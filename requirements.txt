@@ -1,0 +1,10 @@
+# GSO (General Services Office) System - Phase 1.1
+Django>=5.0,<6
+psycopg[binary]>=3.1
+python-dotenv>=1.0
+dj-database-url>=2.1
+# Phase 6.3 / 6.4: Excel export for IPMT and WAR
+openpyxl>=3.1
+# API: REST framework for external system integration
+djangorestframework>=3.14,<4
+djangorestframework-simplejwt>=5.3,<6

@@ -1,0 +1,73 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}{{ item.name }} — Inventory{% endblock %}
+{% block staff_content %}
+<div class="max-w-3xl space-y-6">
+    <div class="flex items-center gap-4">
+        <a href="{% url 'gso_accounts:staff_inventory' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back to inventory
+        </a>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ item.name }}</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ item.unit.name }} · {{ item.category|default:"—" }}</p>
+            </div>
+            {% if not user.is_personnel %}
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'gso_accounts:staff_inventory_adjust' item.pk %}" class="inline-flex items-center gap-1 px-4 py-2 bg-primary/10 text-primary rounded-lg text-sm font-medium hover:bg-primary/20 transition-colors">Adjust quantity</a>
+                <a href="{% url 'gso_accounts:staff_inventory_edit' item.pk %}" class="inline-flex items-center gap-1 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Edit</a>
+                <a href="{% url 'gso_accounts:staff_inventory_delete' item.pk %}" class="inline-flex items-center gap-1 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Delete</a>
+            </div>
+            {% endif %}
+        </div>
+        <dl class="px-6 py-5 space-y-4">
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Quantity</dt>
+                <dd class="text-slate-900 dark:text-slate-100 font-medium">{{ item.quantity }} {{ item.unit_of_measure }}{% if item.is_low_stock %} <span class="text-amber-600 dark:text-amber-400 text-sm">(Low stock)</span>{% endif %}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Reorder level</dt>
+                <dd class="text-slate-700 dark:text-slate-300">{{ item.reorder_level|default:"—" }}</dd>
+            </div>
+            {% if item.description %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description</dt>
+                <dd class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ item.description }}</dd>
+            </div>
+            {% endif %}
+            {% if item.location %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Location</dt>
+                <dd class="text-slate-700 dark:text-slate-300">{{ item.location }}</dd>
+            </div>
+            {% endif %}
+            {% if item.serial_or_asset_number %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Serial / Asset no.</dt>
+                <dd class="text-slate-700 dark:text-slate-300">{{ item.serial_or_asset_number }}</dd>
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Recent transactions</h2>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for t in transactions %}
+            <div class="px-6 py-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <span class="font-medium {% if t.transaction_type == 'IN' %}text-green-600 dark:text-green-400{% else %}text-red-600 dark:text-red-400{% endif %}">{{ t.get_transaction_type_display }}</span>
+                    <span class="text-slate-700 dark:text-slate-300"> {{ t.quantity }} {{ item.unit_of_measure }}</span>
+                    {% if t.notes %}<span class="text-slate-500 dark:text-slate-400 text-sm">· {{ t.notes }}</span>{% endif %}
+                </div>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ t.created_at|date:"M j, Y g:i A" }}{% if t.performed_by %} · {{ t.performed_by.get_full_name|default:t.performed_by.username }}{% endif %}</span>
+            </div>
+            {% empty %}
+            <p class="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">No transactions yet.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

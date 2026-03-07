@@ -1,0 +1,102 @@
+{% extends "layouts/base_staff.html" %}
+
+{% block title %}Inventory Activity Log — GSO{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <a href="{% url 'gso_accounts:staff_inventory' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-2">
+        <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Inventory
+      </a>
+      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }} ({{ unit_name }})</p>
+    </div>
+  </div>
+
+  <form method="get" action="" class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-wrap items-end gap-4">
+    <div class="flex flex-col gap-1">
+      <label for="type" class="text-xs font-medium text-slate-600 dark:text-slate-400">Type</label>
+      <select name="type" id="type" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[140px]">
+        {% for value, label in inventory_type_choices %}
+        <option value="{{ value }}" {% if filter_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="date_from" class="text-xs font-medium text-slate-600 dark:text-slate-400">From date</label>
+      <input type="date" name="date_from" id="date_from" value="{{ filter_date_from }}" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"/>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="date_to" class="text-xs font-medium text-slate-600 dark:text-slate-400">To date</label>
+      <input type="date" name="date_to" id="date_to" value="{{ filter_date_to }}" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"/>
+    </div>
+    <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Apply filters</button>
+    <a href="{% url 'gso_accounts:staff_inventory_activity_log' %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Clear</a>
+  </form>
+
+  <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-50 dark:bg-slate-800/50">
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date & time</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Item</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Quantity</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Performed by</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Notes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          {% for t in activity_list %}
+          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ t.created_at|date:"M d, Y" }} {{ t.created_at|time:"g:i A" }}</td>
+            <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{{ t.item.name }}</td>
+            <td class="px-6 py-4 text-sm">
+              {% if t.transaction_type == 'IN' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">In</span>
+              {% elif t.transaction_type == 'OUT' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">Out</span>
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">Adjustment</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{{ t.quantity }} {{ t.item.unit_of_measure }}</td>
+            <td class="px-6 py-4 text-sm">
+              {% if t.request %}
+              <a href="{% url 'gso_accounts:staff_request_detail' t.request.pk %}" class="text-primary hover:underline font-medium">{{ t.request.display_id }}</a>
+              {% else %}
+              <span class="text-slate-400">—</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{% if t.performed_by %}{% if t.performed_by_id == request.user.pk %}<span class="font-medium text-primary">You</span>{% else %}{{ t.performed_by.get_full_name|default:t.performed_by.username }}{% endif %}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title="{{ t.notes }}">{{ t.notes|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No inventory transactions for your unit match your filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj %}
+    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} total)
+      </p>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if filter_type %}&type={{ filter_type }}{% endif %}{% if filter_date_from %}&date_from={{ filter_date_from }}{% endif %}{% if filter_date_to %}&date_to={{ filter_date_to }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if filter_type %}&type={{ filter_type }}{% endif %}{% if filter_date_from %}&date_from={{ filter_date_from }}{% endif %}{% if filter_date_to %}&date_to={{ filter_date_to }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

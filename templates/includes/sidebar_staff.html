@@ -1,0 +1,333 @@
+{% comment %}
+Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. State in localStorage.
+{% endcomment %}
+<aside class="sidebar-staff sidebar--expand w-64 flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col p-4 gap-2 fixed md:relative inset-y-0 left-0 z-30 transform -translate-x-full md:translate-x-0 transition-[transform,width] duration-200 ease-out" aria-label="Main navigation" id="staff-sidebar">
+    <div class="sidebar-header-row flex items-center justify-between mb-4 px-2 min-h-[1.25rem]">
+        <span class="sidebar-main-menu text-[10px] font-bold uppercase tracking-wider text-slate-400">Main Menu</span>
+        <button type="button" id="staff-sidebar-minimize-btn" class="sidebar-minimize-btn flex items-center justify-center rounded-lg w-8 h-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors flex-shrink-0" aria-label="Collapse sidebar" title="Collapse sidebar">
+            <span class="material-symbols-outlined text-[20px]">chevron_left</span>
+        </button>
+    </div>
+    <nav class="flex flex-col gap-0.5 flex-1 overflow-y-auto">
+        {% if request.user.is_unit_head %}
+        <a href="{% url 'gso_accounts:staff_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_dashboard' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Dashboard">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
+            <span class="sidebar-label text-sm truncate">Dashboard</span>
+        </a>
+        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">assignment_late</span>
+            <span class="sidebar-label text-sm truncate">Request Management</span>
+        </a>
+        {# Request History: access via icon on Request Management page (left of filters), not in sidebar. #}
+        <a href="{% url 'gso_accounts:staff_personnel_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_personnel_management' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Personnel Management">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">badge</span>
+            <span class="sidebar-label text-sm truncate">Personnel Management</span>
+        </a>
+        <a href="{% url 'gso_accounts:staff_inventory' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name|default:''|slice:':15' == 'staff_inventory' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Inventory">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">inventory_2</span>
+            <span class="sidebar-label text-sm truncate">Inventory</span>
+        </a>
+        {# Inventory Activity Log: access via icon on Inventory page (left of search), not in sidebar. #}
+        {% elif request.user.is_personnel %}
+        <a href="{% url 'gso_accounts:staff_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_dashboard' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Dashboard">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
+            <span class="sidebar-label text-sm truncate">Dashboard</span>
+        </a>
+        <a href="{% url 'gso_accounts:staff_task_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_task_management' or request.resolver_match.url_name == 'staff_task_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Task Management">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">task_alt</span>
+            <span class="sidebar-label text-sm truncate">Task Management</span>
+        </a>
+        {# Task History: access via icon on Task Management page. #}
+        <a href="{% url 'gso_accounts:staff_inventory' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name|default:''|slice:':15' == 'staff_inventory' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Inventory">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">inventory_2</span>
+            <span class="sidebar-label text-sm truncate">Inventory</span>
+        </a>
+        {% elif request.user.is_gso_office or request.user.is_director %}
+        <a href="{% url 'gso_accounts:staff_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_dashboard' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Dashboard">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
+            <span class="sidebar-label text-sm truncate">Dashboard</span>
+        </a>
+        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">assignment_late</span>
+            <span class="sidebar-label text-sm truncate">Request Management</span>
+        </a>
+        {# Request History: access via icon on Request Management page (left of filters). #}
+        <a href="{% url 'gso_accounts:staff_inventory' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name|default:''|slice:':15' == 'staff_inventory' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Inventory">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">inventory_2</span>
+            <span class="sidebar-label text-sm truncate">Inventory</span>
+        </a>
+        <div class="space-y-0.5">
+            <div class="sidebar-nav-group group" data-sidebar-group="reports">
+                <a href="{% url 'gso_accounts:staff_work_reports' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Work Reports">
+                    <span class="material-symbols-outlined text-[22px] flex-shrink-0">assessment</span>
+                    <span class="sidebar-label text-sm truncate">Work Reports</span>
+                    <span class="material-symbols-outlined text-[18px] ml-auto opacity-70 sidebar-group-toggle" id="reports-submenu-icon" onclick="toggleReportsSubmenu(event)">expand_more</span>
+                </a>
+                <div id="reports-submenu" class="mt-0.5 space-y-0.5 hidden group-hover:block">
+                    <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_ipmt' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="IPMT Report">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">table_chart</span>
+                        <span class="sidebar-label text-xs truncate">IPMT Report</span>
+                    </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_war_export' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="WAR">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">description</span>
+                        <span class="sidebar-label text-xs truncate">WAR</span>
+                    </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_feedback' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Feedback Reports">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">forum</span>
+                        <span class="sidebar-label text-xs truncate">Feedback Reports</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% if request.user.is_director %}
+        <a href="{% url 'gso_accounts:staff_account_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_account_management' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Account Management">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">group</span>
+            <span class="sidebar-label text-sm truncate">Account Management</span>
+        </a>
+        <a href="{% url 'gso_accounts:staff_activity_log' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_activity_log' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Activity Log">
+            <span class="material-symbols-outlined text-[22px] flex-shrink-0">history</span>
+            <span class="sidebar-label text-sm truncate">Activity Log</span>
+        </a>
+        {% endif %}
+        {% endif %}
+    </nav>
+    <div class="mt-auto border-t border-slate-200 dark:border-slate-800 pt-4 px-2">
+        <div class="bg-primary/5 dark:bg-primary/10 rounded-xl p-4 sidebar-bottom-card">
+            <p class="sidebar-bottom-text text-xs font-semibold text-primary mb-1">{% if request.user.unit %}{{ request.user.unit.name }}{% else %}{% if request.user.is_director %}Director{% elif request.user.is_gso_office %}GSO Office{% elif request.user.is_unit_head %}Unit Head{% elif request.user.is_personnel %}Personnel{% else %}Staff{% endif %}{% endif %}</p>
+            <p class="sidebar-bottom-text text-[10px] text-slate-500 dark:text-slate-400 leading-tight">You are currently viewing the {% if request.user.is_director %}Director{% elif request.user.is_gso_office %}GSO Office{% elif request.user.is_unit_head %}Unit Head{% elif request.user.is_personnel %}Personnel{% else %}Staff{% endif %} management console.</p>
+        </div>
+    </div>
+</aside>
+<script>
+function updateSidebarGroupToggleVisibility() {
+    try {
+        var sidebar = document.getElementById('staff-sidebar');
+        if (!sidebar) return;
+        var collapsed = sidebar.classList.contains('sidebar--collapsed');
+        var toggles = sidebar.querySelectorAll('.sidebar-group-toggle');
+        toggles.forEach(function(t) {
+            if (collapsed) {
+                t.classList.add('hidden');
+            } else {
+                t.classList.remove('hidden');
+            }
+        });
+
+        // In collapsed (icon-only) mode, also disable hover dropdowns entirely
+        var requestSub = document.getElementById('request-submenu');
+        var requestIcon = document.getElementById('request-submenu-icon');
+        var taskSub = document.getElementById('task-submenu');
+        var taskIcon = document.getElementById('task-submenu-icon');
+        var reportsSub = document.getElementById('reports-submenu');
+        var reportsIcon = document.getElementById('reports-submenu-icon');
+        if (collapsed) {
+            // Force-close submenus in state and UI when collapsing sidebar
+            try {
+                localStorage.setItem('gso-request-submenu-open', '0');
+                localStorage.setItem('gso-task-submenu-open', '0');
+                localStorage.setItem('gso-reports-submenu-open', '0');
+            } catch (e) {}
+
+            if (requestSub) {
+                requestSub.classList.add('hidden');
+                requestSub.classList.remove('group-hover:block');
+            }
+            if (requestIcon) requestIcon.classList.remove('rotate-180');
+            if (taskSub) {
+                taskSub.classList.add('hidden');
+                taskSub.classList.remove('group-hover:block');
+            }
+            if (taskIcon) taskIcon.classList.remove('rotate-180');
+            if (reportsSub) {
+                reportsSub.classList.add('hidden');
+                reportsSub.classList.remove('group-hover:block');
+            }
+            if (reportsIcon) reportsIcon.classList.remove('rotate-180');
+        } else {
+            if (requestSub && !requestSub.classList.contains('group-hover:block')) {
+                requestSub.classList.add('group-hover:block');
+            }
+            if (taskSub && !taskSub.classList.contains('group-hover:block')) {
+                taskSub.classList.add('group-hover:block');
+            }
+            if (reportsSub && !reportsSub.classList.contains('group-hover:block')) {
+                reportsSub.classList.add('group-hover:block');
+            }
+        }
+    } catch (e) {}
+}
+
+(function(){
+    try {
+        if (localStorage.getItem('gso-sidebar-collapsed') === '1') {
+            var el = document.getElementById('staff-sidebar');
+            if (el) {
+                el.classList.remove('sidebar--expand');
+                el.classList.add('sidebar--collapsed');
+                var icon = el.querySelector('.sidebar-minimize-btn .material-symbols-outlined');
+                if (icon) icon.textContent = 'chevron_right';
+            }
+        }
+        // Ensure toggle arrows hidden/shown correctly on initial load
+        updateSidebarGroupToggleVisibility();
+        // Also hook into the minimize button so we refresh when user collapses/expands
+        var btn = document.getElementById('staff-sidebar-minimize-btn');
+        if (btn) {
+            btn.addEventListener('click', function() {
+                // Give other handlers a moment to toggle classes, then update
+                setTimeout(updateSidebarGroupToggleVisibility, 0);
+            });
+        }
+    } catch (e) {}
+})();
+
+function toggleRequestSubmenu(evt) {
+    try {
+        if (evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+        }
+        var submenu = document.getElementById('request-submenu');
+        var icon = document.getElementById('request-submenu-icon');
+        if (!submenu) return;
+
+        var isHidden = submenu.classList.contains('hidden');
+        if (isHidden) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+            try { localStorage.setItem('gso-request-submenu-open', '1'); } catch (e) {}
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+            try { localStorage.setItem('gso-request-submenu-open', '0'); } catch (e) {}
+        }
+    } catch (e) {}
+}
+
+function closeRequestSubmenuOnNavigate() {
+    try {
+        // When navigating to Request History, remember submenu as open
+        localStorage.setItem('gso-request-submenu-open', '1');
+    } catch (e) {}
+}
+
+(function initRequestSubmenu(){
+    try {
+        var sidebar = document.getElementById('staff-sidebar');
+        var isCollapsed = sidebar && sidebar.classList.contains('sidebar--collapsed');
+        var submenu = document.getElementById('request-submenu');
+        var icon = document.getElementById('request-submenu-icon');
+        if (!submenu) return;
+        var stored = null;
+        try { stored = localStorage.getItem('gso-request-submenu-open'); } catch (e) {}
+        var shouldOpen = !isCollapsed && stored === '1';
+        if (shouldOpen) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+        }
+    } catch (e) {}
+})();
+
+function toggleReportsSubmenu(evt) {
+    try {
+        if (evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+        }
+        var submenu = document.getElementById('reports-submenu');
+        var icon = document.getElementById('reports-submenu-icon');
+        if (!submenu) return;
+
+        var isHidden = submenu.classList.contains('hidden');
+        if (isHidden) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+            try { localStorage.setItem('gso-reports-submenu-open', '1'); } catch (e) {}
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+            try { localStorage.setItem('gso-reports-submenu-open', '0'); } catch (e) {}
+        }
+    } catch (e) {}
+}
+
+function closeReportsSubmenuOnNavigate() {
+    try {
+        // When navigating to any Work Reports child page, remember submenu as open
+        localStorage.setItem('gso-reports-submenu-open', '1');
+    } catch (e) {}
+}
+
+(function initReportsSubmenu(){
+    try {
+        var sidebar = document.getElementById('staff-sidebar');
+        var isCollapsed = sidebar && sidebar.classList.contains('sidebar--collapsed');
+        var submenu = document.getElementById('reports-submenu');
+        var icon = document.getElementById('reports-submenu-icon');
+        if (!submenu) return;
+        var stored = null;
+        try { stored = localStorage.getItem('gso-reports-submenu-open'); } catch (e) {}
+        var shouldOpen = !isCollapsed && stored === '1';
+        if (shouldOpen) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+        }
+    } catch (e) {}
+})();
+
+function toggleTaskSubmenu(evt) {
+    try {
+        if (evt) {
+            evt.stopPropagation();
+            evt.preventDefault();
+        }
+        var submenu = document.getElementById('task-submenu');
+        var icon = document.getElementById('task-submenu-icon');
+        if (!submenu) return;
+
+        var isHidden = submenu.classList.contains('hidden');
+        if (isHidden) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+            try { localStorage.setItem('gso-task-submenu-open', '1'); } catch (e) {}
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+            try { localStorage.setItem('gso-task-submenu-open', '0'); } catch (e) {}
+        }
+    } catch (e) {}
+}
+
+function closeTaskSubmenuOnNavigate() {
+    try {
+        // When navigating to Task History, remember submenu as open
+        localStorage.setItem('gso-task-submenu-open', '1');
+    } catch (e) {}
+}
+
+(function initTaskSubmenu(){
+    try {
+        var sidebar = document.getElementById('staff-sidebar');
+        var isCollapsed = sidebar && sidebar.classList.contains('sidebar--collapsed');
+        var submenu = document.getElementById('task-submenu');
+        var icon = document.getElementById('task-submenu-icon');
+        if (!submenu) return;
+        var stored = null;
+        try { stored = localStorage.getItem('gso-task-submenu-open'); } catch (e) {}
+        var shouldOpen = !isCollapsed && stored === '1';
+        if (shouldOpen) {
+            submenu.classList.remove('hidden');
+            if (icon) icon.classList.add('rotate-180');
+        } else {
+            submenu.classList.add('hidden');
+            if (icon) icon.classList.remove('rotate-180');
+        }
+    } catch (e) {}
+})();
+</script>

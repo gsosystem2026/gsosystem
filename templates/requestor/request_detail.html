@@ -1,0 +1,5 @@
+{% extends "layouts/base_requestor.html" %}
+{% block title %}Request {{ req.display_id }} — GSO{% endblock %}
+{% block requestor_content %}
+{% include "request/includes/request_detail_content.html" with is_requestor_layout=1 %}
+{% endblock %}

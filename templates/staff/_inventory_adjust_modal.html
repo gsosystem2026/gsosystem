@@ -1,0 +1,30 @@
+<form method="post" action="{{ request.path }}" class="space-y-4" id="inventory-modal-form">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+  <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{{ form.non_field_errors }}</div>
+  {% endif %}
+  <p class="text-sm text-slate-600 dark:text-slate-300">
+    Current stock: <strong>{{ item.quantity }} {{ item.unit_of_measure }}</strong>
+  </p>
+  <div>
+    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type</label>
+    <div class="flex gap-6">
+      {% for choice in form.transaction_type.field.choices %}
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="radio" name="transaction_type" value="{{ choice.0 }}" {% if form.transaction_type.value == choice.0 or not form.transaction_type.value and choice.0 == 'IN' %}checked{% endif %} class="rounded border-slate-300 text-primary focus:ring-primary"/>
+        <span class="text-slate-700 dark:text-slate-300 text-sm">{{ choice.1 }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <div>
+    <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
+    {{ form.quantity }}
+    {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
+  </div>
+  <div>
+    <label for="id_notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes (optional)</label>
+    {{ form.notes }}
+  </div>
+</form>
+

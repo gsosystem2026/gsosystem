@@ -1,0 +1,20 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}{{ page_title }} — GSO{% endblock %}
+{% block staff_content %}
+<div class="max-w-lg space-y-6">
+    <div class="flex items-center gap-4">
+        <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back
+        </a>
+    </div>
+    <div class="rounded-xl border border-red-200 dark:border-red-800 bg-white dark:bg-slate-900 p-6">
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="mt-2 text-slate-600 dark:text-slate-400">Are you sure you want to delete <strong>{{ item.name }}</strong>? This cannot be undone.</p>
+        <form method="post" action="" class="mt-6 flex gap-3">
+            {% csrf_token %}
+            <button type="submit" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">Delete</button>
+            <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" class="px-5 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

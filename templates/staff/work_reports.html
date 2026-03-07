@@ -1,0 +1,28 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Work Reports — GSO{% endblock %}
+{% block staff_content %}
+<div class="max-w-2xl space-y-8">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    </div>
+
+    <div class="grid gap-6 sm:grid-cols-2">
+        <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
+            <span class="material-symbols-outlined text-3xl text-primary mb-3">assessment</span>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">IPMT Report</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Generate IPMT by personnel and period (month/year). Download Excel with WARs aligned to success indicators.</p>
+        </a>
+        <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
+            <span class="material-symbols-outlined text-3xl text-primary mb-3">download</span>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Export WAR</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Export Work Accomplishment Reports to Excel. Filter by personnel and/or date range.</p>
+        </a>
+        <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
+            <span class="material-symbols-outlined text-3xl text-primary mb-3">rate_review</span>
+            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Feedback Reports</h2>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">View and download Client Satisfaction (CSM) feedback from requestors. Filter by date or unit.</p>
+        </a>
+    </div>
+</div>
+{% endblock %}

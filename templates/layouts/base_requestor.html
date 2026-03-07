@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load static %}
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>{% block title %}GSO Request Management{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1152d4",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Public Sans', sans-serif; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display transition-colors duration-200">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<!-- Header -->
+<header class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-background-dark px-6 md:px-10 py-4 sticky top-0 z-50">
+    <div class="flex items-center gap-4 text-primary">
+        <div class="size-10 bg-primary/10 rounded-lg flex items-center justify-center overflow-hidden">
+            <img src="{% static 'img/logo/gso_logo.png' %}" alt="GSO logo" class="w-8 h-8 object-contain">
+        </div>
+        <a href="{% url 'gso_accounts:requestor_dashboard' %}" class="text-slate-900 dark:text-slate-100 text-xl font-bold leading-tight tracking-tight hover:opacity-90">GSO Request Management</a>
+    </div>
+    <div class="flex flex-1 justify-end gap-4 items-center">
+        <div class="flex gap-2 items-center">
+            <!-- Notifications dropdown -->
+            <div class="relative" id="notif-dropdown-wrap">
+                <button type="button" id="notif-dropdown-btn" class="relative flex items-center justify-center rounded-lg h-10 w-10 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors" aria-label="Notifications" aria-expanded="false" aria-haspopup="true">
+                    <span class="material-symbols-outlined">notifications</span>
+                    {% if unread_notification_count > 0 %}
+                    <span class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5 ring-2 ring-white dark:ring-slate-900" aria-label="{{ unread_notification_count }} unread">{% if unread_notification_count > 9 %}9+{% else %}{{ unread_notification_count }}{% endif %}</span>
+                    {% endif %}
+                </button>
+                <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-50 overflow-hidden flex flex-col max-h-[70vh]" role="menu">
+                    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
+                    </div>
+                    <div class="overflow-y-auto flex-1 min-h-0">
+                        {% for n in requestor_notifications %}
+                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ n.title }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                        </a>
+                        {% empty %}
+                        <p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
+                        {% endfor %}
+                    </div>
+                    {% if unread_notification_count > 0 %}
+                    <div class="p-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+                        <form method="post" action="{% url 'gso_accounts:notification_mark_all_read' %}" class="block">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary py-2">Mark all as read</button>
+                        </form>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- Profile dropdown -->
+            <div class="relative" id="profile-dropdown-wrap">
+                <button type="button" id="profile-dropdown-btn" class="flex items-center gap-2 rounded-lg h-10 pl-2 pr-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-primary/30" aria-expanded="false" aria-haspopup="true" aria-label="Profile menu">
+                    <div class="bg-slate-200 dark:bg-slate-700 rounded-full size-8 overflow-hidden border-2 border-primary/20 flex items-center justify-center">
+                        <img src="{% static request.user.avatar_static_path %}" alt="Profile avatar" class="w-full h-full object-cover"/>
+                    </div>
+                </button>
+                <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-2 z-50" role="menu">
+                    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{{ request.user.get_full_name|default:request.user.username }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Requestor</p>
+                    </div>
+                    <button type="button" id="profile-modal-settings-btn" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left" role="menuitem">
+                        <span class="material-symbols-outlined text-lg">settings</span>
+                        Settings
+                    </button>
+                    <div class="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">
+                        <form method="post" action="{% url 'gso_accounts:logout' %}" class="block">
+                            {% csrf_token %}
+                            <button type="submit" class="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left" role="menuitem">
+                                <span class="material-symbols-outlined text-lg">logout</span>
+                                Log out
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</header>
+<main class="flex-1 flex justify-center py-8">
+    <div class="layout-content-container flex flex-col max-w-7xl w-full px-6 md:px-10">
+    {% block requestor_content %}{% endblock %}
+    </div>
+</main>
+<!-- Footer -->
+<footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 px-6 md:px-10">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+        <p class="text-slate-500 dark:text-slate-400 text-sm">© {% now "Y" %} General Services Office. All rights reserved.</p>
+        <div class="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
+            <a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+            <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
+            <a class="hover:text-primary transition-colors" href="#">Contact Support</a>
+        </div>
+    </div>
+</footer>
+</div>
+</div>
+
+<!-- Profile / Settings modal (popup) -->
+<div id="profile-modal" class="hidden fixed inset-0 z-[100] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="profile-modal-title">
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div id="profile-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                <h2 id="profile-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Profile &amp; Settings</h2>
+                <button type="button" id="profile-modal-close" class="rounded-lg p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500" aria-label="Close">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="overflow-y-auto flex-1 p-6">
+                <!-- Pane 1: Profile view (read-only) -->
+                <div id="profile-modal-view" class="profile-modal-pane">
+                    <div class="flex flex-col items-center mb-6">
+                        <div class="relative">
+                            <div class="bg-slate-200 dark:bg-slate-700 rounded-full size-20 overflow-hidden border-4 border-primary/30 flex items-center justify-center">
+                                <img src="{% static request.user.avatar_static_path %}" alt="Profile avatar" class="w-full h-full object-cover"/>
+                            </div>
+                            <button type="button" id="profile-modal-edit-avatar-btn" class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40 opacity-0 hover:opacity-100 transition-opacity text-xs font-semibold text-white">
+                                Edit avatar
+                            </button>
+                        </div>
+                        <div id="profile-avatar-picker" class="mt-4 w-full hidden">
+                            <form method="post" action="{% url 'gso_accounts:requestor_profile_edit' %}" id="profile-avatar-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="first_name" value="{{ request.user.first_name|default:'' }}">
+                                <input type="hidden" name="last_name" value="{{ request.user.last_name|default:'' }}">
+                                <input type="hidden" name="email" value="{{ request.user.email|default:'' }}">
+                                <input type="hidden" name="avatar_code" id="profile-avatar-code-input" value="{{ request.user.avatar_code|default:'man1' }}">
+                                <div class="grid grid-cols-4 gap-3 mt-2">
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man1">
+                                        <img src="{% static 'img/avatars/man1.png' %}" alt="man1" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man2">
+                                        <img src="{% static 'img/avatars/man2.png' %}" alt="man2" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man3">
+                                        <img src="{% static 'img/avatars/man3.png' %}" alt="man3" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man4">
+                                        <img src="{% static 'img/avatars/man4.png' %}" alt="man4" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man5">
+                                        <img src="{% static 'img/avatars/man5.png' %}" alt="man5" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man6">
+                                        <img src="{% static 'img/avatars/man6.png' %}" alt="man6" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man7">
+                                        <img src="{% static 'img/avatars/man7.png' %}" alt="man7" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man8">
+                                        <img src="{% static 'img/avatars/man8.png' %}" alt="man8" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="man9">
+                                        <img src="{% static 'img/avatars/man9.png' %}" alt="man9" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman1">
+                                        <img src="{% static 'img/avatars/woman1.png' %}" alt="woman1" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman2">
+                                        <img src="{% static 'img/avatars/woman2.png' %}" alt="woman2" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman3">
+                                        <img src="{% static 'img/avatars/woman3.png' %}" alt="woman3" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman4">
+                                        <img src="{% static 'img/avatars/woman4.png' %}" alt="woman4" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman5">
+                                        <img src="{% static 'img/avatars/woman5.png' %}" alt="woman5" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman6">
+                                        <img src="{% static 'img/avatars/woman6.png' %}" alt="woman6" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman7">
+                                        <img src="{% static 'img/avatars/woman7.png' %}" alt="woman7" class="w-full h-full object-cover">
+                                    </button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-avatar-choice="woman8">
+                                        <img src="{% static 'img/avatars/woman8.png' %}" alt="woman8" class="w-full h-full object-cover">
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <dl class="space-y-4">
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Username</dt>
+                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.username }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">First name</dt>
+                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.first_name|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Last name</dt>
+                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.last_name|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Email</dt>
+                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.email|default:"—" }}</dd>
+                        </div>
+                        <div>
+                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Role</dt>
+                            <dd class="text-slate-900 dark:text-slate-100 mt-1">Requestor</dd>
+                        </div>
+                    </dl>
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <button type="button" id="profile-modal-show-edit" class="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+                            <span class="material-symbols-outlined text-lg">edit</span>
+                            Edit profile
+                        </button>
+                        <a href="{% url 'gso_accounts:password_reset' %}" class="inline-flex items-center gap-2 px-4 py-2 text-sm text-primary hover:underline">Change password</a>
+                    </div>
+                </div>
+                <!-- Pane 2: Edit profile form -->
+                <div id="profile-modal-edit" class="profile-modal-pane hidden">
+                    <form method="post" action="{% url 'gso_accounts:requestor_profile_edit' %}" id="profile-edit-form">
+                        {% csrf_token %}
+                        {% if requestor_profile_form.non_field_errors %}
+                            <ul class="text-sm text-red-600 dark:text-red-400 mb-4">{{ requestor_profile_form.non_field_errors }}</ul>
+                        {% endif %}
+                        <div class="space-y-4">
+                            <div>
+                                <label for="id_first_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">First name</label>
+                                <input type="text" name="first_name" id="id_first_name_modal" value="{{ request.user.first_name|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                            </div>
+                            <div>
+                                <label for="id_last_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Last name</label>
+                                <input type="text" name="last_name" id="id_last_name_modal" value="{{ request.user.last_name|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                            </div>
+                        <div>
+                                <label for="id_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+                                <input type="email" name="email" id="id_email_modal" value="{{ request.user.email|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                            </div>
+                        <div>
+                            <label for="id_avatar_code_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile avatar</label>
+                            <select name="avatar_code" id="id_avatar_code_modal" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary">
+                                <option value="man1" {% if request.user.avatar_code == 'man1' %}selected{% endif %}>Man 1</option>
+                                <option value="man2" {% if request.user.avatar_code == 'man2' %}selected{% endif %}>Man 2</option>
+                                <option value="man3" {% if request.user.avatar_code == 'man3' %}selected{% endif %}>Man 3</option>
+                                <option value="man4" {% if request.user.avatar_code == 'man4' %}selected{% endif %}>Man 4</option>
+                                <option value="man5" {% if request.user.avatar_code == 'man5' %}selected{% endif %}>Man 5</option>
+                                <option value="man6" {% if request.user.avatar_code == 'man6' %}selected{% endif %}>Man 6</option>
+                                <option value="man7" {% if request.user.avatar_code == 'man7' %}selected{% endif %}>Man 7</option>
+                                <option value="man8" {% if request.user.avatar_code == 'man8' %}selected{% endif %}>Man 8</option>
+                                <option value="man9" {% if request.user.avatar_code == 'man9' %}selected{% endif %}>Man 9</option>
+                                <option value="woman1" {% if request.user.avatar_code == 'woman1' %}selected{% endif %}>Woman 1</option>
+                                <option value="woman2" {% if request.user.avatar_code == 'woman2' %}selected{% endif %}>Woman 2</option>
+                                <option value="woman3" {% if request.user.avatar_code == 'woman3' %}selected{% endif %}>Woman 3</option>
+                                <option value="woman4" {% if request.user.avatar_code == 'woman4' %}selected{% endif %}>Woman 4</option>
+                                <option value="woman5" {% if request.user.avatar_code == 'woman5' %}selected{% endif %}>Woman 5</option>
+                                <option value="woman6" {% if request.user.avatar_code == 'woman6' %}selected{% endif %}>Woman 6</option>
+                                <option value="woman7" {% if request.user.avatar_code == 'woman7' %}selected{% endif %}>Woman 7</option>
+                                <option value="woman8" {% if request.user.avatar_code == 'woman8' %}selected{% endif %}>Woman 8</option>
+                            </select>
+                        </div>
+                        </div>
+                        <div class="mt-6 flex gap-3">
+                            <button type="submit" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Save changes</button>
+                            <button type="button" id="profile-modal-edit-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var profileBtn = document.getElementById('profile-dropdown-btn');
+    var profileMenu = document.getElementById('profile-dropdown');
+    var profileWrap = document.getElementById('profile-dropdown-wrap');
+    function closeP() { profileMenu.classList.add('hidden'); profileBtn.setAttribute('aria-expanded', 'false'); }
+    if (profileBtn && profileMenu) {
+        profileBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var isOpen = !profileMenu.classList.contains('hidden');
+            if (isOpen) closeP(); else { closeNotifDropdown(); profileMenu.classList.remove('hidden'); profileBtn.setAttribute('aria-expanded', 'true'); }
+        });
+        document.addEventListener('click', closeP);
+        if (profileWrap) profileWrap.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
+    // Profile modal: open from Settings or Edit profile in dropdown
+    var profileModal = document.getElementById('profile-modal');
+    var profileModalView = document.getElementById('profile-modal-view');
+    var profileModalEdit = document.getElementById('profile-modal-edit');
+    function openProfileModal(showEditPane) {
+        if (profileMenu) profileMenu.classList.add('hidden');
+        if (profileBtn) profileBtn.setAttribute('aria-expanded', 'false');
+        if (profileModal) {
+            profileModal.classList.remove('hidden');
+            if (showEditPane && profileModalEdit) {
+                profileModalView.classList.add('hidden');
+                profileModalEdit.classList.remove('hidden');
+            } else {
+                profileModalView.classList.remove('hidden');
+                profileModalEdit.classList.add('hidden');
+            }
+        }
+    }
+    function closeProfileModal() {
+        if (profileModal) profileModal.classList.add('hidden');
+        if (profileModalView) profileModalView.classList.remove('hidden');
+        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+    }
+    var settingsBtn = document.getElementById('profile-modal-settings-btn');
+    var editBtn = document.getElementById('profile-modal-edit-btn');
+    if (settingsBtn) settingsBtn.addEventListener('click', function() { openProfileModal(false); });
+    if (editBtn) editBtn.addEventListener('click', function() { openProfileModal(true); });
+    var profileModalClose = document.getElementById('profile-modal-close');
+    var profileModalBackdrop = document.getElementById('profile-modal-backdrop');
+    if (profileModalClose) profileModalClose.addEventListener('click', closeProfileModal);
+    if (profileModalBackdrop) profileModalBackdrop.addEventListener('click', closeProfileModal);
+    if (profileModal) profileModal.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeProfileModal(); });
+    var profileShowEdit = document.getElementById('profile-modal-show-edit');
+    var profileEditAvatarBtn = document.getElementById('profile-modal-edit-avatar-btn');
+    var profileAvatarPicker = document.getElementById('profile-avatar-picker');
+    var profileAvatarForm = document.getElementById('profile-avatar-form');
+    var avatarButtons = profileAvatarPicker ? profileAvatarPicker.querySelectorAll('button[data-avatar-choice]') : [];
+    if (profileShowEdit) profileShowEdit.addEventListener('click', function() {
+        if (profileModalView) profileModalView.classList.add('hidden');
+        if (profileModalEdit) profileModalEdit.classList.remove('hidden');
+    });
+    if (profileEditAvatarBtn && profileAvatarPicker) {
+        profileEditAvatarBtn.addEventListener('click', function() {
+            profileAvatarPicker.classList.toggle('hidden');
+        });
+    }
+    if (profileAvatarForm && avatarButtons.length) {
+        avatarButtons.forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var code = btn.getAttribute('data-avatar-choice');
+                var input = document.getElementById('profile-avatar-code-input');
+                if (input && code) {
+                    input.value = code;
+                    profileAvatarForm.submit();
+                }
+            });
+        });
+    }
+    var profileEditCancel = document.getElementById('profile-modal-edit-cancel');
+    if (profileEditCancel) profileEditCancel.addEventListener('click', function() {
+        if (profileModalView) profileModalView.classList.remove('hidden');
+        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+    });
+
+    var notifBtn = document.getElementById('notif-dropdown-btn');
+    var notifMenu = document.getElementById('notif-dropdown');
+    var notifWrap = document.getElementById('notif-dropdown-wrap');
+    function closeNotifDropdown() {
+        if (notifMenu) { notifMenu.classList.add('hidden'); if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false'); }
+    }
+    if (notifBtn && notifMenu) {
+        notifBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var isOpen = !notifMenu.classList.contains('hidden');
+            if (isOpen) closeNotifDropdown(); else { closeP(); notifMenu.classList.remove('hidden'); notifBtn.setAttribute('aria-expanded', 'true'); }
+        });
+        document.addEventListener('click', closeNotifDropdown);
+        if (notifWrap) notifWrap.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
+})();
+</script>
+<script>
+(function() {
+    var VERSION_KEY = 'gso_app_version';
+    var versionUrl = '{% url "gso_accounts:app_version" %}';
+    function checkVersion() {
+        fetch(versionUrl, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(data) {
+            var serverVersion = data.version || '';
+            var stored = sessionStorage.getItem(VERSION_KEY);
+            if (stored && stored !== serverVersion) {
+                showNewVersionBanner();
+            } else if (serverVersion) {
+                sessionStorage.setItem(VERSION_KEY, serverVersion);
+            }
+        }).catch(function() {});
+    }
+    function showNewVersionBanner() {
+        if (document.getElementById('gso-new-version-banner')) return;
+        var b = document.createElement('div');
+        b.id = 'gso-new-version-banner';
+        b.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-sm z-50 flex items-center justify-between gap-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 shadow-lg';
+        b.innerHTML = '<span class="text-sm font-medium text-amber-800 dark:text-amber-200">A new version is available. Please refresh the page.</span>' +
+            '<button type="button" onclick="window.location.reload()" class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg">Refresh</button>';
+        document.body.appendChild(b);
+    }
+    checkVersion();
+    setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

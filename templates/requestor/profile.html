@@ -1,0 +1,42 @@
+{% extends "layouts/base_requestor.html" %}
+
+{% block title %}Profile / Settings{% endblock %}
+
+{% block requestor_content %}
+<div class="mb-8">
+    <h1 class="text-slate-900 dark:text-slate-100 text-3xl font-bold leading-tight">Profile &amp; Settings</h1>
+    <p class="text-slate-500 dark:text-slate-400 mt-1">Manage your account details.</p>
+</div>
+
+<div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 max-w-xl">
+    <dl class="space-y-4">
+        <div>
+            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Username</dt>
+            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.username }}</dd>
+        </div>
+        <div>
+            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">First name</dt>
+            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.first_name|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Last name</dt>
+            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.last_name|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Email</dt>
+            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.email|default:"—" }}</dd>
+        </div>
+        <div>
+            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Role</dt>
+            <dd class="text-slate-900 dark:text-slate-100 mt-1">Requestor</dd>
+        </div>
+    </dl>
+    <div class="mt-6">
+        <a href="{% url 'gso_accounts:requestor_profile_edit' %}" class="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
+            <span class="material-symbols-outlined text-lg">edit</span>
+            Edit profile
+        </a>
+        <a href="{% url 'gso_accounts:password_reset' %}" class="ml-3 text-sm text-primary hover:underline">Change password</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% comment %}
+Base template WITH SIDEBAR for: Unit Head, Personnel, GSO Office, Director.
+Same UI structure for all roles; permission-based menu items differ per role.
+Header matches requestor layout; no footer (content fills viewport).
+{% endcomment %}
+
+{% block extra_head %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                colors: {
+                    "primary": "#1152d4",
+                    "background-light": "#f6f6f8",
+                    "background-dark": "#101622",
+                },
+                fontFamily: { "display": ["Public Sans", "sans-serif"] },
+                borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+            },
+        },
+    }
+</script>
+<style>
+    body { font-family: 'Public Sans', sans-serif; }
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    #staff-wrapper.sidebar-open #staff-sidebar { transform: translateX(0); }
+    #staff-wrapper.sidebar-open .staff-sidebar-overlay { display: block; }
+    /* Minimizable sidebar: collapsed = icons only */
+    #staff-sidebar { width: 16rem; min-width: 16rem; }
+    #staff-sidebar.sidebar--collapsed { width: 5rem; min-width: 5rem; }
+    #staff-sidebar.sidebar--collapsed .sidebar-label,
+    #staff-sidebar.sidebar--collapsed .sidebar-main-menu,
+    #staff-sidebar.sidebar--collapsed .sidebar-bottom-text { display: none !important; }
+    #staff-sidebar.sidebar--collapsed .sidebar-nav-link { justify-content: center; padding-left: 0.5rem; padding-right: 0.5rem; }
+    #staff-sidebar.sidebar--collapsed .sidebar-bottom-card { padding: 0.5rem; }
+    #staff-sidebar.sidebar--collapsed .sidebar-header-row { justify-content: center; }
+    #staff-sidebar.sidebar--collapsed .sidebar-minimize-btn { margin-left: 0; }
+</style>
+{% endblock %}
+
+{% block body_class %}bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen{% endblock %}
+
+{% block content %}
+<div class="flex flex-col h-screen" id="staff-wrapper">
+    {% include "includes/header_staff.html" %}
+    <div class="flex flex-1 overflow-hidden">
+        <div class="staff-sidebar-overlay hidden fixed inset-0 bg-black/50 z-20 md:hidden" id="staff-sidebar-overlay" aria-hidden="true"></div>
+        {% include "includes/sidebar_staff.html" %}
+        <main class="flex-1 overflow-y-auto bg-background-light dark:bg-background-dark p-6 min-w-0">
+            {% block staff_content %}{% endblock %}
+        </main>
+    </div>
+</div>
+
+<script>
+(function() {
+    var btn = document.getElementById('staff-sidebar-toggle');
+    var wrapper = document.getElementById('staff-wrapper');
+    var overlay = document.getElementById('staff-sidebar-overlay');
+    function closeSidebar() { if (wrapper) wrapper.classList.remove('sidebar-open'); }
+    if (btn && wrapper) {
+        btn.addEventListener('click', function() { wrapper.classList.toggle('sidebar-open'); });
+        if (overlay) overlay.addEventListener('click', closeSidebar);
+    }
+})();
+(function() {
+    var STORAGE_KEY = 'gso-sidebar-collapsed';
+    var sidebar = document.getElementById('staff-sidebar');
+    var minBtn = document.getElementById('staff-sidebar-minimize-btn');
+    var minIcon = minBtn ? minBtn.querySelector('.material-symbols-outlined') : null;
+    function isCollapsed() { return sidebar && sidebar.classList.contains('sidebar--collapsed'); }
+    function setCollapsed(collapsed) {
+        if (!sidebar) return;
+        if (collapsed) {
+            sidebar.classList.remove('sidebar--expand');
+            sidebar.classList.add('sidebar--collapsed');
+            if (minIcon) minIcon.textContent = 'chevron_right';
+            if (minBtn) { minBtn.setAttribute('aria-label', 'Expand sidebar'); minBtn.title = 'Expand sidebar'; }
+            try { localStorage.setItem(STORAGE_KEY, '1'); } catch (e) {}
+        } else {
+            sidebar.classList.remove('sidebar--collapsed');
+            sidebar.classList.add('sidebar--expand');
+            if (minIcon) minIcon.textContent = 'chevron_left';
+            if (minBtn) { minBtn.setAttribute('aria-label', 'Collapse sidebar'); minBtn.title = 'Collapse sidebar'; }
+            try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        }
+    }
+    function toggle() { setCollapsed(!isCollapsed()); }
+    if (minBtn && sidebar) {
+        minBtn.addEventListener('click', toggle);
+        try {
+            if (localStorage.getItem(STORAGE_KEY) === '1') setCollapsed(true);
+        } catch (e) {}
+    }
+})();
+</script>
+<script>
+(function() {
+    var VERSION_KEY = 'gso_app_version';
+    var versionUrl = '{% url "gso_accounts:app_version" %}';
+    function checkVersion() {
+        fetch(versionUrl, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(data) {
+            var serverVersion = data.version || '';
+            var stored = sessionStorage.getItem(VERSION_KEY);
+            if (stored && stored !== serverVersion) {
+                showNewVersionBanner();
+            } else if (serverVersion) {
+                sessionStorage.setItem(VERSION_KEY, serverVersion);
+            }
+        }).catch(function() {});
+    }
+    function showNewVersionBanner() {
+        if (document.getElementById('gso-new-version-banner')) return;
+        var b = document.createElement('div');
+        b.id = 'gso-new-version-banner';
+        b.className = 'fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-sm z-50 flex items-center justify-between gap-4 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 px-4 py-3 shadow-lg';
+        b.innerHTML = '<span class="text-sm font-medium text-amber-800 dark:text-amber-200">A new version is available. Please refresh the page.</span>' +
+            '<button type="button" onclick="window.location.reload()" class="flex-shrink-0 inline-flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg">Refresh</button>';
+        document.body.appendChild(b);
+    }
+    checkVersion();
+    setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+{% block extra_js %}{% endblock %}
+{% endblock %}

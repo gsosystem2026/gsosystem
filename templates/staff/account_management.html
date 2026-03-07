@@ -1,0 +1,151 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Account Management — GSO{% endblock %}
+{% block staff_content %}
+<div class="max-w-5xl space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{{ page_title }}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+        </div>
+        <a href="{% url 'gso_accounts:staff_account_user_add' %}" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-lg">person_add</span> Add user
+        </a>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Officer-in-Charge (OIC)</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Assign a GSO Office user to act as Director when you are away. They can approve requests until you revoke.</p>
+        </div>
+        <div class="px-6 py-5 space-y-5">
+            {% if current_oic %}
+            <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div>
+                    <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Current OIC</p>
+                    <p class="text-slate-900 dark:text-slate-100 font-medium mt-1">{{ current_oic.get_full_name|default:current_oic.username }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ current_oic.email|default:current_oic.username }}</p>
+                </div>
+                <form method="post" action="{% url 'gso_accounts:staff_revoke_oic' %}" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Revoke OIC</button>
+                </form>
+            </div>
+            {% else %}
+            <p class="text-sm text-slate-500 dark:text-slate-400">No OIC assigned. Only you can approve requests.</p>
+            {% endif %}
+
+            <div>
+                <label for="id_oic_user" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Assign OIC</label>
+                <form method="post" action="{% url 'gso_accounts:staff_assign_oic' %}" class="flex flex-wrap items-end gap-3">
+                    {% csrf_token %}
+                    <select name="user_id" id="id_oic_user" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]">
+                        <option value="">Select a GSO Office user…</option>
+                        {% for u in gso_users %}
+                        <option value="{{ u.pk }}" {% if current_oic and current_oic.pk == u.pk %}disabled{% endif %}>{{ u.get_full_name|default:u.username }}{% if u.email %} ({{ u.email }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Set as OIC</button>
+                </form>
+                {% if not gso_users %}
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">No GSO Office users in the system. Add users with role GSO Office first.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <form method="get" action="{% url 'gso_accounts:staff_account_management' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-wrap items-end gap-4">
+        <div class="flex flex-col gap-1">
+            <label for="role" class="text-xs font-medium text-slate-600 dark:text-slate-400">Role</label>
+            <select name="role" id="role" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[140px]">
+                {% for value, label in role_choices %}
+                <option value="{{ value }}" {% if filter_role == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="unit" class="text-xs font-medium text-slate-600 dark:text-slate-400">Unit</label>
+            <select name="unit" id="unit" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[160px]">
+                <option value="">All units</option>
+                {% for u in units %}
+                <option value="{{ u.pk }}" {% if filter_unit|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="active" class="text-xs font-medium text-slate-600 dark:text-slate-400">Status</label>
+            <select name="active" id="active" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[120px]">
+                <option value="" {% if filter_active == '' %}selected{% endif %}>All</option>
+                <option value="1" {% if filter_active == '1' %}selected{% endif %}>Active only</option>
+                <option value="0" {% if filter_active == '0' %}selected{% endif %}>Inactive only</option>
+            </select>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="q" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
+            <input type="text" name="q" id="q" value="{{ filter_q }}" placeholder="Username, name, email…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[180px]"/>
+        </div>
+        <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Apply filters</button>
+        <a href="{% url 'gso_accounts:staff_account_management' %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Clear</a>
+    </form>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">All users</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Manage accounts. Use filters above or search by username, name, or email.</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">User</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unit</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for u in user_list %}
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ u.get_full_name|default:u.username }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ u.username }}{% if u.email %} · {{ u.email }}{% endif %}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{{ u.get_role_display }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{% if u.unit %}{{ u.unit.name }}{% else %}—{% endif %}</td>
+                        <td class="px-6 py-4">
+                            {% if u.is_active %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <a href="{% url 'gso_accounts:staff_account_user_edit' u.pk %}" class="text-sm font-medium text-primary hover:underline">Edit</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No users match your filters.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj %}
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} total)
+            </p>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if filter_role %}&role={{ filter_role }}{% endif %}{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_active %}&active={{ filter_active }}{% endif %}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if filter_role %}&role={{ filter_role }}{% endif %}{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_active %}&active={{ filter_active }}{% endif %}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

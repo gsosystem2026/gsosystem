@@ -1,0 +1,137 @@
+"""
+Phase 6.1: Work Accomplishment Report (WAR).
+Phase 6.2: Success indicators — master data; WAR entries can be tagged with indicators.
+"""
+from django.conf import settings
+from django.db import models
+from django.utils import timezone
+
+
+class SuccessIndicator(models.Model):
+    """
+    Phase 6.2: Master data for success indicators.
+    WAR entries (and later IPMT) can be aligned to these so "what was done" maps to indicators.
+    """
+    code = models.CharField(max_length=50, unique=True, help_text='Short code, e.g. SI-01')
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    display_order = models.PositiveSmallIntegerField(default=0, help_text='Order in lists/dropdowns')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['display_order', 'code']
+        verbose_name = 'success indicator'
+        verbose_name_plural = 'success indicators'
+
+    def __str__(self):
+        return f"{self.code}: {self.name}"
+
+
+class WorkAccomplishmentReport(models.Model):
+    """
+    WAR: linked to a completed Request and to the Personnel who did the work.
+    One request can have multiple WARs (one per assigned personnel).
+    """
+    request = models.ForeignKey(
+        'gso_requests.Request',
+        on_delete=models.CASCADE,
+        related_name='work_accomplishment_reports',
+    )
+    personnel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='work_accomplishment_reports',
+        limit_choices_to={'role': 'PERSONNEL'},
+        help_text='Personnel who did the work (must be assigned to this request).',
+    )
+    period_start = models.DateField(
+        help_text='Start of the work period covered by this report.',
+    )
+    period_end = models.DateField(
+        help_text='End of the work period covered by this report.',
+    )
+    summary = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Short summary or title.',
+    )
+    accomplishments = models.TextField(
+        blank=True,
+        help_text='Description of work accomplished.',
+    )
+    success_indicators = models.ManyToManyField(
+        SuccessIndicator,
+        related_name='work_accomplishment_reports',
+        blank=True,
+        help_text='Success indicators this work aligns to (Phase 6.2).',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='war_created',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-period_end', '-created_at']
+        verbose_name = 'work accomplishment report'
+        verbose_name_plural = 'work accomplishment reports'
+        unique_together = [('request', 'personnel')]
+
+    def __str__(self):
+        return f"WAR: {self.request.display_id} — {self.personnel.get_full_name() or self.personnel.username}"
+
+
+def ensure_war_for_request(request_obj, created_by=None):
+    """
+    Ensure that a completed request has one WAR per assigned personnel.
+    - Called when a request becomes COMPLETED.
+    - Idempotent: safe to call multiple times for the same request.
+    - Skips requests with no personnel assignments.
+    """
+    from apps.gso_requests.models import RequestAssignment, Request  # local import to avoid circulars
+
+    if not isinstance(request_obj, Request):
+        return
+    # Only act for completed requests
+    if request_obj.status != Request.Status.COMPLETED:
+        return
+
+    # If no personnel are assigned, skip WAR creation
+    assigned_ids = list(
+        RequestAssignment.objects.filter(request=request_obj).values_list("personnel_id", flat=True)
+    )
+    if not assigned_ids:
+        return
+
+    existing_personnel_ids = set(
+        WorkAccomplishmentReport.objects.filter(request=request_obj).values_list("personnel_id", flat=True)
+    )
+    to_create_ids = [pid for pid in assigned_ids if pid not in existing_personnel_ids]
+    if not to_create_ids:
+        return
+
+    # Default period: from request created_at to completed_at (use updated_at as completion timestamp)
+    created_date = getattr(request_obj, "created_at", None) or timezone.now()
+    completed_date = getattr(request_obj, "updated_at", None) or timezone.now()
+    period_start = created_date.date()
+    period_end = completed_date.date()
+
+    from apps.gso_accounts.models import User  # local import
+
+    personnel_qs = User.objects.filter(pk__in=to_create_ids)
+    for personnel in personnel_qs:
+        WorkAccomplishmentReport.objects.create(
+            request=request_obj,
+            personnel=personnel,
+            period_start=period_start,
+            period_end=period_end,
+            summary="To be filled",
+            accomplishments="To be filled",
+            created_by=created_by,
+        )

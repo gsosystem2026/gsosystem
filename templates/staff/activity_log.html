@@ -1,0 +1,194 @@
+{% extends "layouts/base_staff.html" %}
+
+{% block title %}Activity Log — GSO{% endblock %}
+
+{% block staff_content %}
+<div class="space-y-6">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    </div>
+  </div>
+
+  <form method="get" action="" class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 flex flex-wrap items-end gap-4">
+    <div class="flex flex-col gap-1">
+      <label for="log_type" class="text-xs font-medium text-slate-600 dark:text-slate-400">Log type</label>
+      <select name="log_type" id="log_type" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[180px]">
+        <option value="" {% if not log_type %}selected{% endif %}>System activity</option>
+        <option value="inventory" {% if log_type == 'inventory' %}selected{% endif %}>Inventory</option>
+      </select>
+    </div>
+
+    {% if log_type == 'inventory' %}
+    <div class="flex flex-col gap-1">
+      <label for="unit" class="text-xs font-medium text-slate-600 dark:text-slate-400">Unit</label>
+      <select name="unit" id="unit" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[160px]">
+        <option value="">All units</option>
+        {% for u in units %}
+        <option value="{{ u.pk }}" {% if filter_unit|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="type" class="text-xs font-medium text-slate-600 dark:text-slate-400">Type</label>
+      <select name="type" id="type" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[140px]">
+        {% for value, label in inventory_type_choices %}
+        <option value="{{ value }}" {% if filter_type == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="date_from" class="text-xs font-medium text-slate-600 dark:text-slate-400">From date</label>
+      <input type="date" name="date_from" id="date_from" value="{{ filter_date_from }}" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"/>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="date_to" class="text-xs font-medium text-slate-600 dark:text-slate-400">To date</label>
+      <input type="date" name="date_to" id="date_to" value="{{ filter_date_to }}" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"/>
+    </div>
+    {% else %}
+    <div class="flex flex-col gap-1">
+      <label for="user" class="text-xs font-medium text-slate-600 dark:text-slate-400">Who did it</label>
+      <select name="user" id="user" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[180px]">
+        <option value="">All users</option>
+        {% for u in users_with_logs %}
+        <option value="{{ u.pk }}" {% if filter_user|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="action" class="text-xs font-medium text-slate-600 dark:text-slate-400">Action type</label>
+      <select name="action" id="action" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[160px]">
+        {% for value, label in action_choices %}
+        <option value="{{ value }}" {% if filter_action == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="flex flex-col gap-1">
+      <label for="q" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search in message</label>
+      <input type="text" name="q" id="q" value="{{ filter_q }}" placeholder="Search..." class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[180px]"/>
+    </div>
+    {% endif %}
+
+    <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Apply filters</button>
+    <a href="{% url 'gso_accounts:staff_activity_log' %}{% if log_type == 'inventory' %}?log_type=inventory{% endif %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Clear</a>
+  </form>
+
+  <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+    <div class="overflow-x-auto">
+      {% if log_type == 'inventory' %}
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-50 dark:bg-slate-800/50">
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date & time</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Unit</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Item</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Quantity</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Performed by</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Notes</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          {% for t in activity_list %}
+          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ t.created_at|date:"M d, Y" }} {{ t.created_at|time:"g:i A" }}</td>
+            <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{% if t.item.unit %}{{ t.item.unit.name }}{% else %}—{% endif %}</td>
+            <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{{ t.item.name }}</td>
+            <td class="px-6 py-4 text-sm">
+              {% if t.transaction_type == 'IN' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">In</span>
+              {% elif t.transaction_type == 'OUT' %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">Out</span>
+              {% else %}
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">Adjustment</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{{ t.quantity }} {{ t.item.unit_of_measure }}</td>
+            <td class="px-6 py-4 text-sm">
+              {% if t.request %}
+              <a href="{% url 'gso_accounts:staff_request_detail' t.request.pk %}" class="text-primary hover:underline font-medium">{{ t.request.display_id }}</a>
+              {% else %}
+              <span class="text-slate-400">—</span>
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-300">{% if t.performed_by %}{{ t.performed_by.get_full_name|default:t.performed_by.username }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-xs truncate" title="{{ t.notes }}">{{ t.notes|default:"—" }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No inventory transactions match your filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="bg-slate-50 dark:bg-slate-800/50">
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date & time</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Who did it</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+            <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Message</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+          {% for log in activity_list %}
+          <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ log.created_at|date:"M d, Y" }} {{ log.created_at|time:"g:i A" }}</td>
+            <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{% if log.user %}{{ log.user.get_full_name|default:log.user.username }}{% else %}<span class="text-slate-400">—</span>{% endif %}</td>
+            <td class="px-6 py-4 text-sm">
+              {% if log.action == "director_approve" %}
+                <span class="text-primary font-medium">Request Approved</span>
+              {% elif log.action == "oic_assign" %}
+                OIC Assigned
+              {% elif log.action == "oic_revoke" %}
+                OIC Revoked
+              {% elif log.action == "user_create" %}
+                User Created
+              {% elif log.action == "user_edit" %}
+                User Edited
+              {% elif log.action == "requestor_edit_request" %}
+                Requestor Edited Request
+              {% elif log.action == "requestor_cancel_request" %}
+                Requestor Cancelled Request
+              {% else %}
+                {{ log.action }}
+              {% endif %}
+            </td>
+            <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400 max-w-md">{{ log.message }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No activity log entries match your filters.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+    </div>
+    {% if page_obj %}
+    <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between flex-wrap gap-2">
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} ({{ page_obj.paginator.count }} total)
+      </p>
+      <div class="flex gap-2">
+        {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if log_type == 'inventory' %}&log_type=inventory{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_type %}&type={{ filter_type }}{% endif %}{% if filter_date_from %}&date_from={{ filter_date_from }}{% endif %}{% if filter_date_to %}&date_to={{ filter_date_to }}{% endif %}{% else %}{% if filter_user %}&user={{ filter_user }}{% endif %}{% if filter_action %}&action={{ filter_action }}{% endif %}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if log_type == 'inventory' %}&log_type=inventory{% if filter_unit %}&unit={{ filter_unit }}{% endif %}{% if filter_type %}&type={{ filter_type }}{% endif %}{% if filter_date_from %}&date_from={{ filter_date_from }}{% endif %}{% if filter_date_to %}&date_to={{ filter_date_to }}{% endif %}{% else %}{% if filter_user %}&user={{ filter_user }}{% endif %}{% if filter_action %}&action={{ filter_action }}{% endif %}{% if filter_q %}&q={{ filter_q|urlencode }}{% endif %}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+document.getElementById('log_type').addEventListener('change', function() {
+  this.form.submit();
+});
+</script>
+{% endblock %}

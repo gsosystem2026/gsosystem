@@ -1,0 +1,49 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}{{ page_title }} — {{ item.name }}{% endblock %}
+{% block staff_content %}
+<div class="max-w-lg space-y-6">
+    <div class="flex items-center gap-4">
+        <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back to {{ item.name }}
+        </a>
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="mt-1 text-slate-600 dark:text-slate-400">Current stock: <strong>{{ item.quantity }} {{ item.unit_of_measure }}</strong></p>
+        <form method="post" action="" class="mt-6 space-y-4">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type</label>
+                <div class="flex gap-6">
+                    {% for choice in form.transaction_type.field.choices %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="radio" name="transaction_type" value="{{ choice.0 }}" {% if form.transaction_type.value == choice.0 or not form.transaction_type.value and choice.0 == 'IN' %}checked{% endif %} class="rounded border-slate-300 text-primary focus:ring-primary"/>
+                        <span class="text-slate-700 dark:text-slate-300">{{ choice.1 }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            <div>
+                <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
+                {{ form.quantity }}
+                {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="id_notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes (optional)</label>
+                {{ form.notes }}
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Update stock</button>
+                <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" class="px-5 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+<style>
+    #id_quantity, #id_notes { @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary; }
+    #id_notes { min-height: 60px; }
+</style>
+{% endblock %}

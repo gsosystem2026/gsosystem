@@ -1,0 +1,64 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Task History — GSO{% endblock %}
+{% block staff_content %}
+<div class="space-y-6">
+    <div>
+        <a href="{% url 'gso_accounts:staff_task_management' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-2">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Task Management
+        </a>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Request</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Requestor</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Date</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-center">Status</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for req in task_list %}
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4">
+                            <span class="font-medium text-slate-900 dark:text-slate-100">{{ req.display_id }}</span>
+                            <span class="block text-sm text-slate-600 dark:text-slate-400">{{ req.title }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.requestor.get_full_name|default:req.requestor.username }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.updated_at|date:"M d, Y" }}</td>
+                        <td class="px-6 py-4 text-center">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="text-primary hover:underline font-semibold text-sm">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No completed or cancelled tasks yet.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj %}
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <p class="text-xs text-slate-500 dark:text-slate-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

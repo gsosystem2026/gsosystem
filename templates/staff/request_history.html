@@ -1,0 +1,183 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Request History — GSO{% endblock %}
+{% block staff_content %}
+<div class="space-y-6" id="request-history-wrapper">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <a href="{% url 'gso_accounts:staff_request_management' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-2">
+                <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Request Management
+            </a>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+        </div>
+        <form method="get" action="" class="flex flex-wrap items-end gap-3 text-sm" id="request-history-filter-form">
+            {% if show_unit_filter %}
+            <div class="flex flex-col gap-1">
+                <label for="unit" class="text-xs font-medium text-slate-600 dark:text-slate-400">Unit</label>
+                <select name="unit" id="unit" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[180px] focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                    <option value="">All units</option>
+                    {% for u in units %}
+                    <option value="{{ u.pk }}" {% if unit_filter|stringformat:"s" == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <div class="flex flex-col gap-1">
+                <label for="status" class="text-xs font-medium text-slate-600 dark:text-slate-400">Status</label>
+                <select name="status" id="status" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[160px] focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                    <option value="">Completed &amp; Cancelled</option>
+                    {% for value, label in status_choices %}
+                    <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
+                <label for="q" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
+                <input type="text" name="q" id="q" value="{{ search_q }}" placeholder="Request ID, title, requestor, unit…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[200px] focus:ring-2 focus:ring-primary/30 focus:border-primary"/>
+            </div>
+            <a href="{% url 'gso_accounts:staff_request_history' %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Clear</a>
+        </form>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Request ID</th>
+                        {% if show_unit_filter %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
+                        {% endif %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Requestor</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Date</th>
+                        {% if show_unit_filter %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-center">WAR</th>
+                        {% endif %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-center">Status</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for req in request_list %}
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{{ req.display_id }}</td>
+                        {% if show_unit_filter %}
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.unit_name }}</td>
+                        {% endif %}
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.requestor.get_full_name|default:req.requestor.username }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.created_at|date:"M d, Y" }}</td>
+                        {% if show_unit_filter %}
+                        <td class="px-6 py-4 text-center">
+                            {% with war_count=req.work_accomplishment_reports.all|length %}
+                                {% if war_count > 0 %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                    WAR: {{ war_count }}
+                                </span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                    No WAR
+                                </span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        {% endif %}
+                        <td class="px-6 py-4 text-center">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="text-primary hover:underline font-semibold text-sm">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{% if show_unit_filter %}7{% else %}5{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No requests found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj %}
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <p class="text-xs text-slate-500 dark:text-slate-400">
+                Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+            </p>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+<script>
+function initRequestHistoryFilters() {
+    const form = document.getElementById('request-history-filter-form');
+    const wrapper = document.getElementById('request-history-wrapper');
+    if (!form || !wrapper) return;
+
+    const fieldIds = ['unit', 'status', 'q'];
+    let searchDebounce = null;
+
+    const handleChange = function () {
+        const formData = new FormData(form);
+        formData.delete('page');
+        const params = new URLSearchParams(formData);
+        const query = params.toString();
+        const url = window.location.pathname + (query ? '?' + query : '');
+        wrapper.classList.add('opacity-50');
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+            .then(function (response) { return response.text(); })
+            .then(function (html) {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newWrapper = doc.getElementById('request-history-wrapper');
+                if (newWrapper) {
+                    wrapper.innerHTML = newWrapper.innerHTML;
+                    wrapper.classList.remove('opacity-50');
+                    initRequestHistoryFilters();
+                } else {
+                    wrapper.classList.remove('opacity-50');
+                }
+            })
+            .catch(function () {
+                wrapper.classList.remove('opacity-50');
+            });
+    };
+
+    fieldIds.forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === 'q') {
+            el.oninput = function () {
+                if (searchDebounce) {
+                    clearTimeout(searchDebounce);
+                }
+                searchDebounce = setTimeout(handleChange, 400);
+            };
+            el.onkeydown = function (event) {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    if (searchDebounce) {
+                        clearTimeout(searchDebounce);
+                    }
+                    handleChange();
+                }
+            };
+        } else {
+            el.onchange = handleChange;
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initRequestHistoryFilters);
+</script>
+{% endblock %}
+

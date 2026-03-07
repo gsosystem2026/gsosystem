@@ -1,0 +1,607 @@
+<div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center gap-4">
+        {% if in_modal and is_requestor_layout %}
+        <a href="{% url 'gso_requests:requestor_request_detail' req.pk %}" target="_blank" rel="noopener" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">open_in_new</span> View full page
+        </a>
+        {% else %}
+        <a href="{% if is_requestor_layout %}{% url 'gso_accounts:requestor_dashboard' %}{% else %}{{ staff_back_url|default:'' }}{% endif %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back
+        </a>
+        {% endif %}
+    </div>
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+            <div class="flex items-center gap-3 flex-wrap">
+                <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ req.display_id }} — {{ req.title }}</h1>
+                {% if req.is_emergency %}
+                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                    <span class="material-symbols-outlined text-sm">emergency</span> Emergency
+                </span>
+                {% endif %}
+            </div>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ req.unit_name }} · {{ req.created_at|date:"M d, Y" }}</p>
+        </div>
+        <dl class="px-6 py-5 space-y-4">
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Status</dt>
+                <dd><span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span></dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Requestor</dt>
+                <dd class="text-slate-900 dark:text-slate-100">{{ req.requestor.get_full_name|default:req.requestor.username }}</dd>
+            </div>
+            {% if req.custom_full_name or req.custom_email or req.custom_contact_number %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Contact (submission)</dt>
+                <dd class="text-slate-700 dark:text-slate-300">
+                    {% if req.custom_full_name %}{{ req.custom_full_name }}{% endif %}
+                    {% if req.custom_email %} · {{ req.custom_email }}{% endif %}
+                    {% if req.custom_contact_number %} · {{ req.custom_contact_number }}{% endif %}
+                </dd>
+            </div>
+            {% endif %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Request type</dt>
+                <dd class="text-slate-700 dark:text-slate-300">
+                    {% if req.labor %}Labor{% endif %}{% if req.materials %}{% if req.labor %} · {% endif %}Materials{% endif %}{% if req.others %}{% if req.labor or req.materials %} · {% endif %}Others{% endif %}
+                    {% if not req.labor and not req.materials and not req.others %}—{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description &amp; location</dt>
+                <dd class="text-slate-900 dark:text-slate-100 whitespace-pre-wrap">{{ req.description|default:"—" }}</dd>
+            </div>
+            {% if req.attachment %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Attachment</dt>
+                <dd>
+                    <button type="button" onclick="document.getElementById('attachmentPreviewModal').classList.remove('hidden')" class="inline-flex items-center gap-2 text-primary hover:underline text-sm font-medium">
+                        <span class="material-symbols-outlined text-lg">visibility</span> Preview
+                    </button>
+                </dd>
+            </div>
+            <!-- Attachment preview modal -->
+            <div id="attachmentPreviewModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onclick="if (event.target === this) this.classList.add('hidden')" role="dialog" aria-modal="true" aria-label="Preview attachment">
+                <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl max-h-[90vh] w-full flex flex-col" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                        <span class="text-sm font-semibold text-slate-700 dark:text-slate-300">Attachment preview</span>
+                        <div class="flex items-center gap-2">
+                            <a href="{% url 'gso_requests:request_attachment' req.pk %}?download=1" download class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
+                                <span class="material-symbols-outlined text-lg">download</span> Download
+                            </a>
+                            <button type="button" onclick="document.getElementById('attachmentPreviewModal').classList.add('hidden')" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400" aria-label="Close">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-4 overflow-auto flex-1 flex items-center justify-center min-h-0 bg-slate-100 dark:bg-slate-800/50 rounded-b-xl">
+                        <img src="{% url 'gso_requests:request_attachment' req.pk %}" alt="Request attachment" class="max-w-full max-h-[70vh] w-auto h-auto object-contain rounded-lg" />
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% if req.status == 'CANCELLED' and req.requestor_cancel_reason %}
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Cancellation reason</dt>
+                <dd class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{{ req.requestor_cancel_reason }}</dd>
+                {% if req.requestor_cancelled_at %}
+                <dd class="text-xs text-slate-500 dark:text-slate-400 mt-1">Cancelled by requestor on {{ req.requestor_cancelled_at|date:"M d, Y g:i A" }}</dd>
+                {% endif %}
+            </div>
+            {% endif %}
+        </dl>
+    </div>
+
+    {% if is_requestor_layout and can_requestor_edit %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 flex flex-wrap items-center gap-3">
+            <a href="{% url 'gso_requests:requestor_request_edit' req.pk %}" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-lg">edit</span> Edit request
+            </a>
+            <p class="text-xs text-slate-500 dark:text-slate-400">You can edit this request until personnel are assigned or it is approved.</p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if is_requestor_layout and can_requestor_cancel and requestor_cancel_form %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Cancel request</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">You can cancel this request before work has started. You must provide a reason.</p>
+            </div>
+            <button type="button" onclick="document.getElementById('requestorCancelModal').classList.remove('hidden')" class="inline-flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                <span class="material-symbols-outlined text-lg">cancel</span> Cancel request
+            </button>
+        </div>
+    </div>
+    <div id="requestorCancelModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-black/50 transition-opacity" onclick="document.getElementById('requestorCancelModal').classList.add('hidden')"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Cancel request</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Please provide a reason. This will be shown in the request details.</p>
+                </div>
+                <form method="post" action="{% url 'gso_requests:requestor_request_cancel' req.pk %}" class="p-6">
+                    {% csrf_token %}
+                    <div class="mb-4">
+                        <label for="id_reason" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ requestor_cancel_form.reason.label }}</label>
+                        {{ requestor_cancel_form.reason }}
+                        {% if requestor_cancel_form.reason.errors %}
+                        <p class="text-xs text-red-600 dark:text-red-400 mt-1">{{ requestor_cancel_form.reason.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">Confirm cancel</button>
+                        <button type="button" onclick="document.getElementById('requestorCancelModal').classList.add('hidden')" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Keep request</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and assignments %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assigned personnel</h2>
+        </div>
+        <ul class="px-6 py-4 divide-y divide-slate-200 dark:divide-slate-800">
+            {% for a in assignments %}
+            <li class="py-2 flex items-center justify-between gap-4">
+                <span class="text-slate-900 dark:text-slate-100 font-medium">{{ a.personnel.get_full_name|default:a.personnel.username }}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ a.assigned_at|date:"M d, Y g:i A" }}{% if a.assigned_by %} · by {{ a.assigned_by.get_full_name|default:a.assigned_by.username }}{% endif %}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_assign and assign_form %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Assign personnel</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Select one or more personnel from your unit. Status will change to Assigned (waiting Director approval).</p>
+        </div>
+        <form method="post" action="{% url 'gso_accounts:staff_request_assign' req.pk %}" class="px-6 py-4">
+            {% csrf_token %}
+            <div class="space-y-3">
+                {% for choice in assign_form.personnel.field.queryset %}
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="personnel" value="{{ choice.pk }}" class="rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary/30"/>
+                    <div class="flex flex-col">
+                        <span class="text-slate-900 dark:text-slate-100 font-medium">{{ choice.get_full_name|default:choice.username }}</span>
+                        {% if choice.active_requests_for_assignment %}
+                        <span class="text-xs text-slate-500 dark:text-slate-400">
+                            {{ choice.active_requests_for_assignment|length }} active request{% if choice.active_requests_for_assignment|length != 1 %}s{% endif %}:
+                            {% for r in choice.active_requests_for_assignment|slice:":3" %}
+                                {{ r.display_id }}{% if not forloop.last %}, {% endif %}
+                            {% endfor %}
+                            {% if choice.active_requests_for_assignment|length > 3 %}…{% endif %}
+                        </span>
+                        {% else %}
+                        <span class="text-xs text-slate-400">No other active requests</span>
+                        {% endif %}
+                    </div>
+                </label>
+                {% empty %}
+                <p class="text-sm text-slate-500 dark:text-slate-400">No other personnel in this unit to assign. Add personnel in Personnel Management first.</p>
+                {% endfor %}
+            </div>
+            {% if assign_form.personnel.field.queryset %}
+            <div class="mt-4">
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Assign selected</button>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and materials_issued %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Materials issued to this request</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Items issued from unit inventory (stock was deducted).</p>
+        </div>
+        <ul class="px-6 py-4 divide-y divide-slate-200 dark:divide-slate-800">
+            {% for t in materials_issued %}
+            <li class="py-2 flex flex-wrap items-center justify-between gap-2">
+                <span class="text-slate-900 dark:text-slate-100 font-medium">{{ t.item.name }}</span>
+                <span class="text-sm text-slate-700 dark:text-slate-300">{{ t.quantity }} {{ t.item.unit_of_measure }}{% if t.notes %} · {{ t.notes }}{% endif %}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{{ t.created_at|date:"M d, Y g:i A" }}{% if t.performed_by %} · by {{ t.performed_by.get_full_name|default:t.performed_by.username }}{% endif %}</span>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_add_materials and issue_material_form %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Add materials</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Issue items from your unit inventory to this request. Quantity will be deducted from stock.</p>
+        </div>
+        <form method="post" action="{% url 'gso_accounts:staff_request_issue_material' req.pk %}" class="px-6 py-4 space-y-3">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                    <label for="id_item" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.item.label }}</label>
+                    {{ issue_material_form.item }}
+                </div>
+                <div>
+                    <label for="id_quantity" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.quantity.label }}</label>
+                    {{ issue_material_form.quantity }}
+                </div>
+                <div>
+                    <label for="id_notes" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.notes.label }}</label>
+                    {{ issue_material_form.notes }}
+                </div>
+            </div>
+            <div>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Issue material</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and material_requests %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Material requests</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Requested by personnel; inventory is deducted only when Unit Head approves.</p>
+        </div>
+        <ul class="px-6 py-4 divide-y divide-slate-200 dark:divide-slate-800">
+            {% for mr in material_requests %}
+            <li class="py-3 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex-1 min-w-0">
+                    <span class="text-slate-900 dark:text-slate-100 font-medium">{{ mr.item.name }}</span>
+                    <span class="text-sm text-slate-700 dark:text-slate-300"> · {{ mr.quantity }} {{ mr.item.unit_of_measure }}{% if mr.notes %} · {{ mr.notes }}{% endif %}</span>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Requested by {{ mr.requested_by.get_full_name|default:mr.requested_by.username }} · {{ mr.created_at|date:"M d, Y g:i A" }}</p>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if mr.status == 'PENDING' %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Pending</span>
+                    {% if can_approve_reject_materials %}
+                    <form method="post" action="{% url 'gso_accounts:staff_material_request_approve' mr.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-lg transition-colors">Approve</button>
+                    </form>
+                    <form method="post" action="{% url 'gso_accounts:staff_material_request_reject' mr.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-xs font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Reject</button>
+                    </form>
+                    {% endif %}
+                    {% elif mr.status == 'APPROVED' %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">Approved</span>
+                    {% if mr.approved_at %}<span class="text-xs text-slate-500 dark:text-slate-400">· {{ mr.approved_at|date:"M d, Y" }}</span>{% endif %}
+                    {% else %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300">Rejected</span>
+                    {% if mr.approved_at %}<span class="text-xs text-slate-500 dark:text-slate-400">· {{ mr.approved_at|date:"M d, Y" }}</span>{% endif %}
+                    {% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_request_materials and request_material_form %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Request materials</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Request items from unit inventory. Unit Head must approve before stock is deducted.</p>
+        </div>
+        <form method="post" action="{% url 'gso_accounts:staff_request_material_submit' req.pk %}" class="px-6 py-4 space-y-3">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div>
+                    <label for="id_request_item" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.item.label }}</label>
+                    {{ request_material_form.item }}
+                </div>
+                <div>
+                    <label for="id_request_quantity" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.quantity.label }}</label>
+                    {{ request_material_form.quantity }}
+                </div>
+                <div>
+                    <label for="id_request_notes" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.notes.label }}</label>
+                    {{ request_material_form.notes }}
+                </div>
+            </div>
+            <div>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Submit request</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_assign %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Emergency flag</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mark this request as emergency so Director/GSO see it at top with red highlight.</p>
+            </div>
+            <form method="post" action="{% url 'gso_accounts:staff_request_toggle_emergency' req.pk %}" class="inline">
+                {% csrf_token %}
+                {% if req.is_emergency %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-semibold hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">Unmark Emergency</button>
+                {% else %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-lg">emergency</span> Mark as Emergency
+                </button>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_approve %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Director approval</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Approve this request so assigned personnel can start work.</p>
+            </div>
+            <form method="post" action="{% url 'gso_accounts:staff_request_approve' req.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-lg">check_circle</span> Approve request
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_send_reminder and remind_targets %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Send reminder</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Notify someone that this request needs their attention. They will receive an in-app notification.</p>
+        </div>
+        <div class="px-6 py-4 flex flex-wrap gap-3">
+            {% for target, label, desc in remind_targets %}
+            <form method="post" action="{% url 'gso_accounts:staff_request_remind' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="target" value="{{ target }}"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" title="{{ desc }}">
+                    <span class="material-symbols-outlined text-lg">notifications</span>
+                    Notify {{ label }}
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_update_work_status %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Work status</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Update the status of your work on this request.</p>
+        </div>
+        <div class="px-6 py-4 flex flex-wrap gap-3">
+            {% if req.status == 'DIRECTOR_APPROVED' %}
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="IN_PROGRESS"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Start work</button>
+            </form>
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="ON_HOLD"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">On Hold</button>
+            </form>
+            {% endif %}
+            {% if req.status == 'IN_PROGRESS' %}
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="ON_HOLD"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">On Hold</button>
+            </form>
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="DONE_WORKING"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">Done working</button>
+            </form>
+            {% endif %}
+            {% if req.status == 'ON_HOLD' %}
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="IN_PROGRESS"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">In Progress</button>
+            </form>
+            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                {% csrf_token %}
+                <input type="hidden" name="status" value="DONE_WORKING"/>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">Done working</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_complete %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Unit Head review</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Personnel marked work done. Approve to close, or return for rework if more work is needed.</p>
+        </div>
+        <div class="px-6 py-4 flex flex-wrap items-center gap-3">
+            <form method="post" action="{% url 'gso_accounts:staff_request_complete' req.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-lg">check_circle</span> Complete request
+                </button>
+            </form>
+            <form method="post" action="{% url 'gso_accounts:staff_request_return_rework' req.pk %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 rounded-lg text-sm font-semibold hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors">
+                    <span class="material-symbols-outlined text-lg">undo</span> Return for rework
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and request_messages %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Activity / Chat</h2>
+        </div>
+        <div class="divide-y divide-slate-200 dark:divide-slate-800 max-h-64 overflow-y-auto">
+            {% for msg in request_messages %}
+            <div class="px-6 py-3">
+                <p class="text-sm text-slate-900 dark:text-slate-100 whitespace-pre-wrap">{{ msg.message }}</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ msg.user.get_full_name|default:msg.user.username }} · {{ msg.created_at|date:"M j, Y g:i A" }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        <form method="post" action="{% url 'gso_accounts:staff_request_message' req.pk %}" class="p-4 border-t border-slate-200 dark:border-slate-800">
+            {% csrf_token %}
+            <div class="flex gap-2">
+                {{ message_form.message }}
+                <button type="submit" class="flex-shrink-0 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Send</button>
+            </div>
+        </form>
+    </div>
+    {% elif not is_requestor_layout and message_form %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Activity / Chat</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">No messages yet. Add a message below.</p>
+        </div>
+        <form method="post" action="{% url 'gso_accounts:staff_request_message' req.pk %}" class="p-4">
+            {% csrf_token %}
+            <div class="flex gap-2">
+                {{ message_form.message }}
+                <button type="submit" class="flex-shrink-0 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Send</button>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and show_war_section %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Work Accomplishment Reports (WAR)</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">One report per personnel who worked on this request.</p>
+            </div>
+        </div>
+        {% if war_list %}
+        <div class="divide-y divide-slate-200 dark:divide-slate-800">
+            {% for war in war_list %}
+            <div class="px-6 py-4">
+                <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{{ war.personnel.get_full_name|default:war.personnel.username }}</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-slate-100 mt-1">{{ war.summary|default:"—" }}</p>
+                <p class="text-sm text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-wrap">{{ war.accomplishments|default:"—" }}</p>
+                {% if war.success_indicators.all %}
+                <p class="mt-2 flex flex-wrap gap-1">
+                    {% for ind in war.success_indicators.all %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary dark:bg-primary/20">{{ ind.code }}: {{ ind.name }}</span>
+                    {% endfor %}
+                </p>
+                {% endif %}
+                <div class="mt-2 flex items-center justify-between gap-3">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ war.period_start|date:"M d, Y" }} – {{ war.period_end|date:"M d, Y" }}{% if war.created_at %} · Added {{ war.created_at|date:"M j, Y" }}{% endif %}</p>
+                    {% if can_edit_war %}
+                    <a href="{% url 'gso_accounts:staff_war_edit' war.pk %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                        <span class="material-symbols-outlined text-sm">edit</span> Edit WAR
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-6 text-center text-slate-500 dark:text-slate-400 text-sm">
+            No WAR records yet for this request.
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if is_requestor_layout and req.status == 'COMPLETED' %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Client Satisfaction Measurement (CSM)</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Your feedback helps us improve our service. One submission per completed request.</p>
+            </div>
+            {% if user_has_feedback and feedback_list %}
+            <p class="text-sm text-slate-700 dark:text-slate-300">You submitted feedback on {{ feedback_list.0.created_at|date:"M j, Y g:i A" }}. Thank you.</p>
+            {% elif show_feedback_form and feedback_form %}
+            <button type="button" onclick="document.getElementById('feedbackModal').classList.remove('hidden')" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-lg">rate_review</span> Give feedback
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if show_feedback_form and feedback_form %}
+    <!-- Feedback modal popup -->
+    <div id="feedbackModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+        <div class="fixed inset-0 bg-black/50 transition-opacity" onclick="document.getElementById('feedbackModal').classList.add('hidden')"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+                <div class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Client Satisfaction Measurement (CSM) Form</h3>
+                    <button type="button" onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200" aria-label="Close">
+                        <span class="material-symbols-outlined text-2xl">close</span>
+                    </button>
+                </div>
+                <form method="post" action="{% url 'gso_requests:requestor_request_feedback' req.pk %}" class="p-6 space-y-6">
+                    {% csrf_token %}
+                    <div>
+                        <h4 class="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Part I: Citizen's Charter Awareness (CC1–CC3)</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label for="id_cc1" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ feedback_form.cc1.label }}</label>
+                                {{ feedback_form.cc1 }}
+                            </div>
+                            <div>
+                                <label for="id_cc2" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ feedback_form.cc2.label }}</label>
+                                {{ feedback_form.cc2 }}
+                            </div>
+                            <div>
+                                <label for="id_cc3" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ feedback_form.cc3.label }}</label>
+                                {{ feedback_form.cc3 }}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Part II: Service Quality (SQD1–SQD9)</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mb-3">Rate from 1 (Strongly Disagree) to 5 (Strongly Agree).</p>
+                        <div class="space-y-3">
+                            <div><label for="id_sqd1" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD1. {{ sqd_labels.0 }}</label>{{ feedback_form.sqd1 }}</div>
+                            <div><label for="id_sqd2" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD2. {{ sqd_labels.1 }}</label>{{ feedback_form.sqd2 }}</div>
+                            <div><label for="id_sqd3" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD3. {{ sqd_labels.2 }}</label>{{ feedback_form.sqd3 }}</div>
+                            <div><label for="id_sqd4" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD4. {{ sqd_labels.3 }}</label>{{ feedback_form.sqd4 }}</div>
+                            <div><label for="id_sqd5" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD5. {{ sqd_labels.4 }}</label>{{ feedback_form.sqd5 }}</div>
+                            <div><label for="id_sqd6" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD6. {{ sqd_labels.5 }}</label>{{ feedback_form.sqd6 }}</div>
+                            <div><label for="id_sqd7" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD7. {{ sqd_labels.6 }}</label>{{ feedback_form.sqd7 }}</div>
+                            <div><label for="id_sqd8" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD8. {{ sqd_labels.7 }}</label>{{ feedback_form.sqd8 }}</div>
+                            <div><label for="id_sqd9" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">SQD9. {{ sqd_labels.8 }}</label>{{ feedback_form.sqd9 }}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="id_suggestions" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ feedback_form.suggestions.label }}</label>
+                        {{ feedback_form.suggestions }}
+                    </div>
+                    <div>
+                        <label for="id_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ feedback_form.email.label }}</label>
+                        {{ feedback_form.email }}
+                    </div>
+                    <div class="flex flex-wrap gap-3 pt-2">
+                        <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Submit feedback</button>
+                        <button type="button" onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>

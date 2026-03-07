@@ -1,0 +1,259 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Inventory — GSO{% endblock %}
+{% block staff_content %}
+<div class="space-y-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+        </div>
+        <div class="flex items-center gap-3 flex-wrap">
+            {% if request.user.is_unit_head %}
+            <a href="{% url 'gso_accounts:staff_inventory_activity_log' %}" class="flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-primary transition-colors" title="Inventory logs" aria-label="Inventory logs">
+                <span class="material-symbols-outlined text-[22px]">history</span>
+            </a>
+            {% endif %}
+            <form method="get" action="" class="flex items-center gap-2 flex-wrap">
+                {% if show_unit_filter and units %}
+                <select name="unit" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary" onchange="this.form.submit()">
+                    <option value="">All units</option>
+                    {% for u in units %}
+                    <option value="{{ u.pk }}" {% if filter_unit_id == u.pk %}selected{% endif %}>{{ u.name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <input type="search" name="q" value="{{ search_q }}" placeholder="Search by name or category..." class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm w-56 focus:ring-2 focus:ring-primary/30 focus:border-primary"/>
+                <button type="submit" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">Search</button>
+            </form>
+            {% if not user.is_personnel %}
+            <button type="button" id="inventory-add-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-lg">add</span> Add item
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 dark:bg-slate-800/50">
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Item</th>
+                        {% if show_unit_filter %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
+                        {% endif %}
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Category</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Quantity</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-center">Low stock</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                    {% for item in items %}
+                    <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4">
+                            <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" class="font-medium text-slate-900 dark:text-slate-100 hover:text-primary">{{ item.name }}</a>
+                        </td>
+                        {% if show_unit_filter %}
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.unit.name }}</td>
+                        {% endif %}
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.category|default:"—" }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 text-right">{{ item.quantity }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.unit_of_measure }}</td>
+                        <td class="px-6 py-4 text-center">
+                            {% if item.is_low_stock %}
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Low</span>
+                            {% else %}
+                            <span class="text-slate-400">—</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <a href="{% url 'gso_accounts:staff_inventory_detail' item.pk %}" data-inventory-action="view" class="text-primary hover:underline text-sm font-medium">View</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="{% if show_unit_filter %}7{% else %}6{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No inventory items yet.{% if not user.is_personnel %} <a href="{% url 'gso_accounts:staff_inventory_add' %}" class="text-primary hover:underline font-medium">Add one</a>.{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if page_obj %}
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <p class="text-xs text-slate-500 dark:text-slate-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
+            <div class="flex gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if show_unit_filter and filter_unit_id %}&unit={{ filter_unit_id }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if search_q %}&q={{ search_q }}{% endif %}{% if show_unit_filter and filter_unit_id %}&unit={{ filter_unit_id }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Inventory Add Item Modal -->
+<div id="inventory-item-modal" class="hidden fixed inset-0 z-[90] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="inventory-item-modal-title">
+    <div id="inventory-item-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 id="inventory-item-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Add inventory item</h3>
+            <button type="button" id="inventory-item-modal-close" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Close">
+                <span class="material-symbols-outlined text-xl">close</span>
+            </button>
+        </div>
+        <div id="inventory-item-modal-body" class="p-6 max-h-[70vh] overflow-y-auto">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Loading form…</p>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+            <button type="button" id="inventory-item-modal-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+            <button type="button" id="inventory-item-modal-save" class="px-5 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Save item</button>
+        </div>
+    </div>
+</div>
+
+{% block extra_js %}
+{{ block.super }}
+<script>
+(function() {
+    var addBtn = document.getElementById('inventory-add-btn');
+    var modal = document.getElementById('inventory-item-modal');
+    var modalBody = document.getElementById('inventory-item-modal-body');
+    var modalClose = document.getElementById('inventory-item-modal-close');
+    var modalCancel = document.getElementById('inventory-item-modal-cancel');
+    var modalBackdrop = document.getElementById('inventory-item-modal-backdrop');
+    var saveBtn = document.getElementById('inventory-item-modal-save');
+    var saveBtnPrimaryClass = saveBtn ? saveBtn.className : '';
+    var modalBackUrl = null;
+
+    function openModal() {
+        if (modal) modal.classList.remove('hidden');
+    }
+    function closeModal() {
+        if (modal) modal.classList.add('hidden');
+    }
+
+    function bindFormSubmit() {
+        if (!modalBody) return;
+        var form = modalBody.querySelector('#inventory-modal-form');
+        if (!form) return;
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+        });
+        if (saveBtn) {
+            saveBtn.onclick = function() {
+                var form = modalBody.querySelector('#inventory-modal-form');
+                if (!form) return;
+                var url = form.getAttribute('action') + '?partial=1';
+                var formData = new FormData(form);
+                fetch(url, {
+                    method: 'POST',
+                    headers: {'X-Requested-With': 'XMLHttpRequest'},
+                    body: formData,
+                    credentials: 'same-origin'
+                }).then(function(r) {
+                    if (r.ok) {
+                        return r.json();
+                    }
+                    return r.json().then(function(data) { throw data; });
+                }).then(function(data) {
+                    if (data.success) {
+                        closeModal();
+                        window.location.reload();
+                    }
+                }).catch(function(err) {
+                    if (err && err.html) {
+                        modalBody.innerHTML = err.html;
+                        bindFormSubmit();
+                    }
+                });
+            };
+        }
+    }
+
+    function loadContent(url, mode, title, backUrl) {
+        if (!modalBody) return;
+        if (mode === 'view') modalBackUrl = null;
+        else if (backUrl) modalBackUrl = backUrl;
+        if (title) {
+            var titleEl = document.getElementById('inventory-item-modal-title');
+            if (titleEl) titleEl.textContent = title;
+        }
+        if (mode === 'view') {
+            if (saveBtn) saveBtn.classList.add('hidden');
+            if (modalCancel) modalCancel.textContent = 'Close';
+        } else if (mode === 'delete') {
+            if (saveBtn) {
+                saveBtn.classList.remove('hidden');
+                saveBtn.textContent = 'Delete';
+                saveBtn.className = 'px-5 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition-colors';
+            }
+            if (modalCancel) modalCancel.textContent = 'Cancel';
+        } else {
+            if (saveBtn) {
+                saveBtn.classList.remove('hidden');
+                saveBtn.textContent = 'Save item';
+                if (saveBtnPrimaryClass) saveBtn.className = saveBtnPrimaryClass;
+            }
+            if (modalCancel) modalCancel.textContent = 'Cancel';
+        }
+        modalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading…</p>';
+        fetch(url, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin'
+        }).then(function(r) { return r.text(); })
+        .then(function(html) {
+            modalBody.innerHTML = html;
+            if (mode === 'form' || mode === 'delete') bindFormSubmit();
+        }).catch(function() {
+            modalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load. Please refresh and try again.</p>';
+        });
+    }
+
+    if (addBtn) {
+        addBtn.addEventListener('click', function() {
+            openModal();
+            loadContent('{% url "gso_accounts:staff_inventory_add" %}?partial=1', 'form', 'Add inventory item');
+        });
+    }
+    if (modalClose) modalClose.addEventListener('click', closeModal);
+    modalCancel.addEventListener('click', function() {
+        if (modalBackUrl) {
+            loadContent(modalBackUrl, 'view', 'Inventory item details');
+        } else {
+            closeModal();
+        }
+    });
+    if (modalBackdrop) modalBackdrop.addEventListener('click', closeModal);
+
+    // Row actions: view, adjust, edit, delete in modal
+    document.addEventListener('click', function(e) {
+        var link = e.target.closest('[data-inventory-action]');
+        if (!link) return;
+        e.preventDefault();
+        var action = link.getAttribute('data-inventory-action');
+        var href = link.getAttribute('href') || '';
+        if (!href) return;
+        openModal();
+        var url = href + (href.indexOf('?') === -1 ? '?partial=1' : '&partial=1');
+        var detailUrl = link.getAttribute('data-inventory-detail-url');
+        var backUrl = detailUrl ? detailUrl + (detailUrl.indexOf('?') === -1 ? '?partial=1' : '&partial=1') : null;
+        if (action === 'view') {
+            loadContent(url, 'view', 'Inventory item details');
+        } else if (action === 'adjust') {
+            loadContent(url, 'form', 'Adjust quantity', backUrl);
+        } else if (action === 'edit') {
+            loadContent(url, 'form', 'Edit inventory item', backUrl);
+        } else if (action === 'delete') {
+            loadContent(url, 'delete', 'Delete inventory item', backUrl);
+        }
+    });
+})();
+</script>
+{% endblock %}
+
+{% endblock %}
