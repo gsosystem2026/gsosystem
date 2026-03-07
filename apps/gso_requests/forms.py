@@ -44,9 +44,9 @@ class RequestForm(forms.ModelForm):
             'labor': forms.CheckboxInput(),
             'materials': forms.CheckboxInput(),
             'others': forms.CheckboxInput(),
-            'custom_full_name': forms.TextInput(attrs={'placeholder': 'Full Name'}),
-            'custom_email': forms.EmailInput(attrs={'placeholder': 'Email'}),
-            'custom_contact_number': forms.TextInput(attrs={'placeholder': 'Contact Number'}),
+            'custom_full_name': forms.TextInput(attrs={'placeholder': 'John Doe'}),
+            'custom_email': forms.EmailInput(attrs={'placeholder': 'name@psu.palawan.edu.ph'}),
+            'custom_contact_number': forms.TextInput(attrs={'placeholder': '09XX XXX XXXX', 'type': 'tel'}),
             'attachment': forms.FileInput(attrs={'accept': 'image/*'}),
         }
         labels = {

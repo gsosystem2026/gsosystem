@@ -1,28 +1,208 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}Work Reports — GSO{% endblock %}
 {% block staff_content %}
-<div class="max-w-2xl space-y-8">
-    <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+<div class="space-y-8">
+    <!-- Page header / filters -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">Personnel Performance Analytics</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">
+                Overview of completed work, efficiency, and ratings across units and personnel.
+            </p>
+        </div>
+        <div class="flex items-center gap-4">
+            <form method="get" class="flex items-center gap-2">
+                <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700 gap-2">
+                    <span class="material-symbols-outlined text-slate-400">calendar_today</span>
+                    <input type="date" name="start" value="{{ date_from_input }}"
+                           class="bg-transparent border-none text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-0 p-0" />
+                    <span class="text-xs text-slate-400">–</span>
+                    <input type="date" name="end" value="{{ date_to_input }}"
+                           class="bg-transparent border-none text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-0 p-0" />
+                </div>
+                <input type="hidden" name="range" value="{{ active_range }}">
+                <button type="submit" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                    Apply
+                </button>
+            </form>
+            <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}"
+               class="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-all">
+                <span class="material-symbols-outlined text-sm">download</span>
+                Export IPMT / WAR
+            </a>
+        </div>
     </div>
 
-    <div class="grid gap-6 sm:grid-cols-2">
-        <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
-            <span class="material-symbols-outlined text-3xl text-primary mb-3">assessment</span>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">IPMT Report</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Generate IPMT by personnel and period (month/year). Download Excel with WARs aligned to success indicators.</p>
-        </a>
-        <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
-            <span class="material-symbols-outlined text-3xl text-primary mb-3">download</span>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Export WAR</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Export Work Accomplishment Reports to Excel. Filter by personnel and/or date range.</p>
-        </a>
-        <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" class="block rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 shadow-sm hover:border-primary/50 hover:shadow-md transition-all">
-            <span class="material-symbols-outlined text-3xl text-primary mb-3">rate_review</span>
-            <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Feedback Reports</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">View and download Client Satisfaction (CSM) feedback from requestors. Filter by date or unit.</p>
-        </a>
+    <!-- KPI cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <span class="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg material-symbols-outlined">task_alt</span>
+                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                    <span class="material-symbols-outlined !text-xs">trending_up</span>
+                    <span class="ml-1">12%</span>
+                </span>
+            </div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Tasks Completed</p>
+            <h3 class="text-2xl font-bold mt-1">{{ kpi_total_completed|default:"—" }}</h3>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <span class="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg material-symbols-outlined">timer</span>
+                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                    <span class="material-symbols-outlined !text-xs">trending_down</span>
+                    <span class="ml-1">0.5d</span>
+                </span>
+            </div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Average Completion Time</p>
+            <h3 class="text-2xl font-bold mt-1">
+                {% if kpi_avg_completion_days is not None %}{{ kpi_avg_completion_days }} Days{% else %}—{% endif %}
+            </h3>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <span class="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-lg material-symbols-outlined">verified</span>
+                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                    <span class="material-symbols-outlined !text-xs">trending_up</span>
+                    <span class="ml-1">2.1%</span>
+                </span>
+            </div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Success Rate</p>
+            <h3 class="text-2xl font-bold mt-1">
+                {% if kpi_success_rate is not None %}{{ kpi_success_rate }}%{% else %}—{% endif %}
+            </h3>
+        </div>
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <span class="p-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-lg material-symbols-outlined">star</span>
+                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
+                    <span class="material-symbols-outlined !text-xs">trending_up</span>
+                    <span class="ml-1">0.2</span>
+                </span>
+            </div>
+            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Personnel Rating</p>
+            <h3 class="text-2xl font-bold mt-1">
+                {% if kpi_avg_rating is not None %}{{ kpi_avg_rating }}/5{% else %}—{% endif %}
+            </h3>
+        </div>
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Tasks completed bar chart (placeholder) -->
+        <div class="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div class="flex items-center justify-between mb-6">
+                <h4 class="font-bold text-sm">Tasks Completed by Unit</h4>
+                <span class="material-symbols-outlined text-slate-400 cursor-pointer">more_horiz</span>
+            </div>
+            <div class="flex gap-3 pt-4">
+                {% for bar in unit_bars %}
+                <div class="flex-1 flex flex-col items-end gap-2 group h-64">
+                    <div class="w-full rounded-t-lg transition-all {% if bar.is_top %}bg-primary{% else %}bg-primary/20 group-hover:bg-primary{% endif %}"
+                         style="height: {{ bar.height_pct }};"></div>
+                    <span class="text-[10px] text-slate-400 font-bold">{{ bar.label }}</span>
+                </div>
+                {% empty %}
+                <p class="text-xs text-slate-500 dark:text-slate-400">No completed requests in this period.</p>
+                {% endfor %}
+            </div>
+        </div>
+        <!-- Skill / unit distribution doughnut (placeholder) -->
+        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
+            <h4 class="font-bold text-sm mb-6">Unit Distribution</h4>
+            <div class="flex-1 flex items-center justify-center relative">
+                <div class="w-40 h-40 rounded-full border-[12px] border-slate-100 dark:border-slate-800 relative flex items-center justify-center">
+                    <div class="absolute inset-0 rounded-full border-[12px] border-primary border-t-transparent border-r-transparent rotate-45"></div>
+                    <div class="text-center">
+                        <p class="text-xl font-bold">{{ unit_count|default:0 }} Units</p>
+                        <p class="text-[10px] text-slate-500">with completed work in range</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 space-y-2">
+                {% for unit in unit_distribution %}
+                <div class="flex items-center justify-between text-[11px]">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full {% if forloop.first %}bg-primary{% else %}bg-slate-400{% endif %}"></span>
+                        {{ unit.label }}
+                    </div>
+                    <span class="font-bold">{{ unit.percent }}%</span>
+                </div>
+                {% empty %}
+                <p class="text-[11px] text-slate-500 dark:text-slate-400">No units with completed work in this period.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance trends line chart -->
+    <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between mb-6">
+            <h4 class="font-bold text-sm">Performance Trends over Time</h4>
+            <div class="flex gap-2">
+                <a href="?range=weekly"
+                   class="text-[10px] font-bold px-3 py-1 rounded-md {% if active_range == 'weekly' %}bg-primary text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200{% endif %}">
+                    Weekly
+                </a>
+                <a href="?range=monthly"
+                   class="text-[10px] font-bold px-3 py-1 rounded-md {% if active_range != 'weekly' %}bg-primary text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200{% endif %}">
+                    Monthly
+                </a>
+            </div>
+        </div>
+        <div class="h-48 flex items-end gap-2 pt-2">
+            {% for point in trend_points %}
+            <div class="flex-1 flex flex-col items-center gap-1">
+                <div class="w-full rounded-t-lg bg-primary/20" style="height: {{ point.height_pct }};"></div>
+                <span class="text-[9px] text-slate-400 font-medium whitespace-nowrap">{{ point.label }}</span>
+            </div>
+            {% empty %}
+            <p class="text-xs text-slate-500 dark:text-slate-400">No completed requests in this period.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Top performing personnel table (static placeholder) -->
+    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h4 class="font-bold text-sm">Top Performing Personnel</h4>
+            <span class="text-xs text-slate-500 dark:text-slate-400">Based on WAR count in the last 30 days</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead class="bg-slate-50 dark:bg-slate-800/50">
+                    <tr>
+                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Personnel Name</th>
+                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unit</th>
+                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Accomplishments</th>
+                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Success Indicator</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                    {% for p in top_personnel %}
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
+                        <td class="px-6 py-4 font-semibold">{{ p.name }}</td>
+                        <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ p.unit_name }}</td>
+                        <td class="px-6 py-4">{{ p.accomplishments }} WARs</td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden max-w-[100px]">
+                                    <div class="h-full bg-emerald-500" style="width: 100%"></div>
+                                </div>
+                                <span class="text-[10px] font-bold text-emerald-600">&nbsp;</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-6 py-6 text-center text-slate-500 dark:text-slate-400">
+                            No Work Accomplishment Reports found in this period.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

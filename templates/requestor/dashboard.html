@@ -385,7 +385,7 @@
             var code = btn.getAttribute('data-unit-code');
             var name = btn.getAttribute('data-unit-name');
             if (code) {
-                openFormModal(code, 'Submitting for: ' + (name || code));
+                openFormModal(code, name || code);
             }
         });
     });
@@ -401,7 +401,7 @@
             });
             closeUnitModal();
             if (codes.length) {
-                openFormModal(codes.join(','), 'Submitting for: ' + names.join(', '));
+                openFormModal(codes.join(','), names.join(', '));
             }
         });
     }
