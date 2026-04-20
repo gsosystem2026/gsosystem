@@ -1,6 +1,10 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}Request Management — GSO{% endblock %}
 {% block staff_content %}
+<p id="request-mgmt-auto-refresh-status" class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap mb-1" aria-live="polite">
+    <span id="request-mgmt-refresh-spinner" class="hidden inline-block size-3 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+    <span>List auto-refreshes every 15s. Last updated: <time id="request-mgmt-last-updated">—</time></span>
+</p>
 <div class="space-y-6" id="request-management-wrapper">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -105,6 +109,22 @@
     </div>
 </div>
 <script>
+function requestMgmtFormatNow() {
+    try {
+        return new Date().toLocaleString('en-PH', { dateStyle: 'short', timeStyle: 'short' });
+    } catch (e) {
+        return new Date().toISOString();
+    }
+}
+function requestMgmtSetLastUpdated() {
+    var el = document.getElementById('request-mgmt-last-updated');
+    if (el) el.textContent = requestMgmtFormatNow();
+}
+function requestMgmtSetRefreshing(on) {
+    var sp = document.getElementById('request-mgmt-refresh-spinner');
+    if (sp) sp.classList.toggle('hidden', !on);
+}
+
 function initRequestManagementFilters() {
     const form = document.getElementById('request-management-filter-form');
     const wrapper = document.getElementById('request-management-wrapper');
@@ -121,10 +141,10 @@ function initRequestManagementFilters() {
         const query = params.toString();
         const url = window.location.pathname + (query ? '?' + query : '');
         wrapper.classList.add('opacity-50');
+        requestMgmtSetRefreshing(true);
         fetch(url, {
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-            }
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
         })
             .then(function (response) { return response.text(); })
             .then(function (html) {
@@ -134,6 +154,7 @@ function initRequestManagementFilters() {
                 if (newWrapper) {
                     wrapper.innerHTML = newWrapper.innerHTML;
                     wrapper.classList.remove('opacity-50');
+                    requestMgmtSetLastUpdated();
                     initRequestManagementFilters();
                 } else {
                     wrapper.classList.remove('opacity-50');
@@ -141,6 +162,9 @@ function initRequestManagementFilters() {
             })
             .catch(function () {
                 wrapper.classList.remove('opacity-50');
+            })
+            .finally(function () {
+                requestMgmtSetRefreshing(false);
             });
     };
 
@@ -170,6 +194,37 @@ function initRequestManagementFilters() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initRequestManagementFilters);
+document.addEventListener('DOMContentLoaded', function () {
+    requestMgmtSetLastUpdated();
+    initRequestManagementFilters();
+    setInterval(function () {
+        var form = document.getElementById('request-management-filter-form');
+        var wrapper = document.getElementById('request-management-wrapper');
+        if (!form || !wrapper) return;
+        var formData = new FormData(form);
+        formData.delete('page');
+        var params = new URLSearchParams(formData);
+        var url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        requestMgmtSetRefreshing(true);
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var newWrapper = doc.getElementById('request-management-wrapper');
+                if (newWrapper) {
+                    wrapper.innerHTML = newWrapper.innerHTML;
+                    requestMgmtSetLastUpdated();
+                    initRequestManagementFilters();
+                }
+            })
+            .catch(function () {})
+            .finally(function () {
+                requestMgmtSetRefreshing(false);
+            });
+    }, 15000);
+});
 </script>
 {% endblock %}

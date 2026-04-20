@@ -8,3 +8,5 @@ openpyxl>=3.1
 # API: REST framework for external system integration
 djangorestframework>=3.14,<4
 djangorestframework-simplejwt>=5.3,<6
+# CORS: allow Flutter web / mobile to call API from different origin
+django-cors-headers>=4.0,<5

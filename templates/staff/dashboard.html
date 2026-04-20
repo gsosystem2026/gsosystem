@@ -338,49 +338,55 @@
           <div>
             <h2 class="text-lg font-bold text-slate-900 dark:text-white">Pending Requests Overview</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Submitted requests waiting for assignment or action.</p>
+            <p id="dashboard-pending-refresh-status" class="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-2 flex-wrap" aria-live="polite">
+              <span id="dashboard-pending-spinner" class="hidden inline-block size-3 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
+              <span>Auto-refreshes every 15s. Last updated: <time id="dashboard-pending-last-updated">—</time></span>
+            </p>
           </div>
           <a href="{% url 'gso_accounts:staff_request_management' %}?status=SUBMITTED" class="text-primary text-sm font-semibold hover:underline">View Request Management</a>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead>
-              <tr class="bg-slate-50 dark:bg-slate-800/50">
-                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request ID</th>
-                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Title</th>
-                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-              {% for req in unit_head_pending_assign %}
-              <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors {% if req.show_urgent_indicator %}border-l-4 border-l-red-500{% endif %}">
-                <td class="px-6 py-4 font-semibold text-primary">
-                  <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="hover:underline">{{ req.display_id }}</a>
-                  {% if req.show_urgent_indicator %}
-                  <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Emergency</span>
-                  {% endif %}
-                </td>
-                <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
-                  {{ req.title|default:'—' }}
-                </td>
-                <td class="px-6 py-4">
-                  <span class="px-2 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">
-                    {{ req.get_status_display }}
-                  </span>
-                </td>
-                <td class="px-6 py-4">
-                  <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="inline-block bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">View Details</a>
-                </td>
-              </tr>
-              {% empty %}
-              <tr>
-                <td colspan="4" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
-                  No pending submitted requests for your unit.
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <div id="dashboard-pending-requests-wrapper">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="bg-slate-50 dark:bg-slate-800/50">
+                  <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request ID</th>
+                  <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Title</th>
+                  <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                  <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                {% for req in unit_head_pending_assign %}
+                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors {% if req.show_urgent_indicator %}border-l-4 border-l-red-500{% endif %}">
+                  <td class="px-6 py-4 font-semibold text-primary">
+                    <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="hover:underline">{{ req.display_id }}</a>
+                    {% if req.show_urgent_indicator %}
+                    <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Emergency</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
+                    {{ req.title|default:'—' }}
+                  </td>
+                  <td class="px-6 py-4">
+                    <span class="px-2 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">
+                      {{ req.get_status_display }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4">
+                    <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="inline-block bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">View Details</a>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="4" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                    No pending submitted requests for your unit.
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -559,4 +565,32 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+(function() {
+  var wrapper = document.getElementById('dashboard-pending-requests-wrapper');
+  if (!wrapper) return;
+  var url = '{% url "gso_accounts:staff_dashboard_pending_requests" %}';
+  var spinner = document.getElementById('dashboard-pending-spinner');
+  var timeEl = document.getElementById('dashboard-pending-last-updated');
+  function fmt() {
+    try { return new Date().toLocaleString('en-PH', { dateStyle: 'short', timeStyle: 'short' }); }
+    catch (e) { return new Date().toISOString(); }
+  }
+  if (timeEl) timeEl.textContent = fmt();
+  setInterval(function() {
+    if (spinner) spinner.classList.remove('hidden');
+    fetch(url, { credentials: 'same-origin' })
+      .then(function(r) { return r.text(); })
+      .then(function(html) {
+        if (html && wrapper) wrapper.innerHTML = html;
+        if (timeEl) timeEl.textContent = fmt();
+      })
+      .catch(function() {})
+      .finally(function() {
+        if (spinner) spinner.classList.add('hidden');
+      });
+  }, 15000);
+})();
+</script>
 {% endblock %}

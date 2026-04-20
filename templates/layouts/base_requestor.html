@@ -52,18 +52,16 @@
     <div class="flex flex-1 justify-end gap-4 items-center">
         <div class="flex gap-2 items-center">
             <!-- Notifications dropdown -->
-            <div class="relative" id="notif-dropdown-wrap">
+            <div class="relative" id="notif-dropdown-wrap" data-initial-unread="{{ unread_notification_count|default:0 }}">
                 <button type="button" id="notif-dropdown-btn" class="relative flex items-center justify-center rounded-lg h-10 w-10 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-primary/10 hover:text-primary transition-colors" aria-label="Notifications" aria-expanded="false" aria-haspopup="true">
                     <span class="material-symbols-outlined">notifications</span>
-                    {% if unread_notification_count > 0 %}
-                    <span class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5 ring-2 ring-white dark:ring-slate-900" aria-label="{{ unread_notification_count }} unread">{% if unread_notification_count > 9 %}9+{% else %}{{ unread_notification_count }}{% endif %}</span>
-                    {% endif %}
+                    <span id="notif-badge" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5 ring-2 ring-white dark:ring-slate-900 hidden" aria-label="0 unread">0</span>
                 </button>
                 <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-50 overflow-hidden flex flex-col max-h-[70vh]" role="menu">
                     <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
                         <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
                     </div>
-                    <div class="overflow-y-auto flex-1 min-h-0">
+                    <div id="notif-list" class="overflow-y-auto flex-1 min-h-0">
                         {% for n in requestor_notifications %}
                         <a href="{% url 'gso_accounts:notification_go' n.pk %}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
                             <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ n.title }}</p>
@@ -73,14 +71,12 @@
                         <p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
                         {% endfor %}
                     </div>
-                    {% if unread_notification_count > 0 %}
-                    <div class="p-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+                    <div id="notif-mark-all" class="p-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0 {% if unread_notification_count == 0 %}hidden{% endif %}">
                         <form method="post" action="{% url 'gso_accounts:notification_mark_all_read' %}" class="block">
                             {% csrf_token %}
                             <button type="submit" class="w-full text-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary py-2">Mark all as read</button>
                         </form>
                     </div>
-                    {% endif %}
                 </div>
             </div>
             <!-- Profile dropdown -->
@@ -396,6 +392,57 @@
         });
         document.addEventListener('click', closeNotifDropdown);
         if (notifWrap) notifWrap.addEventListener('click', function(e) { e.stopPropagation(); });
+    }
+
+    // Auto-update notifications from API every 15s (so new requests from mobile appear)
+    var notifBadge = document.getElementById('notif-badge');
+    var notifListEl = document.getElementById('notif-list');
+    var notifMarkAllEl = document.getElementById('notif-mark-all');
+    var initialUnread = notifWrap ? parseInt(notifWrap.getAttribute('data-initial-unread') || '0', 10) : 0;
+    if (notifBadge) {
+        notifBadge.textContent = initialUnread > 9 ? '9+' : String(initialUnread);
+        notifBadge.classList.toggle('hidden', initialUnread === 0);
+    }
+    function updateRequestorNotifications() {
+        fetch('/api/v1/notifications/unread_count/', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data || !notifBadge) return;
+                var c = data.count || 0;
+                notifBadge.textContent = c > 9 ? '9+' : String(c);
+                notifBadge.classList.toggle('hidden', c === 0);
+                notifBadge.setAttribute('aria-label', c + ' unread');
+                if (notifMarkAllEl) notifMarkAllEl.classList.toggle('hidden', c === 0);
+            })
+            .catch(function() {});
+        fetch('/api/v1/notifications/', { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .then(function(data) {
+                if (!data || !notifListEl) return;
+                var list = data.results || data;
+                if (!Array.isArray(list)) return;
+                var goBase = '/accounts/notifications/';
+                function fmtDate(s) {
+                    if (!s) return '';
+                    try {
+                        var d = new Date(s);
+                        return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+                    } catch (e) { return s; }
+                }
+                if (list.length === 0) {
+                    notifListEl.innerHTML = '<p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>';
+                } else {
+                    notifListEl.innerHTML = list.map(function(n) {
+                        var cls = 'block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
+                        if (!n.read) cls += ' bg-primary/5 dark:bg-primary/10';
+                        return '<a href="' + goBase + n.id + '/go/" class="' + cls + '"><p class="text-sm font-medium text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + fmtDate(n.created_at) + '</p></a>';
+                    }).join('');
+                }
+            })
+            .catch(function() {});
+    }
+    if (notifBadge && notifListEl) {
+        setInterval(updateRequestorNotifications, 15000);
     }
 
 })();

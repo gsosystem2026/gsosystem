@@ -1,0 +1,42 @@
+{% comment %}Partial for dashboard Pending Requests Overview table. Used by AJAX polling. {% endcomment %}
+<div class="overflow-x-auto">
+  <table class="w-full text-left">
+    <thead>
+      <tr class="bg-slate-50 dark:bg-slate-800/50">
+        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request ID</th>
+        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Title</th>
+        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+      {% for req in unit_head_pending_assign %}
+      <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors {% if req.show_urgent_indicator %}border-l-4 border-l-red-500{% endif %}">
+        <td class="px-6 py-4 font-semibold text-primary">
+          <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="hover:underline">{{ req.display_id }}</a>
+          {% if req.show_urgent_indicator %}
+          <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Emergency</span>
+          {% endif %}
+        </td>
+        <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
+          {{ req.title|default:'—' }}
+        </td>
+        <td class="px-6 py-4">
+          <span class="px-2 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">
+            {{ req.get_status_display }}
+          </span>
+        </td>
+        <td class="px-6 py-4">
+          <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="inline-block bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-primary/90 transition-colors">View Details</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="4" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+          No pending submitted requests for your unit.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

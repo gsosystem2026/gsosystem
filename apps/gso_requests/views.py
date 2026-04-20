@@ -606,22 +606,8 @@ class UpdateWorkStatusView(LoginRequiredMixin, View):
         old_status = req.status
         req.status = new_status
         req.save(update_fields=['status', 'updated_at'])
-        if new_status == Request.Status.DONE_WORKING:
-            from apps.gso_notifications.utils import notify_done_working
-            notify_done_working(req)
-        else:
-            from apps.gso_notifications.utils import (
-                notify_requestor_work_started,
-                notify_requestor_work_resumed,
-                notify_requestor_work_on_hold,
-            )
-            if new_status == Request.Status.IN_PROGRESS:
-                if old_status == Request.Status.DIRECTOR_APPROVED:
-                    notify_requestor_work_started(req)
-                elif old_status == Request.Status.ON_HOLD:
-                    notify_requestor_work_resumed(req)
-            elif new_status == Request.Status.ON_HOLD:
-                notify_requestor_work_on_hold(req)
+        from apps.gso_notifications.utils import notify_after_personnel_work_status_change
+        notify_after_personnel_work_status_change(req, old_status, new_status)
         messages.success(request, f'Status set to {req.get_status_display()}.')
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 

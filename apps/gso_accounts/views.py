@@ -216,6 +216,29 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
         return context
 
 
+class StaffDashboardPendingRequestsView(StaffRequiredMixin, TemplateView):
+    """Returns only the Pending Requests Overview table fragment for dashboard AJAX polling."""
+    template_name = 'staff/dashboard_pending_requests_partial.html'
+
+    def get_context_data(self, **kwargs):
+        from apps.gso_requests.models import Request
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and user.unit_id:
+            pending_submitted = Request.objects.filter(
+                unit_id=user.unit_id,
+                status=Request.Status.SUBMITTED,
+            )
+            context['unit_head_pending_assign'] = list(
+                pending_submitted.select_related('unit')
+                .prefetch_related('assignments__personnel')
+                .order_by('-is_emergency', '-created_at')[:10]
+            )
+        else:
+            context['unit_head_pending_assign'] = []
+        return context
+
+
 class StaffActivityLogView(StaffRequiredMixin, ListView):
     """Director only: activity log (system audit) and inventory logs in one place. Filter by log type to switch table."""
     template_name = 'staff/activity_log.html'

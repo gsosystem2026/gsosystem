@@ -7,6 +7,7 @@ from apps.gso_accounts.models import User
 from apps.gso_requests.models import Request, RequestAssignment
 from apps.gso_inventory.models import InventoryItem
 from apps.gso_units.models import Unit
+from apps.gso_notifications.models import Notification
 
 
 class UnitSerializer(serializers.ModelSerializer):
@@ -19,6 +20,23 @@ class UserMinimalSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'username', 'first_name', 'last_name', 'role']
+
+
+class UserMeSerializer(serializers.ModelSerializer):
+    """Current user info for mobile app (id, username, role, unit_id, unit_name, can_approve)."""
+    unit_id = serializers.IntegerField(allow_null=True)
+    unit_name = serializers.SerializerMethodField()
+    can_approve = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'role', 'unit_id', 'unit_name', 'can_approve']
+
+    def get_unit_name(self, obj):
+        return obj.unit.name if obj.unit_id else None
+
+    def get_can_approve(self, obj):
+        return getattr(obj, 'can_approve_requests', False)
 
 
 class RequestListSerializer(serializers.ModelSerializer):
@@ -78,6 +96,12 @@ class RequestCreateSerializer(serializers.ModelSerializer):
         validated_data['requestor_id'] = user.id
         validated_data['status'] = Request.Status.SUBMITTED
         return super().create(validated_data)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'title', 'message', 'link', 'read', 'created_at']
 
 
 class InventoryItemSerializer(serializers.ModelSerializer):

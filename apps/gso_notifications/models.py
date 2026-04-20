@@ -20,3 +20,23 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.user})"
+
+
+class DeviceToken(models.Model):
+    """FCM device token for push notifications. One user can have multiple devices."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='device_tokens',
+    )
+    token = models.CharField(max_length=500)
+    platform = models.CharField(max_length=50, blank=True)  # android, ios, web
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [['user', 'token']]
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.user} ({self.platform})"

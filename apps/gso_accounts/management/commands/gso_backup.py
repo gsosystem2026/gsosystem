@@ -1,64 +1,111 @@
 """
-Phase 9.1: Backup SQLite database and optionally export critical data to JSON.
-Uses SQLite when DATABASE_URL is not set. For PostgreSQL, only JSON export is done.
+Backup database (SQLite file copy or PostgreSQL pg_dump) and optional JSON export.
 
 Usage:
-  python manage.py gso_backup              # SQLite copy + JSON export
-  python manage.py gso_backup --db-only   # SQLite file copy only
-  python manage.py gso_backup --json-only # JSON export only (works with any DB)
+  python manage.py gso_backup              # DB backup + JSON export
+  python manage.py gso_backup --db-only    # DB backup only (SQLite copy or pg_dump)
+  python manage.py gso_backup --json-only  # JSON export only (any DB engine)
+  python manage.py gso_backup --keep 10    # override retention (default: GSO_BACKUP_KEEP env or 7)
 
-Backup directory: set GSO_BACKUP_DIR in .env or defaults to project_root/backups
-Schedule: run daily via cron/Task Scheduler, e.g. 0 2 * * * (2 AM)
+After each run, old dated files are pruned per type: keep the newest N files
+(db_*.sqlite3, pg_*.dump, data_*.json). Rotating N files is safer than a single
+"replace" file — you can roll back to a previous day.
+
+PostgreSQL requires `pg_dump` on PATH (PostgreSQL client tools).
+Backup directory: GSO_BACKUP_DIR in .env or project_root/backups
+
+Schedule daily (e.g. 2 AM): cron / Task Scheduler
 """
 import json
+import os
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.db import connection
 
 
 class Command(BaseCommand):
-    help = "Backup SQLite DB and/or export critical data to JSON (Phase 9.1)."
+    help = "Backup SQLite or PostgreSQL database and/or export critical data to JSON."
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--db-only',
             action='store_true',
-            help='Only copy the SQLite database file (no JSON export).',
+            help='Only backup database (no JSON export).',
         )
         parser.add_argument(
             '--json-only',
             action='store_true',
-            help='Only export data to JSON (no DB file copy).',
+            help='Only export data to JSON (no DB backup).',
+        )
+        parser.add_argument(
+            '--keep',
+            type=int,
+            default=None,
+            metavar='N',
+            help='Keep N newest files per backup type (db/pg/json). Overrides GSO_BACKUP_KEEP env.',
         )
 
     def handle(self, *args, **options):
         db_only = options['db_only']
         json_only = options['json_only']
+        keep = options['keep']
+        if keep is None:
+            keep = getattr(settings, 'GSO_BACKUP_KEEP', 7)
+        keep = max(1, min(100, int(keep)))
 
         backup_dir = self._backup_dir()
         backup_dir.mkdir(parents=True, exist_ok=True)
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
         if not options['json_only']:
-            self._backup_sqlite(backup_dir, ts)
+            self._backup_database(backup_dir, ts)
         if not options['db_only']:
             self._export_json(backup_dir, ts)
 
+        self._prune_rotations(backup_dir, keep)
+
         self.stdout.write(self.style.SUCCESS(f'Backup completed. Directory: {backup_dir}'))
+
+    def _prune_rotations(self, backup_dir: Path, keep: int):
+        """Keep the newest `keep` files for each backup family; delete older ones."""
+        families = [
+            ('db_*.sqlite3', 'SQLite DB copies'),
+            ('pg_*.dump', 'PostgreSQL dumps'),
+            ('data_*.json', 'JSON exports'),
+        ]
+        for pattern, label in families:
+            paths = sorted(backup_dir.glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+            for old in paths[keep:]:
+                try:
+                    old.unlink()
+                    self.stdout.write(f'Pruned old {label}: {old.name}')
+                except OSError as e:
+                    self.stdout.write(self.style.WARNING(f'Could not remove {old}: {e}'))
 
     def _backup_dir(self):
         path = getattr(settings, 'GSO_BACKUP_DIR', None)
         return Path(path) if path else Path(settings.BASE_DIR) / 'backups'
 
-    def _backup_sqlite(self, backup_dir, ts):
+    def _backup_database(self, backup_dir, ts):
         db = settings.DATABASES.get('default', {})
-        if db.get('ENGINE') != 'django.db.backends.sqlite3':
-            self.stdout.write('Database is not SQLite; skipping DB file copy. Use --json-only for data export.')
-            return
+        engine = (db.get('ENGINE') or '').lower()
+        if 'sqlite' in engine:
+            self._backup_sqlite(backup_dir, ts, db)
+        elif 'postgresql' in engine or 'postgres' in engine:
+            self._backup_postgresql(backup_dir, ts)
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    f'Unknown database engine; skipping file backup. Engine: {db.get("ENGINE")}'
+                )
+            )
+
+    def _backup_sqlite(self, backup_dir, ts, db):
         name = db.get('NAME')
         if not name:
             self.stdout.write(self.style.WARNING('No database NAME configured.'))
@@ -71,7 +118,60 @@ class Command(BaseCommand):
             return
         dest = backup_dir / f'db_{ts}.sqlite3'
         shutil.copy2(src, dest)
-        self.stdout.write(f'Copied DB to {dest}')
+        self.stdout.write(f'Copied SQLite DB to {dest}')
+
+    def _pg_connection_uri(self):
+        """Connection URI for pg_dump (DATABASE_URL or built from DATABASES)."""
+        url = (os.environ.get('DATABASE_URL') or '').strip()
+        if url:
+            return url
+        db = settings.DATABASES.get('default', {})
+        name = db.get('NAME')
+        if not name:
+            return None
+        user = db.get('USER') or ''
+        password = db.get('PASSWORD') or ''
+        host = db.get('HOST') or 'localhost'
+        port = str(db.get('PORT') or '5432')
+        u = quote(str(user), safe='')
+        p = quote(str(password), safe='')
+        if user and password:
+            auth = f'{u}:{p}@'
+        elif user:
+            auth = f'{u}@'
+        else:
+            auth = ''
+        return f'postgresql://{auth}{host}:{port}/{name}'
+
+    def _backup_postgresql(self, backup_dir, ts):
+        uri = self._pg_connection_uri()
+        if not uri:
+            self.stdout.write(self.style.WARNING('Could not build PostgreSQL connection URI; skipping pg_dump.'))
+            return
+        dest = backup_dir / f'pg_{ts}.dump'
+        # Custom format (-Fc) for pg_restore; works with connection URI as last arg
+        try:
+            proc = subprocess.run(
+                ['pg_dump', '-Fc', '-f', str(dest), uri],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+        except FileNotFoundError:
+            self.stdout.write(
+                self.style.ERROR(
+                    'pg_dump not found. Install PostgreSQL client tools and ensure pg_dump is on PATH, '
+                    'or use your host’s dashboard backups (Supabase/Neon). JSON export still ran if not --db-only.'
+                )
+            )
+            return
+        except subprocess.TimeoutExpired:
+            self.stdout.write(self.style.ERROR('pg_dump timed out.'))
+            return
+        if proc.returncode != 0:
+            self.stdout.write(self.style.ERROR(f'pg_dump failed (exit {proc.returncode}): {proc.stderr or proc.stdout}'))
+            return
+        self.stdout.write(f'PostgreSQL custom-format dump written to {dest}')
 
     def _export_json(self, backup_dir, ts):
         from django.contrib.auth import get_user_model
@@ -82,17 +182,14 @@ class Command(BaseCommand):
         User = get_user_model()
         data = {'exported_at': datetime.now().isoformat(), 'version': getattr(settings, 'GSO_APP_VERSION', '1.0')}
 
-        # Users: id, username, role, unit_id, is_active (no passwords)
         data['users'] = list(
             User.objects.values('id', 'username', 'first_name', 'last_name', 'role', 'unit_id', 'is_active', 'date_joined')
         )
-        # Requests: minimal for recovery reference
         data['requests'] = list(
             Request.objects.values(
                 'id', 'requestor_id', 'unit_id', 'title', 'status', 'is_emergency', 'created_at', 'updated_at'
             )
         )
-        # Request feedback (CSM)
         data['request_feedback'] = list(
             RequestFeedback.objects.values(
                 'id', 'request_id', 'user_id', 'cc1', 'cc2', 'cc3',
@@ -100,13 +197,11 @@ class Command(BaseCommand):
                 'suggestions', 'created_at'
             )
         )
-        # WAR
         data['war'] = list(
             WorkAccomplishmentReport.objects.values(
                 'id', 'request_id', 'personnel_id', 'period_start', 'period_end', 'summary', 'accomplishments', 'created_at'
             )
         )
-        # Inventory items
         data['inventory'] = list(
             InventoryItem.objects.values('id', 'unit_id', 'name', 'quantity', 'unit_of_measure', 'updated_at')
         )

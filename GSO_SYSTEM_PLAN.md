@@ -287,3 +287,9 @@
 | 9 | Backup & rollback | `gso_backup` command (SQLite + JSON), rollback doc, audit log, security checklist | ✅ Done |
 
 **All phases complete.** The GSO system is ready for final testing and deployment. See `docs/PHASE9_BACKUP_ROLLBACK_SECURITY.md` for backup, rollback, and security; use `python manage.py gso_backup` for backups when using SQLite.
+
+---
+
+## Flutter Mobile App
+
+A phased plan for building a Flutter mobile app that connects to the GSO Django backend is in **`FLUTTER_IMPLEMENTATION_PLAN.md`**. Phases: 1) Foundation & setup, 2) Auth & role-based nav, 3) Requestor flow, 4) Staff flow, 5) Inventory, 6) Notifications & polish.

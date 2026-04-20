@@ -126,6 +126,28 @@ def notify_personnel_assigned(request_obj):
         )
 
 
+def notify_after_personnel_work_status_change(request_obj, old_status, new_status):
+    """
+    After personnel saves a work status change (web or API). Same rules as UpdateWorkStatusView.
+    - DONE_WORKING → notify_done_working (unit heads + requestor).
+    - IN_PROGRESS from DIRECTOR_APPROVED → requestor "work started".
+    - IN_PROGRESS from ON_HOLD → requestor "work resumed".
+    - ON_HOLD → requestor "on hold".
+    """
+    from apps.gso_requests.models import Request
+
+    if new_status == Request.Status.DONE_WORKING:
+        notify_done_working(request_obj)
+        return
+    if new_status == Request.Status.IN_PROGRESS:
+        if old_status == Request.Status.DIRECTOR_APPROVED:
+            notify_requestor_work_started(request_obj)
+        elif old_status == Request.Status.ON_HOLD:
+            notify_requestor_work_resumed(request_obj)
+    elif new_status == Request.Status.ON_HOLD:
+        notify_requestor_work_on_hold(request_obj)
+
+
 def notify_done_working(request_obj):
     """Phase 5.4: When Personnel mark Done working, notify Unit Head(s) and the Requestor."""
     from django.apps import apps

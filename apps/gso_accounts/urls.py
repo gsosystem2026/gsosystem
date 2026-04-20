@@ -43,6 +43,7 @@ urlpatterns = [
     path('login/', views.GsoLoginView.as_view(), name='login'),
     path('logout/', views.GsoLogoutView.as_view(), name='logout'),
     path('staff/dashboard/', views.StaffDashboardView.as_view(), name='staff_dashboard'),
+    path('staff/dashboard/pending-requests/', views.StaffDashboardPendingRequestsView.as_view(), name='staff_dashboard_pending_requests'),
     path('staff/request-management/', StaffRequestListView.as_view(), name='staff_request_management'),
     path('staff/request-management/<int:pk>/', RequestDetailView.as_view(), name='staff_request_detail'),
     path('staff/request-management/<int:pk>/assign/', AssignPersonnelView.as_view(), name='staff_request_assign'),
