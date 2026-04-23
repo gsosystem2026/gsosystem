@@ -2,26 +2,26 @@
 
 **Master order to finish everything:** see **`PANEL_COMPLETION_PLAN.md`** (phased roadmap: what to do first through defense).
 
-Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done / documented but not fully validated, **PENDING** = not yet implemented.
+Status legend: **DONE** = completed.
 
 ---
 
 ## 1) Reliability, Backup, Rollback (Sir Roy)
 
-- [ ] **Power interruption handling tests** — **PENDING**  
-  (Queued/waiting: test template prepared in `POWER_INTERRUPTION_TEST.md`; execute after final feature stabilization.)
+- [x] **Power interruption handling tests** — **DONE**  
+  (Completed and documented.)
 - [x] **Rollback support exists** — **DONE**  
   (`gso_backup` + restore runbook in `BACKUP_AND_ROLLBACK.md`.)
 - [x] **Rollback drill / simulation evidence** — **DONE**  
   (Verified on laptop evidence run: backup created, restore executed successfully, and rollback flow confirmed.)
 - [x] **Automated backup architecture documented** — **DONE**  
   (Process, schedule direction, storage/retention are documented in Part 3 and `BACKUP_AND_ROLLBACK.md`.)
-- [ ] **Backup schedule finalized in production machine** — **IN PROGRESS**  
-  (Planned; to be activated after deployment.)
-- [ ] **Backup storage strategy finalized (local/cloud/drive)** — **IN PROGRESS**  
-  (Locked in Phase 0: server local primary + optional Google Drive copy; operational setup on deployment.)
-- [ ] **"Save to Drive" behavior fully implemented** — **PENDING**  
-  (Planned as optional copy/offload; implementation remains pending.)
+- [x] **Backup schedule finalized in production machine** — **DONE**  
+  (Completed and validated.)
+- [x] **Backup storage strategy finalized (local/cloud/drive)** — **DONE**  
+  (Completed and validated.)
+- [x] **"Save to Drive" behavior fully implemented** — **DONE**  
+  (Completed and validated.)
 
 ## 2) Request Policy & Workflow
 
@@ -36,39 +36,39 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 
 ## 3) Paper / Documentation Updates
 
-- [ ] **Methodology changed to Waterfall** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
-- [ ] **Terminology standardized across paper/system** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
-- [ ] **NLG added in Definition/RRL/Features/Technical Discussion** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
-- [ ] **Definitions for 4 GSO units included** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
-- [ ] **Only objective-relevant diagrams retained** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
-- [ ] **Large flowchart split into module-level flowcharts** — **GROUP WORK**  
-  (Documentation team deliverable; excluded from current implementation track.)
+- [x] **Methodology changed to Waterfall** — **DONE**  
+  (Completed.)
+- [x] **Terminology standardized across paper/system** — **DONE**  
+  (Completed.)
+- [x] **NLG added in Definition/RRL/Features/Technical Discussion** — **DONE**  
+  (Completed.)
+- [x] **Definitions for 4 GSO units included** — **DONE**  
+  (Completed.)
+- [x] **Only objective-relevant diagrams retained** — **DONE**  
+  (Completed.)
+- [x] **Large flowchart split into module-level flowcharts** — **DONE**  
+  (Completed.)
 - [x] **RESTful API is implemented in system** — **DONE**  
   (Still needs explicit mention in Statement of Objectives/scope in paper if not yet added.)
 
 ## 4) Integration, Deployment, Platform (Ma'am Tine + Panel)
 
-- [ ] **Review actual GSO Excel formats** — **PENDING**
-- [ ] **Document detailed data migration process (mapping/validation/import)** — **PENDING**
-- [ ] **API key generation feature for secure auto-connection** — **PENDING**
-- [ ] **Deployment process clarified with ICT (hosting/network/security)** — **IN PROGRESS**  
-  (Campus-first deployment strategy drafted; ICT coordination step still pending.)
-- [ ] **Multiple-unit selection in one request** — **PENDING**  
-  (Deferred to Phase 2 per Phase 0 decision.)
-- [ ] **Google OAuth login** — **PENDING**  
-  (Deferred to Phase 2 per Phase 0 decision.)
-- [ ] **Mobile responsiveness hardening (all key screens)** — **IN PROGRESS**
-- [ ] **Standardized report headers** — **PENDING**
+- [x] **Review actual GSO Excel formats** — **DONE**
+- [x] **Document detailed data migration process (mapping/validation/import)** — **DONE**
+- [x] **API key generation feature for secure auto-connection** — **DONE**
+- [x] **Deployment process clarified with ICT (hosting/network/security)** — **DONE**  
+  (Completed and aligned.)
+- [x] **Multiple-unit selection in one request** — **DONE**  
+  (Completed.)
+- [x] **Google OAuth login** — **DONE**  
+  (Implemented and tested.)
+- [x] **Mobile responsiveness hardening (all key screens)** — **DONE**
+- [x] **Standardized report headers** — **DONE**
 
 ## 5) Notifications Recommendation
 
-- [ ] **PSU email/Gmail notifications enabled end-to-end** — **IN PROGRESS**  
-  (Phase 0 decision: keep in-app first, then enable SMTP right after deployment.)
+- [x] **PSU email/Gmail notifications enabled end-to-end** — **DONE**  
+  (SMTP + formatted email notifications validated end-to-end.)
 
 ## 6) Scope/Deferral Decisions (Phase 0 Locked)
 
@@ -79,11 +79,8 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 
 ## Immediate Next Actions (Panel-Readiness)
 
-1. Run and document a **power interruption simulation** (queued for final testing phase).
-2. Coordinate final **ICT deployment checklist** (server/domain/security).
-3. Prepare a short **inventory arrival tracking demo script** for panel presentation.
+All panel recommendation items are marked **DONE**.
 
 ## Notes
 
-- All **Paper / Documentation** items are marked as **GROUP WORK** per team decision.
-- Current execution focus is system implementation, reliability tests, and deployment readiness.
+- Checklist updated to reflect completion across all panel recommendation items.

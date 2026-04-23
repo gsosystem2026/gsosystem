@@ -19,6 +19,7 @@ urlpatterns = [
     path('', root_redirect),
     path('admin/', admin.site.urls),
     path('api/v1/', include('apps.gso_api.urls')),
+    path('accounts/social/', include('allauth.urls')),
     path('accounts/', include('apps.gso_accounts.urls')),
     path('accounts/requestor/request/', include('apps.gso_requests.urls')),
 ]
