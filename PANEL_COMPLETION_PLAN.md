@@ -26,6 +26,15 @@ This document is the **ordered roadmap** to finish everything the panel asked fo
 
 **Deliverable:** One-page “decisions” note you can paste into your paper’s scope/limitations.
 
+### Phase 0 decision lock (approved)
+
+- **Post-submission edit policy:** Editable only until `DIRECTOR_APPROVED`.
+- **Backup storage:** Server local folder as primary + optional Google Drive copy.
+- **Email channel for phase 1:** In-app first; enable SMTP right after deployment.
+- **Multiple-unit selection in one request:** Deferred to Phase 2 (post-defense).
+- **Offline-to-online sync:** Marked as future enhancement in paper/scope limitations.
+- **Google OAuth:** Deferred to Phase 2 (post-defense).
+
 ---
 
 ## Phase 1 — Prove reliability (system + evidence for panel)

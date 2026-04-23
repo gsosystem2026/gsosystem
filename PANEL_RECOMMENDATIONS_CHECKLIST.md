@@ -12,21 +12,21 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
   (Need documented outage test cases + execution evidence.)
 - [x] **Rollback support exists** — **DONE**  
   (`gso_backup` + restore runbook in `BACKUP_AND_ROLLBACK.md`.)
-- [ ] **Rollback drill / simulation evidence** — **IN PROGRESS**  
-  (Mechanism exists, but formal recorded drill for panel is still needed.)
+- [x] **Rollback drill / simulation evidence** — **DONE**  
+  (Verified on laptop evidence run: backup created, restore executed successfully, and rollback flow confirmed.)
 - [x] **Automated backup architecture documented** — **DONE**  
   (Process, schedule direction, storage/retention are documented in Part 3 and `BACKUP_AND_ROLLBACK.md`.)
 - [ ] **Backup schedule finalized in production machine** — **IN PROGRESS**  
   (Planned; to be activated after deployment.)
 - [ ] **Backup storage strategy finalized (local/cloud/drive)** — **IN PROGRESS**  
-  (Options mapped; final operational choice pending deployment setup.)
+  (Locked in Phase 0: server local primary + optional Google Drive copy; operational setup on deployment.)
 - [ ] **"Save to Drive" behavior fully implemented** — **PENDING**  
-  (Currently planned as post-stabilization attachment/backup offload.)
+  (Planned as optional copy/offload; implementation remains pending.)
 
 ## 2) Request Policy & Workflow
 
-- [ ] **Editable requests after submission policy finalized** — **PENDING**  
-  (Need final rule: editable until approval / limited window / locked after submit.)
+- [x] **Editable requests after submission policy finalized** — **DONE**  
+  (Locked in Phase 0: editable only until `DIRECTOR_APPROVED`.)
 - [ ] **Policy enforcement in code + UI** — **PENDING**  
   (Implement right after policy decision.)
 - [x] **Material arrival tracking in inventory** — **DONE**  
@@ -52,22 +52,29 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 - [ ] **API key generation feature for secure auto-connection** — **PENDING**
 - [ ] **Deployment process clarified with ICT (hosting/network/security)** — **IN PROGRESS**  
   (Campus-first deployment strategy drafted; ICT coordination step still pending.)
-- [ ] **Multiple-unit selection in one request** — **PENDING**
-- [ ] **Google OAuth login** — **PENDING**
+- [ ] **Multiple-unit selection in one request** — **PENDING**  
+  (Deferred to Phase 2 per Phase 0 decision.)
+- [ ] **Google OAuth login** — **PENDING**  
+  (Deferred to Phase 2 per Phase 0 decision.)
 - [ ] **Mobile responsiveness hardening (all key screens)** — **IN PROGRESS**
 - [ ] **Standardized report headers** — **PENDING**
 
 ## 5) Notifications Recommendation
 
 - [ ] **PSU email/Gmail notifications enabled end-to-end** — **IN PROGRESS**  
-  (SMTP setup was prepared then paused; needs final credentials and production testing.)
+  (Phase 0 decision: keep in-app first, then enable SMTP right after deployment.)
+
+## 6) Scope/Deferral Decisions (Phase 0 Locked)
+
+- [x] **Offline-to-online sync scope decision finalized** — **DONE**  
+  (Full offline sync marked as future enhancement for post-defense scope.)
 
 ---
 
 ## Immediate Next Actions (Panel-Readiness)
 
 1. Finalize **post-submission edit policy** and implement it in code/UI.
-2. Run and document a **rollback drill** + **power interruption simulation**.
+2. Run and document a **power interruption simulation**.
 3. Complete **Waterfall + terminology + NLG + unit definitions** in the paper.
 4. Coordinate final **ICT deployment checklist** (server/domain/security).
 5. Prepare a short **inventory arrival tracking demo script** for panel presentation.
