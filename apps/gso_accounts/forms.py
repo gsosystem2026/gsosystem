@@ -24,13 +24,42 @@ class GsoPasswordResetForm(PasswordResetForm):
     )
 
 
+class GsoPasswordResetOTPForm(forms.Form):
+    """Enter 6-digit OTP sent by email."""
+    otp = forms.CharField(
+        max_length=6,
+        min_length=6,
+        widget=forms.TextInput(attrs={
+            'placeholder': 'Enter 6-digit OTP',
+            'autocomplete': 'one-time-code',
+            'inputmode': 'numeric',
+            'pattern': '[0-9]*',
+            'class': 'w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-center tracking-[0.3em] font-semibold',
+        }),
+    )
+
+    def clean_otp(self):
+        otp = (self.cleaned_data.get('otp') or '').strip()
+        if not otp.isdigit():
+            raise ValidationError('OTP must be numeric.')
+        return otp
+
+
 class GsoSetPasswordForm(SetPasswordForm):
     """Set new password (from reset link)."""
     new_password1 = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'New password', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'New password',
+            'autocomplete': 'new-password',
+            'class': 'w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
+        })
     )
     new_password2 = forms.CharField(
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm new password', 'autocomplete': 'new-password'})
+        widget=forms.PasswordInput(attrs={
+            'placeholder': 'Confirm new password',
+            'autocomplete': 'new-password',
+            'class': 'w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
+        })
     )
 
 

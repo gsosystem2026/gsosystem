@@ -1,5 +1,10 @@
 {% load inventory_units %}
 <div class="max-w-3xl mx-auto space-y-6">
+    {% if request.GET.updated %}
+    <div class="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+        Request updated successfully.
+    </div>
+    {% endif %}
     <div class="flex items-center gap-4">
         {% if in_modal and is_requestor_layout %}
         <a href="{% url 'gso_requests:requestor_request_detail' req.pk %}" target="_blank" rel="noopener" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
@@ -101,7 +106,12 @@
     {% if is_requestor_layout and can_requestor_edit %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 flex flex-wrap items-center gap-3">
-            <a href="{% url 'gso_requests:requestor_request_edit' req.pk %}" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+            <a
+                href="{% url 'gso_requests:requestor_request_edit' req.pk %}"
+                class="requestor-edit-request-btn inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors"
+                data-edit-url="{% url 'gso_requests:requestor_request_edit' req.pk %}"
+                data-detail-url="{% url 'gso_requests:requestor_request_detail' req.pk %}"
+            >
                 <span class="material-symbols-outlined text-lg">edit</span> Edit request
             </a>
             <p class="text-xs text-slate-500 dark:text-slate-400">You can edit this request until personnel are assigned or it is approved.</p>

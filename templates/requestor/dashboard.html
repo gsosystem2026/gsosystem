@@ -545,6 +545,7 @@
 
     var detailModal = document.getElementById('request-detail-modal');
     var detailModalBody = document.getElementById('request-detail-modal-body');
+    var detailModalTitle = document.getElementById('request-detail-modal-title');
     var detailModalClose = document.getElementById('request-detail-modal-close');
     var detailModalBackdrop = document.getElementById('request-detail-modal-backdrop');
     function closeDetailModal() {
@@ -553,22 +554,84 @@
     function openDetailModal() {
         if (detailModal) detailModal.classList.remove('hidden');
     }
-    // Use event delegation so newly loaded rows (after pagination/filter) also work
-    document.addEventListener('click', function(e) {
-        var btn = e.target.closest('.requestor-view-detail-btn');
-        if (!btn) return;
-        var url = btn.getAttribute('data-detail-url');
+    function setDetailModalTitle(mode) {
+        if (!detailModalTitle) return;
+        detailModalTitle.textContent = mode === 'edit' ? 'Edit request' : 'Request details';
+    }
+    function loadDetailModalContent(url, mode) {
         if (!url) return;
+        var fullUrl = url;
+        try {
+            var u = new URL(url, window.location.origin);
+            u.searchParams.set('partial', '1');
+            u.searchParams.set('modal', '1');
+            fullUrl = u.toString();
+        } catch (e) {
+            fullUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'partial=1&modal=1';
+        }
         if (detailModalBody) detailModalBody.innerHTML = '<p class="text-slate-500 dark:text-slate-400 text-sm">Loading…</p>';
+        setDetailModalTitle(mode || 'detail');
         openDetailModal();
-        fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'partial=1', { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+        fetch(fullUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
             .then(function(r) { return r.text(); })
             .then(function(html) {
                 if (detailModalBody) detailModalBody.innerHTML = html;
             })
             .catch(function() {
-                if (detailModalBody) detailModalBody.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not load details. <a href="' + url + '" class="underline">Open full page</a>.</p>';
+                if (detailModalBody) detailModalBody.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not load content. <a href="' + url + '" class="underline">Open full page</a>.</p>';
             });
+    }
+    // Use event delegation so newly loaded rows (after pagination/filter) also work
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.requestor-view-detail-btn');
+        if (btn) {
+            var detailUrl = btn.getAttribute('data-detail-url');
+            if (!detailUrl) return;
+            loadDetailModalContent(detailUrl, 'detail');
+            return;
+        }
+        var editBtn = e.target.closest('.requestor-edit-request-btn');
+        if (editBtn) {
+            e.preventDefault();
+            var editUrl = editBtn.getAttribute('data-edit-url') || editBtn.getAttribute('href');
+            if (!editUrl) return;
+            loadDetailModalContent(editUrl, 'edit');
+            return;
+        }
+        var backToDetailBtn = e.target.closest('.requestor-edit-back-btn, .requestor-edit-cancel-btn');
+        if (backToDetailBtn) {
+            e.preventDefault();
+            var backDetailUrl = backToDetailBtn.getAttribute('data-detail-url');
+            if (!backDetailUrl) return;
+            loadDetailModalContent(backDetailUrl, 'detail');
+        }
+    });
+    document.addEventListener('submit', function(e) {
+        var editForm = e.target.closest('#requestor-edit-form');
+        if (!editForm) return;
+        e.preventDefault();
+        var submitAction = editForm.getAttribute('action');
+        if (!submitAction) return;
+        var formData = new FormData(editForm);
+        fetch(submitAction, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.text(); })
+        .then(function(html) {
+            if (!detailModalBody) return;
+            detailModalBody.innerHTML = html;
+            if (detailModalBody.querySelector('#requestor-edit-form')) {
+                setDetailModalTitle('edit');
+            } else {
+                setDetailModalTitle('detail');
+            }
+        })
+        .catch(function() {
+            if (detailModalBody) detailModalBody.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not save changes. Please try again.</p>';
+        });
     });
     if (detailModalClose) detailModalClose.addEventListener('click', closeDetailModal);
     if (detailModalBackdrop) detailModalBackdrop.addEventListener('click', closeDetailModal);

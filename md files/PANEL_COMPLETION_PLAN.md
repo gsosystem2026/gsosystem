@@ -62,6 +62,8 @@ This document is the **ordered roadmap** to finish everything the panel asked fo
 | 2.2 | **SMTP / email** (if chosen in Phase 0) | `.env` on server, send test mail, document in deployment plan. |
 | 2.3 | Map **which events** trigger email (subset of in-app notifications) | Avoid spam; document list for paper. |
 
+**Progress update:** Phase 2.1 is implemented (requestor edit allowed until `DIRECTOR_APPROVED`, including `ASSIGNED`).
+
 **Already done (verify in demo only):** inventory arrival tracking, material request notifications, REST API.
 
 ---
@@ -95,6 +97,8 @@ This document is the **ordered roadmap** to finish everything the panel asked fo
 ## Phase 5 — Paper and thesis alignment (parallel from Phase 2 onward)
 
 **Goal:** Sir Roy / Ma’am Kaye / Ma’am Tine documentation requests.
+
+**Ownership:** **GROUP WORK (documentation team)** — not part of the current implementation execution track.
 
 | Order | Task | Deliverable |
 |-------|------|-------------|

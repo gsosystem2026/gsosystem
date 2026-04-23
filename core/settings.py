@@ -169,6 +169,13 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
 EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'no-reply@gso.local')
+GSO_SITE_URL = os.environ.get('GSO_SITE_URL', '')
+GSO_EMAIL_NOTIFICATIONS_ENABLED = os.environ.get('GSO_EMAIL_NOTIFICATIONS_ENABLED', 'True').lower() in ('true', '1', 'yes')
+GSO_PASSWORD_RESET_OTP_EXP_MINUTES = int(os.environ.get('GSO_PASSWORD_RESET_OTP_EXP_MINUTES', '10'))
+GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS = int(os.environ.get('GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS', '5'))
+GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
+    os.environ.get('GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS', '60')
+)
 
 # Phase 8.3: App version for "new version available" prompt (bump on deploy)
 GSO_APP_VERSION = os.environ.get('GSO_APP_VERSION', '1.0')

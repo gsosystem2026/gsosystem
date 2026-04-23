@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
 
 
 class User(AbstractUser):
@@ -146,3 +147,35 @@ class AuditLog(models.Model):
     def __str__(self):
         who = getattr(self.user, 'username', None) or 'Unknown'
         return f"{self.action} by {who} at {self.created_at}"
+
+
+class PasswordResetOTP(models.Model):
+    """One-time password used for email-based password reset."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='password_reset_otps',
+    )
+    code = models.CharField(max_length=6)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_used(self):
+        return self.used_at is not None
+
+    def __str__(self):
+        return f"OTP for {self.user_id} at {self.created_at}"

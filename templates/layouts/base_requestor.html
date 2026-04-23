@@ -296,10 +296,10 @@
                             <span class="material-symbols-outlined text-lg">edit_square</span>
                             Edit profile
                         </button>
-                        <a href="{% url 'gso_accounts:password_reset' %}" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
+                        <button type="button" id="profile-modal-show-password" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
                             <span class="material-symbols-outlined text-lg">key</span>
                             Change password
-                        </a>
+                        </button>
                         </div>
                     </div>
                 </div>
@@ -353,7 +353,49 @@
                         </div>
                     </form>
                 </div>
+                <!-- Pane 3: Change password form -->
+                <div id="profile-modal-password" class="profile-modal-pane hidden px-6 py-6">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Change Password</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Update your account password while you are logged in.</p>
+                    <div id="profile-password-error" class="mb-4 rounded-xl border border-red-300/60 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300 {% if not request.GET.pw_error %}hidden{% endif %}">
+                        {{ request.GET.pw_error|default:'' }}
+                    </div>
+                    <form method="post" action="{% url 'gso_accounts:password_change' %}" id="profile-password-form" class="space-y-4" data-no-loading="1">
+                        {% csrf_token %}
+                        <div>
+                            <label for="id_old_password_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Current password</label>
+                            <input type="password" name="old_password" id="id_old_password_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_new_password1_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">New password</label>
+                            <input type="password" name="new_password1" id="id_new_password1_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_new_password2_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Confirm new password</label>
+                            <input type="password" name="new_password2" id="id_new_password2_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div class="mt-2 flex gap-3">
+                            <button type="submit" class="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Update password</button>
+                            <button type="button" id="profile-modal-password-back" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Back</button>
+                        </div>
+                    </form>
+                </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Password success popup -->
+<div id="profile-password-success-popup" class="hidden fixed inset-0 z-[120]">
+    <div class="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-xs rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 shadow-2xl p-5 text-center">
+            <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
+            </div>
+            <h4 class="text-base font-bold text-slate-900 dark:text-slate-100">Password changed successfully</h4>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Your account password has been updated.</p>
+            <button type="button" id="profile-password-success-ok" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors">OK</button>
         </div>
     </div>
 </div>
@@ -407,42 +449,44 @@
     var profileModal = document.getElementById('profile-modal');
     var profileModalView = document.getElementById('profile-modal-view');
     var profileModalEdit = document.getElementById('profile-modal-edit');
-    function openProfileModal(showEditPane) {
+    var profileModalPassword = document.getElementById('profile-modal-password');
+    function showProfilePane(pane) {
+        if (profileModalView) profileModalView.classList.toggle('hidden', pane !== 'view');
+        if (profileModalEdit) profileModalEdit.classList.toggle('hidden', pane !== 'edit');
+        if (profileModalPassword) profileModalPassword.classList.toggle('hidden', pane !== 'password');
+    }
+    function openProfileModal(pane) {
         if (profileMenu) profileMenu.classList.add('hidden');
         if (profileBtn) profileBtn.setAttribute('aria-expanded', 'false');
         if (profileModal) {
             profileModal.classList.remove('hidden');
-            if (showEditPane && profileModalEdit) {
-                profileModalView.classList.add('hidden');
-                profileModalEdit.classList.remove('hidden');
-            } else {
-                profileModalView.classList.remove('hidden');
-                profileModalEdit.classList.add('hidden');
-            }
+            showProfilePane(pane || 'view');
         }
     }
     function closeProfileModal() {
         if (profileModal) profileModal.classList.add('hidden');
-        if (profileModalView) profileModalView.classList.remove('hidden');
-        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+        showProfilePane('view');
     }
     var settingsBtn = document.getElementById('profile-modal-settings-btn');
     var editBtn = document.getElementById('profile-modal-edit-btn');
-    if (settingsBtn) settingsBtn.addEventListener('click', function() { openProfileModal(false); });
-    if (editBtn) editBtn.addEventListener('click', function() { openProfileModal(true); });
+    if (settingsBtn) settingsBtn.addEventListener('click', function() { openProfileModal('view'); });
+    if (editBtn) editBtn.addEventListener('click', function() { openProfileModal('edit'); });
     var profileModalClose = document.getElementById('profile-modal-close');
     var profileModalBackdrop = document.getElementById('profile-modal-backdrop');
     if (profileModalClose) profileModalClose.addEventListener('click', closeProfileModal);
     if (profileModalBackdrop) profileModalBackdrop.addEventListener('click', closeProfileModal);
     if (profileModal) profileModal.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeProfileModal(); });
     var profileShowEdit = document.getElementById('profile-modal-show-edit');
+    var profileShowPassword = document.getElementById('profile-modal-show-password');
     var profileEditAvatarBtn = document.getElementById('profile-modal-edit-avatar-btn');
     var profileAvatarPicker = document.getElementById('profile-avatar-picker');
     var profileAvatarForm = document.getElementById('profile-avatar-form');
     var avatarButtons = profileAvatarPicker ? profileAvatarPicker.querySelectorAll('button[data-avatar-choice]') : [];
     if (profileShowEdit) profileShowEdit.addEventListener('click', function() {
-        if (profileModalView) profileModalView.classList.add('hidden');
-        if (profileModalEdit) profileModalEdit.classList.remove('hidden');
+        showProfilePane('edit');
+    });
+    if (profileShowPassword) profileShowPassword.addEventListener('click', function() {
+        showProfilePane('password');
     });
     if (profileEditAvatarBtn && profileAvatarPicker) {
         profileEditAvatarBtn.addEventListener('click', function() {
@@ -463,9 +507,101 @@
     }
     var profileEditCancel = document.getElementById('profile-modal-edit-cancel');
     if (profileEditCancel) profileEditCancel.addEventListener('click', function() {
-        if (profileModalView) profileModalView.classList.remove('hidden');
-        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+        showProfilePane('view');
     });
+    var profilePasswordBack = document.getElementById('profile-modal-password-back');
+    if (profilePasswordBack) profilePasswordBack.addEventListener('click', function() {
+        showProfilePane('view');
+    });
+    var params = new URLSearchParams(window.location.search || '');
+    var openPane = params.get('profile_pane');
+    if (openPane === 'password') {
+        openProfileModal('password');
+    }
+    var pwSuccess = params.get('pw_success');
+    var pwPopup = document.getElementById('profile-password-success-popup');
+    var pwPopupOk = document.getElementById('profile-password-success-ok');
+    function clearPwQuery() {
+        var next = new URL(window.location.href);
+        next.searchParams.delete('pw_success');
+        next.searchParams.delete('pw_error');
+        next.searchParams.delete('profile_pane');
+        window.history.replaceState({}, '', next.toString());
+    }
+    function closePwPopup() {
+        if (!pwPopup) return;
+        pwPopup.classList.add('hidden');
+        showProfilePane('view');
+        clearPwQuery();
+    }
+    function showPwPopup() {
+        if (!pwPopup) return;
+        pwPopup.classList.remove('hidden');
+        setTimeout(closePwPopup, 1500);
+    }
+    if (pwSuccess === '1' && pwPopup) {
+        openProfileModal('password');
+        showPwPopup();
+        if (pwPopupOk) pwPopupOk.addEventListener('click', closePwPopup);
+    }
+    if (pwPopupOk) pwPopupOk.addEventListener('click', closePwPopup);
+    var profilePwForm = document.getElementById('profile-password-form');
+    var profilePwError = document.getElementById('profile-password-error');
+    if (profilePwForm) {
+        profilePwForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var submitBtn = profilePwForm.querySelector('button[type="submit"]');
+            var originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (profilePwError) {
+                profilePwError.classList.add('hidden');
+                profilePwError.textContent = '';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined ui-loading-spin text-base">progress_activity</span><span>Please wait...</span></span>';
+            }
+            var formData = new FormData(profilePwForm);
+            fetch(profilePwForm.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(function(r) {
+                return r.json().then(function(data) { return { status: r.status, data: data }; });
+            })
+            .then(function(result) {
+                if (result.status >= 200 && result.status < 300 && result.data && result.data.ok) {
+                    profilePwForm.reset();
+                    showPwPopup();
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                    }
+                    return;
+                }
+                var msg = (result.data && result.data.error) ? result.data.error : 'Unable to change password.';
+                if (profilePwError) {
+                    profilePwError.textContent = msg;
+                    profilePwError.classList.remove('hidden');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            })
+            .catch(function() {
+                if (profilePwError) {
+                    profilePwError.textContent = 'Unable to change password. Please try again.';
+                    profilePwError.classList.remove('hidden');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            });
+        });
+    }
 
     var notifBtn = document.getElementById('notif-dropdown-btn');
     var notifMenu = document.getElementById('notif-dropdown');

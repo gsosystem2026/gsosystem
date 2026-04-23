@@ -1,0 +1,14 @@
+GSO Notification
+
+Hi {{ user.get_full_name|default:user.username }},
+
+{{ title }}
+
+{{ message }}
+{% if link %}
+
+View details:
+{{ link }}
+{% endif %}
+
+General Services Office

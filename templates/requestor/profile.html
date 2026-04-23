@@ -36,7 +36,7 @@
             <span class="material-symbols-outlined text-lg">edit</span>
             Edit profile
         </a>
-        <a href="{% url 'gso_accounts:password_reset' %}" class="ml-3 text-sm text-primary hover:underline">Change password</a>
+        <a href="{% url 'gso_accounts:requestor_profile' %}?profile_pane=password" class="ml-3 text-sm text-primary hover:underline">Change password</a>
     </div>
 </div>
 {% endblock %}

@@ -9,7 +9,7 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 ## 1) Reliability, Backup, Rollback (Sir Roy)
 
 - [ ] **Power interruption handling tests** — **PENDING**  
-  (Need documented outage test cases + execution evidence.)
+  (Queued/waiting: test template prepared in `POWER_INTERRUPTION_TEST.md`; execute after final feature stabilization.)
 - [x] **Rollback support exists** — **DONE**  
   (`gso_backup` + restore runbook in `BACKUP_AND_ROLLBACK.md`.)
 - [x] **Rollback drill / simulation evidence** — **DONE**  
@@ -27,8 +27,8 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 
 - [x] **Editable requests after submission policy finalized** — **DONE**  
   (Locked in Phase 0: editable only until `DIRECTOR_APPROVED`.)
-- [ ] **Policy enforcement in code + UI** — **PENDING**  
-  (Implement right after policy decision.)
+- [x] **Policy enforcement in code + UI** — **DONE**  
+  (Implemented: requestor can edit while `DRAFT`, `SUBMITTED`, or `ASSIGNED`; editing is blocked from `DIRECTOR_APPROVED` onward.)
 - [x] **Material arrival tracking in inventory** — **DONE**  
   (Arrival date + supplier/ref tracking implemented in inventory models/forms/views/templates.)
 - [x] **Material request lifecycle notifications (personnel <-> unit head)** — **DONE**  
@@ -36,12 +36,18 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 
 ## 3) Paper / Documentation Updates
 
-- [ ] **Methodology changed to Waterfall** — **PENDING**
-- [ ] **Terminology standardized across paper/system** — **IN PROGRESS**
-- [ ] **NLG added in Definition/RRL/Features/Technical Discussion** — **PENDING**
-- [ ] **Definitions for 4 GSO units included** — **PENDING**
-- [ ] **Only objective-relevant diagrams retained** — **PENDING**
-- [ ] **Large flowchart split into module-level flowcharts** — **PENDING**
+- [ ] **Methodology changed to Waterfall** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
+- [ ] **Terminology standardized across paper/system** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
+- [ ] **NLG added in Definition/RRL/Features/Technical Discussion** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
+- [ ] **Definitions for 4 GSO units included** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
+- [ ] **Only objective-relevant diagrams retained** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
+- [ ] **Large flowchart split into module-level flowcharts** — **GROUP WORK**  
+  (Documentation team deliverable; excluded from current implementation track.)
 - [x] **RESTful API is implemented in system** — **DONE**  
   (Still needs explicit mention in Statement of Objectives/scope in paper if not yet added.)
 
@@ -73,8 +79,11 @@ Status legend: **DONE** = already implemented, **IN PROGRESS** = partially done 
 
 ## Immediate Next Actions (Panel-Readiness)
 
-1. Finalize **post-submission edit policy** and implement it in code/UI.
-2. Run and document a **power interruption simulation**.
-3. Complete **Waterfall + terminology + NLG + unit definitions** in the paper.
-4. Coordinate final **ICT deployment checklist** (server/domain/security).
-5. Prepare a short **inventory arrival tracking demo script** for panel presentation.
+1. Run and document a **power interruption simulation** (queued for final testing phase).
+2. Coordinate final **ICT deployment checklist** (server/domain/security).
+3. Prepare a short **inventory arrival tracking demo script** for panel presentation.
+
+## Notes
+
+- All **Paper / Documentation** items are marked as **GROUP WORK** per team decision.
+- Current execution focus is system implementation, reliability tests, and deployment readiness.

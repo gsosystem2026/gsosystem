@@ -6,6 +6,7 @@ import os
 from django.conf import settings
 from django.http import Http404, HttpResponse, FileResponse
 from django.shortcuts import redirect, get_object_or_404
+from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.views import View
@@ -107,6 +108,13 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
     template_name = 'requestor/request_edit.html'
     context_object_name = 'req'
 
+    def _wants_partial(self):
+        return bool(
+            self.request.GET.get('partial')
+            or self.request.POST.get('partial')
+            or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
+
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return redirect('gso_accounts:login')
@@ -116,6 +124,11 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
 
     def get_queryset(self):
         return Request.objects.filter(requestor=self.request.user).select_related('unit')
+
+    def get_template_names(self):
+        if self._wants_partial():
+            return ['requestor/request_edit_partial.html']
+        return [self.template_name]
 
     def get(self, request, *args, **kwargs):
         self.object = self.get_object()
@@ -139,10 +152,23 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
         from apps.gso_notifications.utils import notify_requestor_edited_request
         notify_requestor_edited_request(self.object)
         messages.success(self.request, 'Your request has been updated.')
+        if self._wants_partial():
+            detail_url = reverse('gso_requests:requestor_request_detail', args=[self.object.pk])
+            return redirect(f'{detail_url}?partial=1&modal=1&updated=1')
         return response
 
     def get_success_url(self):
         return reverse('gso_requests:requestor_request_detail', args=[self.object.pk])
+
+    def form_invalid(self, form):
+        if self._wants_partial():
+            return TemplateResponse(
+                self.request,
+                self.get_template_names(),
+                self.get_context_data(form=form),
+                status=400,
+            )
+        return super().form_invalid(form)
 
 
 class RequestCancelView(LoginRequiredMixin, View):

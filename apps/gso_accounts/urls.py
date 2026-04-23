@@ -90,13 +90,12 @@ urlpatterns = [
     path('requestor/notifications/', views.RequestorNotificationsView.as_view(), name='requestor_notifications'),
     path('requestor/profile/', views.RequestorProfileView.as_view(), name='requestor_profile'),
     path('requestor/profile/edit/', views.RequestorProfileEditView.as_view(), name='requestor_profile_edit'),
+    path('password-change/', views.GsoPasswordChangeView.as_view(), name='password_change'),
     # Password reset
     path('password-reset/', views.GsoPasswordResetView.as_view(), name='password_reset'),
     path('password-reset/done/', views.GsoPasswordResetDoneView.as_view(), name='password_reset_done'),
-    path(
-        'reset/<uidb64>/<token>/',
-        views.GsoPasswordResetConfirmView.as_view(),
-        name='password_reset_confirm',
-    ),
-    path('reset/done/', views.GsoPasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('password-reset/verify/', views.GsoPasswordResetOTPVerifyView.as_view(), name='password_reset_verify'),
+    path('password-reset/resend-otp/', views.GsoPasswordResetOTPResendView.as_view(), name='password_reset_resend_otp'),
+    path('password-reset/new-password/', views.GsoPasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('password-reset/complete/', views.GsoPasswordResetCompleteView.as_view(), name='password_reset_complete'),
 ]

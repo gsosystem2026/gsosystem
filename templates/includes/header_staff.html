@@ -141,10 +141,10 @@
                                 <span class="material-symbols-outlined text-lg">edit_square</span>
                                 Edit profile
                             </button>
-                            <a href="{% url 'gso_accounts:password_reset' %}" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
+                            <button type="button" id="staff-profile-modal-show-password" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
                                 <span class="material-symbols-outlined text-lg">key</span>
                                 Change password
-                            </a>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -192,7 +192,46 @@
                         </div>
                     </form>
                 </div>
+                <div id="staff-profile-modal-password" class="profile-modal-pane hidden px-6 py-6">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Change Password</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Update your account password while logged in.</p>
+                    <div id="staff-password-error" class="mb-4 rounded-xl border border-red-300/60 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-300 {% if not request.GET.pw_error %}hidden{% endif %}">
+                        {{ request.GET.pw_error|default:'' }}
+                    </div>
+                    <form method="post" action="{% url 'gso_accounts:password_change' %}" id="staff-profile-password-form" class="space-y-4" data-no-loading="1">
+                        {% csrf_token %}
+                        <div>
+                            <label for="id_staff_old_password_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Current password</label>
+                            <input type="password" name="old_password" id="id_staff_old_password_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_staff_new_password1_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">New password</label>
+                            <input type="password" name="new_password1" id="id_staff_new_password1_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_staff_new_password2_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Confirm new password</label>
+                            <input type="password" name="new_password2" id="id_staff_new_password2_modal" required class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div class="mt-2 flex gap-3">
+                            <button type="submit" class="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Update password</button>
+                            <button type="button" id="staff-profile-modal-password-back" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Back</button>
+                        </div>
+                    </form>
+                </div>
             </div>
+        </div>
+    </div>
+</div>
+<div id="staff-password-success-popup" class="hidden fixed inset-0 z-[120]">
+    <div class="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-xs rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 shadow-2xl p-5 text-center">
+            <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
+            </div>
+            <h4 class="text-base font-bold text-slate-900 dark:text-slate-100">Password changed successfully</h4>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Your account password has been updated.</p>
+            <button type="button" id="staff-password-success-ok" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors">OK</button>
         </div>
     </div>
 </div>
@@ -236,6 +275,7 @@
     var profileModal = document.getElementById('staff-profile-modal');
     var profileModalView = document.getElementById('staff-profile-modal-view');
     var profileModalEdit = document.getElementById('staff-profile-modal-edit');
+    var profileModalPassword = document.getElementById('staff-profile-modal-password');
     var settingsBtn = document.getElementById('staff-profile-modal-settings-btn');
     var profileModalClose = document.getElementById('staff-profile-modal-close');
     var profileModalBackdrop = document.getElementById('staff-profile-modal-backdrop');
@@ -245,27 +285,25 @@
     var avatarPicker = document.getElementById('staff-profile-avatar-picker');
     var avatarForm = document.getElementById('staff-profile-avatar-form');
 
-    function openProfileModal(showEdit) {
+    function showProfilePane(pane) {
+        if (profileModalView) profileModalView.classList.toggle('hidden', pane !== 'view');
+        if (profileModalEdit) profileModalEdit.classList.toggle('hidden', pane !== 'edit');
+        if (profileModalPassword) profileModalPassword.classList.toggle('hidden', pane !== 'password');
+    }
+    function openProfileModal(pane) {
         closeProfile();
         if (!profileModal) return;
         profileModal.classList.remove('hidden');
-        if (showEdit) {
-            if (profileModalView) profileModalView.classList.add('hidden');
-            if (profileModalEdit) profileModalEdit.classList.remove('hidden');
-        } else {
-            if (profileModalView) profileModalView.classList.remove('hidden');
-            if (profileModalEdit) profileModalEdit.classList.add('hidden');
-        }
+        showProfilePane(pane || 'view');
     }
     function closeProfileModal() {
         if (!profileModal) return;
         profileModal.classList.add('hidden');
-        if (profileModalView) profileModalView.classList.remove('hidden');
-        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+        showProfilePane('view');
     }
-    if (settingsBtn) settingsBtn.addEventListener('click', function () { openProfileModal(false); });
-    if (showEditBtn) showEditBtn.addEventListener('click', function () { openProfileModal(true); });
-    if (editCancelBtn) editCancelBtn.addEventListener('click', function () { openProfileModal(false); });
+    if (settingsBtn) settingsBtn.addEventListener('click', function () { openProfileModal('view'); });
+    if (showEditBtn) showEditBtn.addEventListener('click', function () { openProfileModal('edit'); });
+    if (editCancelBtn) editCancelBtn.addEventListener('click', function () { openProfileModal('view'); });
     if (profileModalClose) profileModalClose.addEventListener('click', closeProfileModal);
     if (profileModalBackdrop) profileModalBackdrop.addEventListener('click', closeProfileModal);
     document.addEventListener('keydown', function (e) {
@@ -281,6 +319,97 @@
                 if (!input) return;
                 input.value = btn.getAttribute('data-staff-avatar-choice') || '';
                 avatarForm.submit();
+            });
+        });
+    }
+    var showPasswordBtn = document.getElementById('staff-profile-modal-show-password');
+    var passwordBackBtn = document.getElementById('staff-profile-modal-password-back');
+    if (showPasswordBtn) showPasswordBtn.addEventListener('click', function () { showProfilePane('password'); });
+    if (passwordBackBtn) passwordBackBtn.addEventListener('click', function () { showProfilePane('view'); });
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('profile_pane') === 'password') {
+        openProfileModal('password');
+    }
+    var pwSuccess = params.get('pw_success');
+    var pwPopup = document.getElementById('staff-password-success-popup');
+    var pwPopupOk = document.getElementById('staff-password-success-ok');
+    function clearPwQuery() {
+        var next = new URL(window.location.href);
+        next.searchParams.delete('pw_success');
+        next.searchParams.delete('pw_error');
+        next.searchParams.delete('profile_pane');
+        window.history.replaceState({}, '', next.toString());
+    }
+    function closePwPopup() {
+        if (!pwPopup) return;
+        pwPopup.classList.add('hidden');
+        showProfilePane('view');
+        clearPwQuery();
+    }
+    function showPwPopup() {
+        if (!pwPopup) return;
+        pwPopup.classList.remove('hidden');
+        setTimeout(closePwPopup, 1500);
+    }
+    if (pwSuccess === '1' && pwPopup) {
+        openProfileModal('password');
+        showPwPopup();
+    }
+    if (pwPopupOk) pwPopupOk.addEventListener('click', closePwPopup);
+    var staffPwForm = document.getElementById('staff-profile-password-form');
+    var staffPwError = document.getElementById('staff-password-error');
+    if (staffPwForm) {
+        staffPwForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var submitBtn = staffPwForm.querySelector('button[type="submit"]');
+            var originalBtnHtml = submitBtn ? submitBtn.innerHTML : '';
+            if (staffPwError) {
+                staffPwError.classList.add('hidden');
+                staffPwError.textContent = '';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined ui-loading-spin text-base">progress_activity</span><span>Please wait...</span></span>';
+            }
+            var formData = new FormData(staffPwForm);
+            fetch(staffPwForm.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(function(r) {
+                return r.json().then(function(data) { return { status: r.status, data: data }; });
+            })
+            .then(function(result) {
+                if (result.status >= 200 && result.status < 300 && result.data && result.data.ok) {
+                    staffPwForm.reset();
+                    showPwPopup();
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalBtnHtml;
+                    }
+                    return;
+                }
+                var msg = (result.data && result.data.error) ? result.data.error : 'Unable to change password.';
+                if (staffPwError) {
+                    staffPwError.textContent = msg;
+                    staffPwError.classList.remove('hidden');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
+            })
+            .catch(function() {
+                if (staffPwError) {
+                    staffPwError.textContent = 'Unable to change password. Please try again.';
+                    staffPwError.classList.remove('hidden');
+                }
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnHtml;
+                }
             });
         });
     }

@@ -1,26 +1,28 @@
 from django.conf import settings
 from django.contrib import messages
 from django.http import JsonResponse
+from django.core.mail import send_mail
+from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.views import (
     LoginView,
     LogoutView,
-    PasswordResetView,
-    PasswordResetDoneView,
-    PasswordResetConfirmView,
-    PasswordResetCompleteView,
 )
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
-from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView
+from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView, FormView
 from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.utils import timezone
+from django.template.loader import render_to_string
 from datetime import timedelta
+import secrets
+from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
-from .forms import GsoAuthenticationForm, GsoPasswordResetForm, GsoSetPasswordForm, RequestorProfileForm, DirectorUserCreateForm, DirectorUserEditForm
-from .models import User
+from .forms import GsoAuthenticationForm, GsoPasswordResetForm, GsoPasswordResetOTPForm, GsoSetPasswordForm, RequestorProfileForm, DirectorUserCreateForm, DirectorUserEditForm
+from .models import User, PasswordResetOTP
 from apps.gso_requests.models import Request
 
 # Lazy import to avoid circular import
@@ -968,24 +970,236 @@ class StaffProfileEditView(UpdateView):
         return self.request.user
 
 
-# Password reset (email optional; works if EMAIL is configured)
-class GsoPasswordResetView(PasswordResetView):
+def _redirect_with_query(url, params):
+    parsed = urlparse(url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    for key, value in params.items():
+        if value is None:
+            query.pop(key, None)
+        else:
+            query[key] = str(value)
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
+class GsoPasswordChangeView(LoginRequiredMixin, View):
+    """Logged-in change password flow for profile modal."""
+    http_method_names = ['post']
+
+    def post(self, request):
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        fallback = reverse('gso_accounts:requestor_dashboard') if getattr(request.user, 'is_requestor', False) else reverse('gso_accounts:staff_dashboard')
+        referer = request.META.get('HTTP_REFERER') or fallback
+        form = PasswordChangeForm(user=request.user, data=request.POST)
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(request, user)
+            if is_ajax:
+                return JsonResponse({'ok': True})
+            url = _redirect_with_query(
+                referer,
+                {
+                    'profile_pane': 'view',
+                    'pw_success': '1',
+                    'pw_error': None,
+                },
+            )
+            return redirect(url)
+        error_text = '; '.join([e for errors in form.errors.values() for e in errors]) or 'Unable to change password.'
+        if is_ajax:
+            return JsonResponse({'ok': False, 'error': error_text}, status=400)
+        url = _redirect_with_query(
+            referer,
+            {
+                'profile_pane': 'password',
+                'pw_success': None,
+                'pw_error': error_text,
+            },
+        )
+        return redirect(url)
+
+
+# Password reset via OTP email (Forgot Password flow)
+class GsoPasswordResetView(FormView):
     form_class = GsoPasswordResetForm
     template_name = 'registration/password_reset_form.html'
-    email_template_name = 'registration/password_reset_email.html'
     success_url = reverse_lazy('gso_accounts:password_reset_done')
-    subject_template_name = 'registration/password_reset_subject.txt'
+
+    def form_valid(self, form):
+        email = (form.cleaned_data.get('email') or '').strip()
+        user = User.objects.filter(email__iexact=email, is_active=True).first()
+        # Always clear stale session state first.
+        for key in (
+            'password_reset_pending_user_id',
+            'password_reset_pending_otp_id',
+            'password_reset_verified',
+        ):
+            self.request.session.pop(key, None)
+
+        # Keep response generic to avoid exposing whether account exists.
+        if user:
+            _issue_password_reset_otp(self.request, user, force=True)
+
+        return super().form_valid(form)
 
 
-class GsoPasswordResetDoneView(PasswordResetDoneView):
+class GsoPasswordResetDoneView(TemplateView):
     template_name = 'registration/password_reset_done.html'
 
 
-class GsoPasswordResetConfirmView(PasswordResetConfirmView):
+def _otp_resend_cooldown_seconds():
+    return max(10, int(getattr(settings, 'GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS', 60)))
+
+
+def _issue_password_reset_otp(request, user, *, force=False):
+    """Issue and email OTP; optionally enforce resend cooldown."""
+    cooldown_seconds = _otp_resend_cooldown_seconds()
+    latest_active = (
+        PasswordResetOTP.objects
+        .filter(user=user, used_at__isnull=True, expires_at__gt=timezone.now())
+        .order_by('-created_at')
+        .first()
+    )
+    if latest_active and not force:
+        elapsed = (timezone.now() - latest_active.created_at).total_seconds()
+        if elapsed < cooldown_seconds:
+            return None, int(cooldown_seconds - elapsed)
+
+    code = f"{secrets.randbelow(1000000):06d}"
+    otp_minutes = max(3, int(getattr(settings, 'GSO_PASSWORD_RESET_OTP_EXP_MINUTES', 10)))
+    expires_at = timezone.now() + timedelta(minutes=otp_minutes)
+
+    PasswordResetOTP.objects.filter(
+        user=user,
+        used_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    ).update(expires_at=timezone.now())
+
+    otp = PasswordResetOTP.objects.create(
+        user=user,
+        code=code,
+        expires_at=expires_at,
+    )
+    body = render_to_string(
+        'registration/password_reset_otp_email.txt',
+        {
+            'code': code,
+            'user': user,
+            'minutes': otp_minutes,
+        },
+    )
+    send_mail(
+        subject='GSO System - Your password reset OTP',
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
+    request.session['password_reset_pending_user_id'] = user.pk
+    request.session['password_reset_pending_otp_id'] = otp.pk
+    request.session['password_reset_verified'] = False
+    return otp, 0
+
+
+class GsoPasswordResetOTPVerifyView(FormView):
+    form_class = GsoPasswordResetOTPForm
+    template_name = 'registration/password_reset_otp_verify.html'
+    success_url = reverse_lazy('gso_accounts:password_reset_confirm')
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get('password_reset_pending_user_id'):
+            messages.info(request, 'Please request a password reset OTP first.')
+            return redirect('gso_accounts:password_reset')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user_id = self.request.session.get('password_reset_pending_user_id')
+        otp_id = self.request.session.get('password_reset_pending_otp_id')
+        otp = PasswordResetOTP.objects.filter(pk=otp_id, user_id=user_id).first()
+        seconds_left = 0
+        if otp and not otp.is_used and not otp.is_expired:
+            elapsed = (timezone.now() - otp.created_at).total_seconds()
+            seconds_left = max(0, int(_otp_resend_cooldown_seconds() - elapsed))
+        context['otp_resend_seconds_left'] = seconds_left
+        return context
+
+    def form_valid(self, form):
+        otp_id = self.request.session.get('password_reset_pending_otp_id')
+        user_id = self.request.session.get('password_reset_pending_user_id')
+        otp = PasswordResetOTP.objects.filter(pk=otp_id, user_id=user_id).first()
+        max_attempts = max(1, int(getattr(settings, 'GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS', 5)))
+
+        if not otp or otp.is_used or otp.is_expired:
+            form.add_error('otp', 'OTP is invalid or expired. Please request a new one.')
+            return self.form_invalid(form)
+        if otp.attempts >= max_attempts:
+            form.add_error('otp', 'Too many attempts. Please request a new OTP.')
+            return self.form_invalid(form)
+        if form.cleaned_data['otp'] != otp.code:
+            otp.attempts += 1
+            otp.save(update_fields=['attempts'])
+            form.add_error('otp', 'Incorrect OTP. Please try again.')
+            return self.form_invalid(form)
+
+        self.request.session['password_reset_verified'] = True
+        return super().form_valid(form)
+
+
+class GsoPasswordResetOTPResendView(View):
+    """Resend OTP with cooldown protection."""
+    http_method_names = ['post']
+
+    def post(self, request):
+        user_id = request.session.get('password_reset_pending_user_id')
+        if not user_id:
+            messages.info(request, 'Please request a password reset OTP first.')
+            return redirect('gso_accounts:password_reset')
+        user = User.objects.filter(pk=user_id, is_active=True).first()
+        if not user or not user.email:
+            messages.error(request, 'Unable to resend OTP. Please request reset again.')
+            return redirect('gso_accounts:password_reset')
+        otp, seconds_left = _issue_password_reset_otp(request, user, force=False)
+        if otp is None:
+            messages.info(request, f'Please wait {seconds_left} seconds before resending OTP.')
+        else:
+            messages.success(request, 'A new OTP has been sent to your email.')
+        return redirect('gso_accounts:password_reset_verify')
+
+
+class GsoPasswordResetConfirmView(FormView):
     form_class = GsoSetPasswordForm
     template_name = 'registration/password_reset_confirm.html'
     success_url = reverse_lazy('gso_accounts:password_reset_complete')
 
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get('password_reset_pending_user_id'):
+            messages.info(request, 'Please request a password reset OTP first.')
+            return redirect('gso_accounts:password_reset')
+        if not request.session.get('password_reset_verified'):
+            messages.info(request, 'Please verify your OTP before setting a new password.')
+            return redirect('gso_accounts:password_reset_verify')
+        return super().dispatch(request, *args, **kwargs)
 
-class GsoPasswordResetCompleteView(PasswordResetCompleteView):
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        user_id = self.request.session.get('password_reset_pending_user_id')
+        kwargs['user'] = get_object_or_404(User, pk=user_id, is_active=True)
+        return kwargs
+
+    def form_valid(self, form):
+        user = form.user
+        user.set_password(form.cleaned_data['new_password1'])
+        user.save(update_fields=['password'])
+        otp_id = self.request.session.get('password_reset_pending_otp_id')
+        PasswordResetOTP.objects.filter(pk=otp_id, user=user).update(used_at=timezone.now())
+        for key in (
+            'password_reset_pending_user_id',
+            'password_reset_pending_otp_id',
+            'password_reset_verified',
+        ):
+            self.request.session.pop(key, None)
+        return super().form_valid(form)
+
+
+class GsoPasswordResetCompleteView(TemplateView):
     template_name = 'registration/password_reset_complete.html'

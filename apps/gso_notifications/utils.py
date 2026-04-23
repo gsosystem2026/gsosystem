@@ -1,7 +1,82 @@
 """Helpers to create in-app notifications. Phase 4.4: submit, assigned, approved."""
+import logging
+
+from django.conf import settings
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from django.urls import reverse
 
 from .models import Notification
+
+logger = logging.getLogger(__name__)
+
+
+def _email_notifications_enabled():
+    return bool(getattr(settings, 'GSO_EMAIL_NOTIFICATIONS_ENABLED', True))
+
+
+def _safe_send_email(user, title, message, link='', to_email=''):
+    if not _email_notifications_enabled():
+        return
+    email = (to_email or getattr(user, 'email', '') or '').strip()
+    if not email:
+        return
+    app_url = (getattr(settings, 'GSO_SITE_URL', '') or '').rstrip('/')
+    resolved_link = link or ''
+    if resolved_link and resolved_link.startswith('/') and app_url:
+        resolved_link = f'{app_url}{resolved_link}'
+    text_body = render_to_string(
+        'emails/notification.txt',
+        {
+            'title': title,
+            'message': message,
+            'link': resolved_link,
+            'user': user,
+        },
+    )
+    html_body = render_to_string(
+        'emails/notification.html',
+        {
+            'title': title,
+            'message': message,
+            'link': resolved_link,
+            'user': user,
+        },
+    )
+    try:
+        msg = EmailMultiAlternatives(
+            subject=f'GSO Notification: {title}',
+            body=text_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email],
+        )
+        msg.attach_alternative(html_body, 'text/html')
+        msg.send(fail_silently=False)
+    except Exception:
+        logger.exception('Failed sending notification email to user_id=%s', getattr(user, 'id', None))
+
+
+def _notify(user, title, message, link=''):
+    notif = Notification.objects.create(user=user, title=title, message=message, link=link)
+    _safe_send_email(user, title, message, link)
+    return notif
+
+
+def _notify_user_id(user_id, title, message, link='', email_override=''):
+    notif = Notification.objects.create(user_id=user_id, title=title, message=message, link=link)
+    if _email_notifications_enabled():
+        from django.apps import apps
+        app_label, model_name = settings.AUTH_USER_MODEL.rsplit('.', 1)
+        UserModel = apps.get_model(app_label, model_name)
+        user = UserModel.objects.filter(pk=user_id).first()
+        if user:
+            _safe_send_email(user, title, message, link, to_email=email_override)
+    return notif
+
+
+def _requestor_email_for_request(request_obj):
+    """Requestor email routing: form-entered email first, then account email."""
+    return (getattr(request_obj, 'custom_email', '') or '').strip()
 
 
 def notify_request_submitted(request_obj):
@@ -22,33 +97,24 @@ def notify_request_submitted(request_obj):
     message = f"{request_obj.title} — {request_obj.unit.name}"
 
     # Notify requestor
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} submitted",
-        message="Your request has been received.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} submitted",
+        "Your request has been received.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
     # Notify Unit Head(s) for this unit (use staff detail URL)
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
         if u.id != request_obj.requestor_id:
-            Notification.objects.create(
-                user=u,
-                title=title,
-                message=f"New request for your unit: {request_obj.unit.name}",
-                link=staff_link,
-            )
+            _notify(u, title, f"New request for your unit: {request_obj.unit.name}", staff_link)
 
     # Notify GSO Office and Director
     staff = UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR'))
     for u in staff:
-        Notification.objects.create(
-            user=u,
-            title=title,
-            message=message,
-            link=staff_link,
-        )
+        _notify(u, title, message, staff_link)
 
 
 def notify_director_approved(request_obj):
@@ -66,31 +132,22 @@ def notify_director_approved(request_obj):
     message = f"Work can start: {request_obj.title}"
 
     # Notify requestor: their request has been approved
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} approved",
-        message="Your request has been approved. Work will start soon.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} approved",
+        "Your request has been approved. Work will start soon.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
     # Notify each assigned personnel
     for a in request_obj.assignments.select_related('personnel').all():
-        Notification.objects.create(
-            user=a.personnel,
-            title=title,
-            message=message,
-            link=staff_link,
-        )
+        _notify(a.personnel, title, message, staff_link)
 
     # Notify Unit Head(s) for this unit
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
-        Notification.objects.create(
-            user=u,
-            title=title,
-            message=f"Request approved; personnel can start work: {request_obj.title}",
-            link=staff_link,
-        )
+        _notify(u, title, f"Request approved; personnel can start work: {request_obj.title}", staff_link)
 
 
 def notify_personnel_assigned(request_obj):
@@ -108,22 +165,22 @@ def notify_personnel_assigned(request_obj):
 
     # Notify each assigned personnel
     for a in request_obj.assignments.select_related('personnel').all():
-        Notification.objects.create(
-            user=a.personnel,
-            title=title,
-            message=message,
-            link=staff_link,
-        )
+        _notify(a.personnel, title, message, staff_link)
 
     # Notify GSO Office and Director (optional per plan)
     staff = UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR'))
     for u in staff:
-        Notification.objects.create(
-            user=u,
-            title=title,
-            message=f"Personnel assigned to {request_obj.title} — {request_obj.unit.name}",
-            link=staff_link,
-        )
+        _notify(u, title, f"Personnel assigned to {request_obj.title} — {request_obj.unit.name}", staff_link)
+
+    # Notify requestor: personnel has been assigned
+    requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} assigned",
+        "Personnel has been assigned to your request. It is now waiting for approval/work start.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
+    )
 
 
 def notify_after_personnel_work_status_change(request_obj, old_status, new_status):
@@ -160,46 +217,50 @@ def notify_done_working(request_obj):
     message = f"Personnel marked work complete for review: {request_obj.title}"
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
     # Notify requestor: work is done, waiting for unit head to approve completion
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} — Work done",
-        message="Work on your request is complete. It is now awaiting approval from the unit head before it is marked completed.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} — Work done",
+        "Work on your request is complete. It is now awaiting approval from the unit head before it is marked completed.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
 
 def notify_requestor_work_started(request_obj):
     """Notify requestor when personnel start work (status → IN_PROGRESS from DIRECTOR_APPROVED)."""
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} — Work started",
-        message="Work has started on your request.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} — Work started",
+        "Work has started on your request.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
 
 def notify_requestor_work_resumed(request_obj):
     """Notify requestor when personnel resume work (status → IN_PROGRESS from ON_HOLD)."""
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} — Work resumed",
-        message="Work on your request has resumed.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} — Work resumed",
+        "Work on your request has resumed.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
 
 def notify_requestor_work_on_hold(request_obj):
     """Notify requestor when personnel put work on hold."""
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=f"Request {request_obj.display_id} — On hold",
-        message="Work on your request has been put on hold.",
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} — On hold",
+        "Work on your request has been put on hold.",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
 
 
@@ -209,12 +270,7 @@ def notify_returned_for_rework(request_obj):
     title = f"Request {request_obj.display_id} returned for rework"
     message = f"Unit Head returned this request for rework. Please review and complete the work again: {request_obj.title}"
     for a in request_obj.assignments.select_related('personnel').all():
-        Notification.objects.create(
-            user=a.personnel,
-            title=title,
-            message=message,
-            link=staff_link,
-        )
+        _notify(a.personnel, title, message, staff_link)
 
 
 def notify_request_completed(request_obj):
@@ -227,40 +283,36 @@ def notify_request_completed(request_obj):
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} completed"
     message = f"Your request has been completed: {request_obj.title}. Please submit your feedback (Client Satisfaction form) for this request."
-    Notification.objects.create(
-        user_id=request_obj.requestor_id,
-        title=title,
-        message=message,
-        link=requestor_link,
+    _notify_user_id(
+        request_obj.requestor_id,
+        title,
+        message,
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
     )
     for u in UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR')):
-        Notification.objects.create(
-            user=u,
-            title=title,
-            message=f"Request completed: {request_obj.title} — {request_obj.unit.name}",
-            link=staff_link,
-        )
+        _notify(u, title, f"Request completed: {request_obj.title} — {request_obj.unit.name}", staff_link)
 
 
 def notify_oic_assigned(oic_user, director):
     """Phase 8.1: When Director assigns OIC, notify the OIC user."""
     link = reverse('gso_accounts:staff_request_management')
-    Notification.objects.create(
-        user=oic_user,
-        title='You are now Officer-in-Charge (OIC)',
-        message=f'You can approve requests on behalf of the Director. Go to Request Management to approve assigned requests.',
-        link=link,
+    _notify(
+        oic_user,
+        'You are now Officer-in-Charge (OIC)',
+        'You can approve requests on behalf of the Director. Go to Request Management to approve assigned requests.',
+        link,
     )
 
 
 def notify_oic_revoked(oic_user, director):
     """Phase 8.1: When Director revokes OIC, notify the former OIC user."""
     link = reverse('gso_accounts:staff_dashboard')
-    Notification.objects.create(
-        user=oic_user,
-        title='OIC designation revoked',
-        message='You no longer have approval authority. Only the Director can approve requests now.',
-        link=link,
+    _notify(
+        oic_user,
+        'OIC designation revoked',
+        'You no longer have approval authority. Only the Director can approve requests now.',
+        link,
     )
 
 
@@ -274,9 +326,9 @@ def notify_requestor_edited_request(request_obj):
     title = f"Request {request_obj.display_id} updated by requestor"
     message = f"{request_obj.title} — requestor made changes. Please review if needed."
     for u in UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id):
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
     for u in UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR')):
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
 
 
 def notify_requestor_cancelled_request(request_obj):
@@ -290,9 +342,9 @@ def notify_requestor_cancelled_request(request_obj):
     message = f"{request_obj.title} — requestor cancelled this request."
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
     for u in UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR')):
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
 
 
 def notify_gso_reminder(request_obj, target):
@@ -318,7 +370,7 @@ def notify_gso_reminder(request_obj, target):
         ).distinct()
         msg = f"Request {request_obj.display_id} is waiting for your approval. Please review and approve so personnel can start work."
         for u in users:
-            Notification.objects.create(user=u, title=title, message=msg, link=staff_link)
+            _notify(u, title, msg, staff_link)
 
     elif target == 'unit_head':
         # Unit Head(s) for this unit
@@ -330,18 +382,13 @@ def notify_gso_reminder(request_obj, target):
         else:
             msg = f"Request {request_obj.display_id} needs your attention: {message}"
         for u in unit_heads:
-            Notification.objects.create(user=u, title=title, message=msg, link=staff_link)
+            _notify(u, title, msg, staff_link)
 
     elif target == 'personnel':
         # Assigned personnel
         for a in request_obj.assignments.select_related('personnel').all():
             msg = f"Reminder: Request {request_obj.display_id} is assigned to you and needs your attention. Please start or continue work."
-            Notification.objects.create(
-                user=a.personnel,
-                title=title,
-                message=msg,
-                link=staff_link,
-            )
+            _notify(a.personnel, title, msg, staff_link)
 
 
 def notify_material_request_submitted(material_request):
@@ -360,18 +407,18 @@ def notify_material_request_submitted(material_request):
         f'{material_request.quantity} x {material_request.item.name}.'
     )
     for u in UserModel.objects.filter(role='UNIT_HEAD', unit_id=req.unit_id):
-        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+        _notify(u, title, message, staff_link)
 
 
 def notify_material_request_approved(material_request):
     """Notify requesting personnel when Unit Head approves a material request."""
     req = material_request.request
     staff_link = reverse('gso_accounts:staff_request_detail', args=[req.pk])
-    Notification.objects.create(
-        user=material_request.requested_by,
-        title=f"Material request approved — {req.display_id}",
-        message=f'Your material request for "{material_request.item.name}" was approved.',
-        link=staff_link,
+    _notify(
+        material_request.requested_by,
+        f"Material request approved — {req.display_id}",
+        f'Your material request for "{material_request.item.name}" was approved.',
+        staff_link,
     )
 
 
@@ -379,9 +426,9 @@ def notify_material_request_rejected(material_request):
     """Notify requesting personnel when Unit Head rejects a material request."""
     req = material_request.request
     staff_link = reverse('gso_accounts:staff_request_detail', args=[req.pk])
-    Notification.objects.create(
-        user=material_request.requested_by,
-        title=f"Material request rejected — {req.display_id}",
-        message=f'Your material request for "{material_request.item.name}" was rejected.',
-        link=staff_link,
+    _notify(
+        material_request.requested_by,
+        f"Material request rejected — {req.display_id}",
+        f'Your material request for "{material_request.item.name}" was rejected.',
+        staff_link,
     )
