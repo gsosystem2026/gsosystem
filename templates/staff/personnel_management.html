@@ -41,7 +41,14 @@
                             </span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_management' %}?personnel={{ p.pk }}" class="text-primary hover:underline text-sm font-semibold">View requests</a>
+                            <button
+                                type="button"
+                                class="js-view-personnel-requests text-primary hover:underline text-sm font-semibold"
+                                data-personnel-id="{{ p.pk }}"
+                                data-personnel-name="{{ p.get_full_name|default:p.username }}"
+                            >
+                                View requests
+                            </button>
                         </td>
                     </tr>
                     {% endwith %}
@@ -56,6 +63,109 @@
             </table>
         </div>
     </div>
+
+    {% for row in personnel_rows %}
+    <template id="personnel-requests-data-{{ row.personnel.id }}">
+        {% if row.assigned_requests %}
+            {% for req in row.assigned_requests %}
+            <tr class="border-b border-slate-100 dark:border-slate-700/60 last:border-b-0">
+                <td class="px-4 py-3 text-sm font-semibold text-slate-900 dark:text-slate-100">{{ req.display_id }}</td>
+                <td class="px-4 py-3 text-sm text-slate-700 dark:text-slate-300">{{ req.purpose|truncatechars:70 }}</td>
+                <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ req.location }}</td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
+                </td>
+                <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{{ req.created_at|date:"M d, Y" }}</td>
+                <td class="px-4 py-3 text-right">
+                    <a href="{% url 'gso_accounts:staff_request_detail' req.id %}" class="text-primary hover:underline text-sm font-semibold">Open</a>
+                </td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            <tr>
+                <td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No assigned requests yet.</td>
+            </tr>
+        {% endif %}
+    </template>
+    {% endfor %}
 </div>
+
+<div id="personnel-requests-modal" class="fixed inset-0 z-[90] hidden flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="personnel-requests-title">
+    <div id="personnel-requests-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative h-full w-full flex items-center justify-center p-4">
+        <div class="w-full max-w-6xl max-h-[88vh] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xl">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <div>
+                    <h3 id="personnel-requests-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Assigned Requests</h3>
+                    <p id="personnel-requests-subtitle" class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5"></p>
+                </div>
+                <button type="button" id="personnel-requests-close" class="close-btn" aria-label="Close modal">
+                    <span class="material-symbols-outlined close-icon">close</span>
+                </button>
+            </div>
+            <div class="p-6 overflow-auto max-h-[calc(88vh-138px)] bg-slate-50/60 dark:bg-slate-900">
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50">
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Request ID</th>
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Purpose/s</th>
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Location</th>
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider">Date</th>
+                                <th class="px-4 py-3 text-xs font-bold text-slate-500 dark:text-slate-300 uppercase tracking-wider text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="personnel-requests-body" class="bg-white dark:bg-slate-900">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex justify-end">
+                <button type="button" id="personnel-requests-close-footer" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var modal = document.getElementById('personnel-requests-modal');
+    var backdrop = document.getElementById('personnel-requests-backdrop');
+    var closeBtn = document.getElementById('personnel-requests-close');
+    var closeFooterBtn = document.getElementById('personnel-requests-close-footer');
+    var body = document.getElementById('personnel-requests-body');
+    var subtitle = document.getElementById('personnel-requests-subtitle');
+
+    if (!modal || !body || !subtitle) return;
+
+    function closeModal() {
+        modal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    function openModal(personnelId, personnelName) {
+        var tpl = document.getElementById('personnel-requests-data-' + personnelId);
+        body.innerHTML = tpl ? tpl.innerHTML : '<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No assigned requests yet.</td></tr>';
+        subtitle.textContent = personnelName + ' - All assigned requests';
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    document.querySelectorAll('.js-view-personnel-requests').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openModal(btn.dataset.personnelId, btn.dataset.personnelName || 'Personnel');
+        });
+    });
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeFooterBtn) closeFooterBtn.addEventListener('click', closeModal);
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+            closeModal();
+        }
+    });
+});
+</script>
 {% endblock %}
 

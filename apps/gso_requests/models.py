@@ -10,6 +10,7 @@ class Request(models.Model):
         SUBMITTED = 'SUBMITTED', 'Submitted'
         ASSIGNED = 'ASSIGNED', 'Assigned'
         DIRECTOR_APPROVED = 'DIRECTOR_APPROVED', 'Approved'
+        INSPECTION = 'INSPECTION', 'Inspection'
         IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
         ON_HOLD = 'ON_HOLD', 'On Hold'
         DONE_WORKING = 'DONE_WORKING', 'Done working'
@@ -28,6 +29,7 @@ class Request(models.Model):
     )
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    location = models.CharField(max_length=255, blank=True)
     # Request type checkboxes (labor / materials / others)
     labor = models.BooleanField(default=False)
     materials = models.BooleanField(default=False)
@@ -55,6 +57,8 @@ class Request(models.Model):
         help_text='Reason given by requestor when they cancelled (before work started).',
     )
     requestor_cancelled_at = models.DateTimeField(null=True, blank=True)
+    # First moment work actually started; used for ON_HOLD button label logic.
+    work_started_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -96,7 +100,6 @@ class Request(models.Model):
             'utility': 'cleaning_services',
             'electrical': 'bolt',
             'motorpool': 'directions_car',
-            'security': 'security',
         }
         return icons.get(self.unit.code, 'build')
 
@@ -110,7 +113,6 @@ class Request(models.Model):
             'utility': 'text-green-500',
             'electrical': 'text-amber-500',
             'motorpool': 'text-indigo-500',
-            'security': 'text-red-500',
         }
         return classes.get(self.unit.code, 'text-slate-500')
 
@@ -122,6 +124,7 @@ class Request(models.Model):
             self.Status.SUBMITTED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
             self.Status.ASSIGNED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
             self.Status.DIRECTOR_APPROVED: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+            self.Status.INSPECTION: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
             self.Status.IN_PROGRESS: 'bg-primary/10 text-primary',
             self.Status.ON_HOLD: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
             self.Status.DONE_WORKING: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',

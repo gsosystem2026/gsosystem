@@ -4,7 +4,7 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
 <aside class="sidebar-staff sidebar--expand w-64 flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col p-4 gap-2 fixed md:relative inset-y-0 left-0 z-30 transform -translate-x-full md:translate-x-0 transition-[transform,width] duration-200 ease-out" aria-label="Main navigation" id="staff-sidebar">
     <div class="sidebar-header-row flex items-center justify-between mb-4 px-2 min-h-[1.25rem]">
         <span class="sidebar-main-menu text-[10px] font-bold uppercase tracking-wider text-slate-400">Main Menu</span>
-        <button type="button" id="staff-sidebar-minimize-btn" class="sidebar-minimize-btn flex items-center justify-center rounded-lg w-8 h-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors flex-shrink-0" aria-label="Collapse sidebar" title="Collapse sidebar">
+        <button type="button" id="staff-sidebar-minimize-btn" class="icon-anim-trigger sidebar-minimize-btn flex items-center justify-center rounded-lg w-8 h-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary transition-colors flex-shrink-0" aria-label="Collapse sidebar" title="Collapse sidebar">
             <span class="material-symbols-outlined text-[20px]">chevron_left</span>
         </button>
     </div>
@@ -14,7 +14,7 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
             <span class="sidebar-label text-sm truncate">Dashboard</span>
         </a>
-        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
+        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' or request.resolver_match.url_name == 'staff_request_detail' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">assignment_late</span>
             <span class="sidebar-label text-sm truncate">Request Management</span>
         </a>
@@ -33,7 +33,7 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
             <span class="sidebar-label text-sm truncate">Dashboard</span>
         </a>
-        <a href="{% url 'gso_accounts:staff_task_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_task_management' or request.resolver_match.url_name == 'staff_task_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Task Management">
+        <a href="{% url 'gso_accounts:staff_task_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_task_management' or request.resolver_match.url_name == 'staff_task_history' or request.resolver_match.url_name == 'staff_request_detail' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Task Management">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">task_alt</span>
             <span class="sidebar-label text-sm truncate">Task Management</span>
         </a>
@@ -47,7 +47,7 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>
             <span class="sidebar-label text-sm truncate">Dashboard</span>
         </a>
-        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
+        <a href="{% url 'gso_accounts:staff_request_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_request_management' or request.resolver_match.url_name == 'staff_request_history' or request.resolver_match.url_name == 'staff_request_detail' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Management">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">assignment_late</span>
             <span class="sidebar-label text-sm truncate">Request Management</span>
         </a>

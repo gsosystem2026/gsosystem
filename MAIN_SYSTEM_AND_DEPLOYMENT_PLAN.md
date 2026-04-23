@@ -290,7 +290,8 @@ So that the main system is “finished,” deployable, and then extended with AI
 | **5** | Data migration – scan/OCR | One form type: upload scan → OCR → review screen → save to DB. |
 | **6** | AI – WAR & IPMT description & summarization | AI service + “Generate/improve description” and “Summarize” in WAR form; then IPMT descriptions. |
 | **7** | AI – IPMT mapping/suggestions | Optional: suggest indicators or “fill IPMT from work” for a person/month. |
-| **8** | Flutter | After main system is stable and deployed; connect to same API. |
+| **8** | Attachment offload (Google Drive) | Pending finalization phase: move request attachments to Drive via service account; keep only file ID/link in DB; keep local media fallback until verified. |
+| **9** | Flutter | After main system is stable and deployed; connect to same API. |
 
 ---
 
@@ -300,8 +301,10 @@ So that the main system is “finished,” deployable, and then extended with AI
 - **Database:** Neon — use **`DATABASE_URL`**; verify with **`gso_db_check`**; seed **units** so requestors see “Service Selection” (Part 2 §2.3). For SQLite-only local dev, leave `DATABASE_URL` unset.
 - **Backup:** Pre-deploy: Neon dashboard + optional manual `gso_backup`. After deploy: schedule + `pg_dump` + optional Drive/sync (Part 3 §3.3, `BACKUP_AND_ROLLBACK.md`).
 - **Deploy:** **Next major step** — host Django (Railway/Render/VPS/etc.), same **`DATABASE_URL`** to Neon, production env vars, HTTPS, static files; then schedule backups on the server.
+- **Attachments (pending finalization):** Keep current local upload during stabilization. Plan Google Drive offload after edge-case/UAT finalization, with role-based access check and migration of existing files.
 - **AI:** WAR & IPMT description generation and summarization only (no request description); then IPMT mapping/suggestions if needed.
 - **Data migration:** Excel import (templates + commands/UI); scan/OCR with review UI for at least one form.
 - **Order:** Deploy app + HTTPS + backup on server → notifications smoke-test → Excel import → scan → AI (WAR → IPMT) → Flutter last.
 
 **Current focus:** Neon is configured; **deploy the web application** (Part 4) so users reach the system on a real URL. After that: **Excel import** (Part 6), **AI** (Part 5), **Flutter** polish — as the school prioritizes.
+

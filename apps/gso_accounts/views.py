@@ -169,11 +169,12 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
             status_order = Case(
                 When(status=Request.Status.ASSIGNED, then=1),
                 When(status=Request.Status.DIRECTOR_APPROVED, then=2),
-                When(status=Request.Status.IN_PROGRESS, then=3),
-                When(status=Request.Status.DONE_WORKING, then=4),
+                When(status=Request.Status.INSPECTION, then=3),
+                When(status=Request.Status.IN_PROGRESS, then=4),
+                When(status=Request.Status.DONE_WORKING, then=5),
                 When(status=Request.Status.COMPLETED, then=999),
                 When(status=Request.Status.CANCELLED, then=999),
-                default=5,
+                default=6,
                 output_field=IntegerField(),
             )
             context['personnel_assigned_requests'] = list(
@@ -442,12 +443,13 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
         status = self.request.GET.get('status', '').strip()
         if status:
             qs = qs.filter(status=status)
-        # Search by ID, title, requestor, unit
+        # Search by ID, purpose, location, requestor, unit
         q = self.request.GET.get('q', '').strip()
         if q:
             qs = qs.filter(
                 Q(title__icontains=q)
                 | Q(description__icontains=q)
+                | Q(location__icontains=q)
                 | Q(unit__name__icontains=q)
                 | Q(requestor__first_name__icontains=q)
                 | Q(requestor__last_name__icontains=q)
@@ -509,6 +511,7 @@ class StaffPersonnelManagementView(StaffRequiredMixin, TemplateView):
                 Request.Status.SUBMITTED,
                 Request.Status.ASSIGNED,
                 Request.Status.DIRECTOR_APPROVED,
+                Request.Status.INSPECTION,
                 Request.Status.IN_PROGRESS,
                 Request.Status.ON_HOLD,
                 Request.Status.DONE_WORKING,
@@ -523,11 +526,33 @@ class StaffPersonnelManagementView(StaffRequiredMixin, TemplateView):
                 .annotate(total=Count('request_id', distinct=True))
             )
             workload_map = {row['personnel_id']: row['total'] for row in counts}
+            assignments = (
+                RequestAssignment.objects.filter(personnel__in=personnel)
+                .select_related('request')
+                .order_by('-request__created_at')
+            )
+            assigned_map = {}
+            for assignment in assignments:
+                req = assignment.request
+                assigned_map.setdefault(assignment.personnel_id, []).append({
+                    'id': req.id,
+                    'display_id': req.display_id,
+                    'purpose': req.description or '—',
+                    'location': req.location or '—',
+                    'status_display': req.status_display,
+                    'status_badge_class': req.status_badge_class,
+                    'created_at': req.created_at,
+                })
         else:
             workload_map = {}
+            assigned_map = {}
         # Build rows with precomputed counts for easier template usage
         context['personnel_rows'] = [
-            {'personnel': p, 'active_count': workload_map.get(p.id, 0)}
+            {
+                'personnel': p,
+                'active_count': workload_map.get(p.id, 0),
+                'assigned_requests': assigned_map.get(p.id, []),
+            }
             for p in personnel
         ]
         return context
@@ -758,7 +783,6 @@ UNIT_DISPLAY = {
     'utility': {'icon': 'cleaning_services', 'bg': 'bg-green-50 dark:bg-green-900/20', 'text': 'text-green-600', 'description': 'Request cleaning services or venue setup.'},
     'electrical': {'icon': 'bolt', 'bg': 'bg-amber-50 dark:bg-amber-900/20', 'text': 'text-amber-600', 'description': 'Report lighting issues or power requirements.'},
     'motorpool': {'icon': 'directions_car', 'bg': 'bg-indigo-50 dark:bg-indigo-900/20', 'text': 'text-indigo-600', 'description': 'Book vehicle services and transport.'},
-    'security': {'icon': 'admin_panel_settings', 'bg': 'bg-red-50 dark:bg-red-900/20', 'text': 'text-red-600', 'description': 'Request access permits or security assistance.'},
 }
 
 
@@ -799,6 +823,7 @@ class RequestorDashboardView(TemplateView):
             qs = qs.filter(
                 Q(title__icontains=q)
                 | Q(description__icontains=q)
+                | Q(location__icontains=q)
                 | Q(unit__name__icontains=q)
             )
         # Paginate: 5 requests per page so requestor can easily browse history
@@ -813,6 +838,15 @@ class RequestorDashboardView(TemplateView):
         context['filter_q'] = q
         context['status_choices'] = Request.Status.choices
         units = list(Unit.objects.filter(is_active=True).order_by('name'))
+        # Fixed requestor card order:
+        # Repair & Maintenance, Electrical, Utility, Motorpool.
+        unit_order = {
+            'repair': 0,
+            'electrical': 1,
+            'utility': 2,
+            'motorpool': 3,
+        }
+        units.sort(key=lambda u: (unit_order.get((u.code or '').lower(), 99), u.name.lower()))
         context['units'] = [
             {'unit': u, 'display': UNIT_DISPLAY.get(u.code, {'icon': 'build', 'bg': 'bg-slate-50 dark:bg-slate-800', 'text': 'text-slate-600', 'description': u.name})}
             for u in units
@@ -908,6 +942,26 @@ class RequestorProfileEditView(UpdateView):
             return redirect('gso_accounts:login')
         if hasattr(request.user, 'is_staff_role') and request.user.is_staff_role:
             return redirect('gso_accounts:staff_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+
+class StaffProfileEditView(UpdateView):
+    """Edit profile for staff users: first name, last name, email, avatar."""
+    model = User
+    form_class = RequestorProfileForm
+    template_name = 'staff/profile_edit.html'
+
+    def get_success_url(self):
+        return self.request.META.get('HTTP_REFERER') or reverse('gso_accounts:staff_dashboard')
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('gso_accounts:login')
+        if getattr(request.user, 'is_requestor', False):
+            return redirect('gso_accounts:requestor_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
     def get_object(self, queryset=None):

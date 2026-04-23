@@ -4,7 +4,7 @@
     <thead>
       <tr class="bg-slate-50 dark:bg-slate-800/50">
         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Request ID</th>
-        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Title</th>
+        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Purpose/s</th>
         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
       </tr>
@@ -19,7 +19,7 @@
           {% endif %}
         </td>
         <td class="px-6 py-4 text-sm text-slate-700 dark:text-slate-200">
-          {{ req.title|default:'—' }}
+          {{ req.description|default:'—'|truncatechars:90 }}
         </td>
         <td class="px-6 py-4">
           <span class="px-2 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">

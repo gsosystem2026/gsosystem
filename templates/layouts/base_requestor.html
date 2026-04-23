@@ -35,6 +35,71 @@
     <style>
         body { font-family: 'Public Sans', sans-serif; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        /* Consistent icon motion for interactive controls across requestor UI */
+        a .material-symbols-outlined,
+        button .material-symbols-outlined {
+            transition: transform 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+            transform-origin: center;
+        }
+        a:hover .material-symbols-outlined,
+        button:hover .material-symbols-outlined {
+            transform: translateY(-1px) scale(1.08);
+        }
+        a:active .material-symbols-outlined,
+        button:active .material-symbols-outlined {
+            transform: scale(0.96);
+        }
+        .icon-anim-trigger .material-symbols-outlined {
+            transition: transform 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+        }
+        .icon-anim-trigger:hover .material-symbols-outlined {
+            transform: translateY(-1px) scale(1.12);
+        }
+        .icon-anim-trigger:active .material-symbols-outlined {
+            transform: scale(0.94);
+        }
+        .close-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            padding: 0.375rem;
+            color: #94a3b8;
+            transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+        }
+        .close-btn:hover {
+            transform: scale(1.1);
+            color: #1152d4;
+            background-color: #f1f5f9;
+        }
+        .close-btn:active {
+            transform: scale(0.95);
+        }
+        .close-btn .close-icon {
+            transition: transform 0.2s ease;
+        }
+        .close-btn:hover .close-icon {
+            transform: rotate(90deg);
+        }
+        .dark .close-btn:hover {
+            background-color: #1e293b;
+            color: #60a5fa;
+        }
+        .close-btn--on-primary {
+            border-radius: 9999px;
+            color: #ffffff;
+        }
+        .close-btn--on-primary:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        @keyframes gso-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .ui-loading-spin {
+            animation: gso-spin 0.8s linear infinite;
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -57,24 +122,33 @@
                     <span class="material-symbols-outlined">notifications</span>
                     <span id="notif-badge" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5 ring-2 ring-white dark:ring-slate-900 hidden" aria-label="0 unread">0</span>
                 </button>
-                <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-50 overflow-hidden flex flex-col max-h-[70vh]" role="menu">
-                    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
-                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
+                <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-[22rem] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden flex flex-col max-h-[78vh]" role="menu">
+                    <div class="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-2xl leading-none font-bold text-slate-900 dark:text-slate-100">Notifications</p>
+                            <a href="{% url 'gso_accounts:requestor_notifications' %}" class="text-sm font-medium text-primary hover:underline">See all</a>
+                        </div>
+                        <div class="mt-3 inline-flex items-center gap-2">
+                            <button type="button" id="notif-tab-all" data-tab="all" class="rounded-full px-3 py-1.5 text-sm font-semibold bg-primary/10 text-primary">All</button>
+                            <button type="button" id="notif-tab-unread" data-tab="unread" class="rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Unread</button>
+                        </div>
                     </div>
-                    <div id="notif-list" class="overflow-y-auto flex-1 min-h-0">
+                    <div id="notif-list" class="overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900">
                         {% for n in requestor_notifications %}
-                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
-                            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ n.title }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
+                            <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
                         </a>
                         {% empty %}
-                        <p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
+                        <p class="js-notif-empty-initial px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
                         {% endfor %}
+                        <p id="notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>
                     </div>
-                    <div id="notif-mark-all" class="p-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0 {% if unread_notification_count == 0 %}hidden{% endif %}">
+                    <div id="notif-mark-all" class="p-2 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0 {% if unread_notification_count == 0 %}hidden{% endif %}">
                         <form method="post" action="{% url 'gso_accounts:notification_mark_all_read' %}" class="block">
                             {% csrf_token %}
-                            <button type="submit" class="w-full text-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary py-2">Mark all as read</button>
+                            <button type="submit" class="w-full text-center text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg py-2">Mark all as read</button>
                         </form>
                     </div>
                 </div>
@@ -131,20 +205,20 @@
 <!-- Profile / Settings modal (popup) -->
 <div id="profile-modal" class="hidden fixed inset-0 z-[100] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="profile-modal-title">
     <div class="flex min-h-full items-center justify-center p-4">
-        <div id="profile-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-                <h2 id="profile-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Profile &amp; Settings</h2>
-                <button type="button" id="profile-modal-close" class="rounded-lg p-1 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500" aria-label="Close">
-                    <span class="material-symbols-outlined">close</span>
+        <div id="profile-modal-backdrop" class="fixed inset-0 bg-slate-900/55 backdrop-blur-[1px] transition-opacity"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-center px-6 py-5 bg-gradient-to-r from-primary to-blue-600 flex-shrink-0 relative">
+                <h2 id="profile-modal-title" class="text-2xl font-bold text-white tracking-tight">Profile</h2>
+                <button type="button" id="profile-modal-close" class="close-btn close-btn--on-primary absolute right-4 top-4" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
                 </button>
             </div>
-            <div class="overflow-y-auto flex-1 p-6">
+            <div class="overflow-y-auto flex-1 bg-slate-100/80 dark:bg-slate-900 p-0">
                 <!-- Pane 1: Profile view (read-only) -->
                 <div id="profile-modal-view" class="profile-modal-pane">
-                    <div class="flex flex-col items-center mb-6">
-                        <div class="relative">
-                            <div class="bg-slate-200 dark:bg-slate-700 rounded-full size-20 overflow-hidden border-4 border-primary/30 flex items-center justify-center">
+                    <div class="px-6 pt-8 pb-7 text-center">
+                        <div class="relative inline-flex">
+                            <div class="bg-primary/20 dark:bg-primary/30 rounded-full size-36 overflow-hidden border-4 border-white/70 dark:border-slate-700 shadow-lg flex items-center justify-center">
                                 <img src="{% static request.user.avatar_static_path %}" alt="Profile avatar" class="w-full h-full object-cover"/>
                             </div>
                             <button type="button" id="profile-modal-edit-avatar-btn" class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40 opacity-0 hover:opacity-100 transition-opacity text-xs font-semibold text-white">
@@ -213,40 +287,26 @@
                                 </div>
                             </form>
                         </div>
+                        <h3 class="mt-8 text-3xl font-bold text-slate-900 dark:text-slate-100">{{ request.user.get_full_name|default:request.user.username }}</h3>
+                        <p class="mt-2 text-base text-slate-600 dark:text-slate-300">Requestor</p>
                     </div>
-                    <dl class="space-y-4">
-                        <div>
-                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Username</dt>
-                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.username }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">First name</dt>
-                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.first_name|default:"—" }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Last name</dt>
-                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.last_name|default:"—" }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Email</dt>
-                            <dd class="text-slate-900 dark:text-slate-100 mt-1">{{ request.user.email|default:"—" }}</dd>
-                        </div>
-                        <div>
-                            <dt class="text-sm font-medium text-slate-500 dark:text-slate-400">Role</dt>
-                            <dd class="text-slate-900 dark:text-slate-100 mt-1">Requestor</dd>
-                        </div>
-                    </dl>
-                    <div class="mt-6 flex flex-wrap gap-3">
-                        <button type="button" id="profile-modal-show-edit" class="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
-                            <span class="material-symbols-outlined text-lg">edit</span>
+                    <div class="px-6 pb-6 pt-6 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                        <div class="flex flex-wrap gap-3">
+                        <button type="button" id="profile-modal-show-edit" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+                            <span class="material-symbols-outlined text-lg">edit_square</span>
                             Edit profile
                         </button>
-                        <a href="{% url 'gso_accounts:password_reset' %}" class="inline-flex items-center gap-2 px-4 py-2 text-sm text-primary hover:underline">Change password</a>
+                        <a href="{% url 'gso_accounts:password_reset' %}" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
+                            <span class="material-symbols-outlined text-lg">key</span>
+                            Change password
+                        </a>
+                        </div>
                     </div>
                 </div>
                 <!-- Pane 2: Edit profile form -->
-                <div id="profile-modal-edit" class="profile-modal-pane hidden">
-                    <form method="post" action="{% url 'gso_accounts:requestor_profile_edit' %}" id="profile-edit-form">
+                <div id="profile-modal-edit" class="profile-modal-pane hidden px-6 py-6">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Update Profile</h3>
+                    <form method="post" action="{% url 'gso_accounts:requestor_profile_edit' %}" id="profile-edit-form" class="space-y-4">
                         {% csrf_token %}
                         {% if requestor_profile_form.non_field_errors %}
                             <ul class="text-sm text-red-600 dark:text-red-400 mb-4">{{ requestor_profile_form.non_field_errors }}</ul>
@@ -254,19 +314,19 @@
                         <div class="space-y-4">
                             <div>
                                 <label for="id_first_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">First name</label>
-                                <input type="text" name="first_name" id="id_first_name_modal" value="{{ request.user.first_name|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                                <input type="text" name="first_name" id="id_first_name_modal" value="{{ request.user.first_name|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
                             </div>
                             <div>
                                 <label for="id_last_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Last name</label>
-                                <input type="text" name="last_name" id="id_last_name_modal" value="{{ request.user.last_name|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                                <input type="text" name="last_name" id="id_last_name_modal" value="{{ request.user.last_name|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
                             </div>
                         <div>
                                 <label for="id_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
-                                <input type="email" name="email" id="id_email_modal" value="{{ request.user.email|default:'' }}" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                                <input type="email" name="email" id="id_email_modal" value="{{ request.user.email|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
                             </div>
                         <div>
                             <label for="id_avatar_code_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile avatar</label>
-                            <select name="avatar_code" id="id_avatar_code_modal" class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary">
+                            <select name="avatar_code" id="id_avatar_code_modal" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary">
                                 <option value="man1" {% if request.user.avatar_code == 'man1' %}selected{% endif %}>Man 1</option>
                                 <option value="man2" {% if request.user.avatar_code == 'man2' %}selected{% endif %}>Man 2</option>
                                 <option value="man3" {% if request.user.avatar_code == 'man3' %}selected{% endif %}>Man 3</option>
@@ -287,9 +347,9 @@
                             </select>
                         </div>
                         </div>
-                        <div class="mt-6 flex gap-3">
-                            <button type="submit" class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Save changes</button>
-                            <button type="button" id="profile-modal-edit-cancel" class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                        <div class="mt-2 flex gap-3">
+                            <button type="submit" class="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Save changes</button>
+                            <button type="button" id="profile-modal-edit-cancel" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
                         </div>
                     </form>
                 </div>
@@ -300,6 +360,35 @@
 
 <script>
 (function() {
+    function setButtonLoading(btn, loadingText) {
+        if (!btn || btn.dataset.loadingApplied === '1') return;
+        btn.dataset.loadingApplied = '1';
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.classList.add('opacity-70', 'cursor-not-allowed');
+        var text = loadingText || btn.dataset.loadingText || 'Please wait...';
+        btn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined ui-loading-spin text-base">progress_activity</span><span>' + text + '</span></span>';
+    }
+    window.GSOUI = window.GSOUI || {};
+    window.GSOUI.setButtonLoading = setButtonLoading;
+
+    // Global: form submit feedback (requestor side)
+    document.addEventListener('submit', function(e) {
+        var form = e.target;
+        if (!form || form.dataset.noLoading === '1') return;
+        var submitter = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+        if (!submitter) return;
+        setButtonLoading(submitter, submitter.dataset.loadingText || 'Please wait...');
+    }, true);
+
+    // Opt-in: click feedback for non-submit buttons
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('button[data-loading-on-click="1"]');
+        if (!btn) return;
+        setButtonLoading(btn, btn.dataset.loadingText || 'Please wait...');
+    }, true);
+
     var profileBtn = document.getElementById('profile-dropdown-btn');
     var profileMenu = document.getElementById('profile-dropdown');
     var profileWrap = document.getElementById('profile-dropdown-wrap');
@@ -398,11 +487,36 @@
     var notifBadge = document.getElementById('notif-badge');
     var notifListEl = document.getElementById('notif-list');
     var notifMarkAllEl = document.getElementById('notif-mark-all');
+    var notifTabAll = document.getElementById('notif-tab-all');
+    var notifTabUnread = document.getElementById('notif-tab-unread');
+    var notifEmpty = document.getElementById('notif-empty');
     var initialUnread = notifWrap ? parseInt(notifWrap.getAttribute('data-initial-unread') || '0', 10) : 0;
     if (notifBadge) {
         notifBadge.textContent = initialUnread > 9 ? '9+' : String(initialUnread);
         notifBadge.classList.toggle('hidden', initialUnread === 0);
     }
+    function applyRequestorNotifTab(tab) {
+        if (!notifListEl) return;
+        notifListEl.querySelectorAll('.js-notif-empty-initial').forEach(function (el) { el.classList.add('hidden'); });
+        var items = Array.from(notifListEl.querySelectorAll('.js-notif-item'));
+        var visible = 0;
+        items.forEach(function (el) {
+            var unread = el.getAttribute('data-read') === '0';
+            var show = tab === 'all' ? true : unread;
+            el.classList.toggle('hidden', !show);
+            if (show) visible += 1;
+        });
+        if (notifEmpty) notifEmpty.classList.toggle('hidden', visible > 0);
+        if (notifTabAll && notifTabUnread) {
+            var isAll = tab === 'all';
+            notifTabAll.className = 'rounded-full px-3 py-1.5 text-sm font-semibold ' + (isAll ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+            notifTabUnread.className = 'rounded-full px-3 py-1.5 text-sm font-semibold ' + (!isAll ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+        }
+        notifListEl.setAttribute('data-active-tab', tab);
+    }
+    if (notifTabAll) notifTabAll.addEventListener('click', function () { applyRequestorNotifTab('all'); });
+    if (notifTabUnread) notifTabUnread.addEventListener('click', function () { applyRequestorNotifTab('unread'); });
+
     function updateRequestorNotifications() {
         fetch('/api/v1/notifications/unread_count/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
@@ -430,18 +544,24 @@
                     } catch (e) { return s; }
                 }
                 if (list.length === 0) {
-                    notifListEl.innerHTML = '<p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>';
+                    notifListEl.innerHTML = '<p id="notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>';
+                    notifEmpty = document.getElementById('notif-empty');
                 } else {
                     notifListEl.innerHTML = list.map(function(n) {
-                        var cls = 'block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
+                        var cls = 'js-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
                         if (!n.read) cls += ' bg-primary/5 dark:bg-primary/10';
-                        return '<a href="' + goBase + n.id + '/go/" class="' + cls + '"><p class="text-sm font-medium text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + fmtDate(n.created_at) + '</p></a>';
+                        var msg = (n.message || '').replace(/</g, '&lt;');
+                        return '<a href="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></a>';
                     }).join('');
+                    notifListEl.insertAdjacentHTML('beforeend', '<p id="notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>');
+                    notifEmpty = document.getElementById('notif-empty');
                 }
+                applyRequestorNotifTab(notifListEl.getAttribute('data-active-tab') || 'all');
             })
             .catch(function() {});
     }
     if (notifBadge && notifListEl) {
+        applyRequestorNotifTab('all');
         setInterval(updateRequestorNotifications, 15000);
     }
 

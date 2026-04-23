@@ -1,3 +1,4 @@
+{% load inventory_units %}
 <div class="max-w-3xl mx-auto space-y-6">
     <div class="flex items-center gap-4">
         {% if in_modal and is_requestor_layout %}
@@ -5,7 +6,7 @@
             <span class="material-symbols-outlined text-lg">open_in_new</span> View full page
         </a>
         {% else %}
-        <a href="{% if is_requestor_layout %}{% url 'gso_accounts:requestor_dashboard' %}{% else %}{{ staff_back_url|default:'' }}{% endif %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+        <a href="{% if is_requestor_layout %}{% url 'gso_accounts:requestor_dashboard' %}{% else %}{{ staff_back_url|default:'' }}{% endif %}" {% if not is_requestor_layout %}data-staff-pjax="1"{% endif %} class="icon-anim-trigger text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm transition-colors">
             <span class="material-symbols-outlined text-lg">arrow_back</span> Back
         </a>
         {% endif %}
@@ -13,7 +14,7 @@
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800">
             <div class="flex items-center gap-3 flex-wrap">
-                <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ req.display_id }} — {{ req.title }}</h1>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">{{ req.display_id }}</h1>
                 {% if req.is_emergency %}
                 <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
                     <span class="material-symbols-outlined text-sm">emergency</span> Emergency
@@ -49,8 +50,12 @@
                 </dd>
             </div>
             <div>
-                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Description &amp; location</dt>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Purpose/s</dt>
                 <dd class="text-slate-900 dark:text-slate-100 whitespace-pre-wrap">{{ req.description|default:"—" }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Location</dt>
+                <dd class="text-slate-900 dark:text-slate-100 whitespace-pre-wrap">{{ req.location|default:"—" }}</dd>
             </div>
             {% if req.attachment %}
             <div>
@@ -70,8 +75,8 @@
                             <a href="{% url 'gso_requests:request_attachment' req.pk %}?download=1" download class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors">
                                 <span class="material-symbols-outlined text-lg">download</span> Download
                             </a>
-                            <button type="button" onclick="document.getElementById('attachmentPreviewModal').classList.add('hidden')" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400" aria-label="Close">
-                                <span class="material-symbols-outlined">close</span>
+                            <button type="button" onclick="document.getElementById('attachmentPreviewModal').classList.add('hidden')" class="close-btn" aria-label="Close">
+                                <span class="material-symbols-outlined close-icon">close</span>
                             </button>
                         </div>
                     </div>
@@ -209,7 +214,7 @@
             {% for t in materials_issued %}
             <li class="py-2 flex flex-wrap items-center justify-between gap-2">
                 <span class="text-slate-900 dark:text-slate-100 font-medium">{{ t.item.name }}</span>
-                <span class="text-sm text-slate-700 dark:text-slate-300">{{ t.quantity }} {{ t.item.unit_of_measure }}{% if t.notes %} · {{ t.notes }}{% endif %}</span>
+                <span class="text-sm text-slate-700 dark:text-slate-300">{{ t.quantity|qty_uom:t.item.unit_of_measure }}{% if t.notes %} · {{ t.notes }}{% endif %}</span>
                 <span class="text-xs text-slate-500 dark:text-slate-400">{{ t.created_at|date:"M d, Y g:i A" }}{% if t.performed_by %} · by {{ t.performed_by.get_full_name|default:t.performed_by.username }}{% endif %}</span>
             </li>
             {% endfor %}
@@ -225,25 +230,115 @@
         </div>
         <form method="post" action="{% url 'gso_accounts:staff_request_issue_material' req.pk %}" class="px-6 py-4 space-y-3">
             {% csrf_token %}
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-                <div>
-                    <label for="id_item" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.item.label }}</label>
-                    {{ issue_material_form.item }}
+            <div class="grid grid-cols-1 sm:[grid-template-columns:repeat(3,minmax(0,1fr))] gap-x-5 gap-y-3 items-start">
+                <div class="space-y-1 w-full">
+                    <label for="id_item" class="block h-5 text-xs font-medium text-slate-600 dark:text-slate-400">{{ issue_material_form.item.label }}</label>
+                    <input
+                        type="text"
+                        class="js-issue-material-search issue-material-field w-full"
+                        placeholder="Type to search item (e.g., bu)"
+                        autocomplete="off"
+                        list="issue-material-list"
+                    />
+                    <datalist id="issue-material-list"></datalist>
+                    <div class="hidden">
+                        {{ issue_material_form.item }}
+                    </div>
                 </div>
-                <div>
-                    <label for="id_quantity" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.quantity.label }}</label>
-                    {{ issue_material_form.quantity }}
+                <div class="space-y-1 w-full">
+                    <label for="id_quantity" class="block h-5 text-xs font-medium text-slate-600 dark:text-slate-400">{{ issue_material_form.quantity.label }}</label>
+                    <div class="issue-material-qty-field">
+                        {{ issue_material_form.quantity }}
+                    </div>
                 </div>
-                <div>
-                    <label for="id_notes" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ issue_material_form.notes.label }}</label>
-                    {{ issue_material_form.notes }}
+                <div class="space-y-1 w-full">
+                    <label for="id_notes" class="block h-5 text-xs font-medium text-slate-600 dark:text-slate-400">{{ issue_material_form.notes.label }}</label>
+                    <div class="issue-material-notes-field">
+                        {{ issue_material_form.notes }}
+                    </div>
                 </div>
             </div>
-            <div>
-                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Issue material</button>
+            <div class="pt-1 flex justify-start">
+                <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Issue material</button>
             </div>
         </form>
     </div>
+    {% endif %}
+
+    {% if not is_requestor_layout and can_add_materials and issue_material_form %}
+    <script>
+    (function () {
+        var searchInputs = document.querySelectorAll('.js-issue-material-search');
+        if (!searchInputs.length) return;
+        searchInputs.forEach(function (input) {
+            var wrap = input.closest('div');
+            if (!wrap) return;
+            var select = wrap.querySelector('select.js-issue-material-select');
+            if (!select) return;
+            var datalist = wrap.querySelector('#issue-material-list');
+            var optionByLabel = {};
+
+            // Build datalist suggestions from select options.
+            if (datalist) {
+                datalist.innerHTML = '';
+                Array.from(select.options).forEach(function (opt) {
+                    if (!opt.value) return;
+                    var label = (opt.textContent || '').trim();
+                    optionByLabel[label.toLowerCase()] = opt.value;
+                    var dopt = document.createElement('option');
+                    dopt.value = label;
+                    datalist.appendChild(dopt);
+                });
+            }
+
+            function syncSelection() {
+                var q = (input.value || '').toLowerCase().trim();
+                var matchedValue = optionByLabel[q] || '';
+                if (!matchedValue && q) {
+                    // Fallback: first partial match.
+                    var first = Array.from(select.options).find(function (opt) {
+                        return !!opt.value && (opt.textContent || '').toLowerCase().indexOf(q) !== -1;
+                    });
+                    matchedValue = first ? first.value : '';
+                }
+                select.value = matchedValue;
+            }
+
+            input.addEventListener('input', syncSelection);
+            input.addEventListener('change', syncSelection);
+            syncSelection();
+        });
+    })();
+    </script>
+    <style>
+    .issue-material-field,
+    .issue-material-qty-field input,
+    .issue-material-notes-field input {
+        width: 100%;
+        height: 3rem;
+        border-radius: 0.5rem;
+        border: 1px solid rgb(203 213 225);
+        background: rgb(255 255 255);
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        line-height: 1.25rem;
+        color: rgb(15 23 42);
+    }
+    .issue-material-field:focus,
+    .issue-material-qty-field input:focus,
+    .issue-material-notes-field input:focus {
+        outline: none;
+        border-color: rgb(17 82 212);
+        box-shadow: 0 0 0 2px rgb(17 82 212 / 0.2);
+    }
+    .dark .issue-material-field,
+    .dark .issue-material-qty-field input,
+    .dark .issue-material-notes-field input {
+        border-color: rgb(71 85 105);
+        background: rgb(30 41 59);
+        color: rgb(241 245 249);
+    }
+    </style>
     {% endif %}
 
     {% if not is_requestor_layout and material_requests %}
@@ -257,7 +352,7 @@
             <li class="py-3 flex flex-wrap items-center justify-between gap-2">
                 <div class="flex-1 min-w-0">
                     <span class="text-slate-900 dark:text-slate-100 font-medium">{{ mr.item.name }}</span>
-                    <span class="text-sm text-slate-700 dark:text-slate-300"> · {{ mr.quantity }} {{ mr.item.unit_of_measure }}{% if mr.notes %} · {{ mr.notes }}{% endif %}</span>
+                    <span class="text-sm text-slate-700 dark:text-slate-300"> · {{ mr.quantity|qty_uom:mr.item.unit_of_measure }}{% if mr.notes %} · {{ mr.notes }}{% endif %}</span>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Requested by {{ mr.requested_by.get_full_name|default:mr.requested_by.username }} · {{ mr.created_at|date:"M d, Y g:i A" }}</p>
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
@@ -298,15 +393,29 @@
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                 <div>
                     <label for="id_request_item" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.item.label }}</label>
-                    {{ request_material_form.item }}
+                    <input
+                        type="text"
+                        class="js-request-material-search issue-material-field w-full"
+                        placeholder="Type to search item (e.g., bu)"
+                        autocomplete="off"
+                        list="request-material-list"
+                    />
+                    <datalist id="request-material-list"></datalist>
+                    <div class="hidden">
+                        {{ request_material_form.item }}
+                    </div>
                 </div>
                 <div>
                     <label for="id_request_quantity" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.quantity.label }}</label>
-                    {{ request_material_form.quantity }}
+                    <div class="issue-material-qty-field">
+                        {{ request_material_form.quantity }}
+                    </div>
                 </div>
                 <div>
                     <label for="id_request_notes" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ request_material_form.notes.label }}</label>
-                    {{ request_material_form.notes }}
+                    <div class="issue-material-notes-field">
+                        {{ request_material_form.notes }}
+                    </div>
                 </div>
             </div>
             <div>
@@ -314,6 +423,50 @@
             </div>
         </form>
     </div>
+    {% endif %}
+    {% if not is_requestor_layout and can_request_materials and request_material_form %}
+    <script>
+    (function () {
+        var searchInputs = document.querySelectorAll('.js-request-material-search');
+        if (!searchInputs.length) return;
+        searchInputs.forEach(function (input) {
+            var wrap = input.closest('div');
+            if (!wrap) return;
+            var select = wrap.querySelector('select.js-request-material-select');
+            if (!select) return;
+            var datalist = wrap.querySelector('#request-material-list');
+            var optionByLabel = {};
+
+            if (datalist) {
+                datalist.innerHTML = '';
+                Array.from(select.options).forEach(function (opt) {
+                    if (!opt.value) return;
+                    var label = (opt.textContent || '').trim();
+                    optionByLabel[label.toLowerCase()] = opt.value;
+                    var dopt = document.createElement('option');
+                    dopt.value = label;
+                    datalist.appendChild(dopt);
+                });
+            }
+
+            function syncSelection() {
+                var q = (input.value || '').toLowerCase().trim();
+                var matchedValue = optionByLabel[q] || '';
+                if (!matchedValue && q) {
+                    var first = Array.from(select.options).find(function (opt) {
+                        return !!opt.value && (opt.textContent || '').toLowerCase().indexOf(q) !== -1;
+                    });
+                    matchedValue = first ? first.value : '';
+                }
+                select.value = matchedValue;
+            }
+
+            input.addEventListener('input', syncSelection);
+            input.addEventListener('change', syncSelection);
+            syncSelection();
+        });
+    })();
+    </script>
     {% endif %}
 
     {% if not is_requestor_layout and can_assign %}
@@ -383,6 +536,31 @@
         </div>
         <div class="px-6 py-4 flex flex-wrap gap-3">
             {% if req.status == 'DIRECTOR_APPROVED' %}
+                {% if req.unit.code == 'repair' or req.unit.code == 'electrical' %}
+                <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="INSPECTION"/>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white text-sm font-semibold rounded-lg transition-colors">Start inspection</button>
+                </form>
+                <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="IN_PROGRESS"/>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Start work</button>
+                </form>
+                {% else %}
+                <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="IN_PROGRESS"/>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Start work</button>
+                </form>
+                <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
+                    {% csrf_token %}
+                    <input type="hidden" name="status" value="ON_HOLD"/>
+                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">On Hold</button>
+                </form>
+                {% endif %}
+            {% endif %}
+            {% if req.status == 'INSPECTION' %}
             <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
                 {% csrf_token %}
                 <input type="hidden" name="status" value="IN_PROGRESS"/>
@@ -410,12 +588,7 @@
             <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
                 {% csrf_token %}
                 <input type="hidden" name="status" value="IN_PROGRESS"/>
-                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">In Progress</button>
-            </form>
-            <form method="post" action="{% url 'gso_accounts:staff_request_update_status' req.pk %}" class="inline">
-                {% csrf_token %}
-                <input type="hidden" name="status" value="DONE_WORKING"/>
-                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">Done working</button>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">{% if req.work_started_at %}Continue work{% else %}Start work{% endif %}</button>
             </form>
             {% endif %}
         </div>
@@ -548,8 +721,8 @@
             <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
                 <div class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-4">
                     <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Client Satisfaction Measurement (CSM) Form</h3>
-                    <button type="button" onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-200" aria-label="Close">
-                        <span class="material-symbols-outlined text-2xl">close</span>
+                    <button type="button" onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="close-btn" aria-label="Close">
+                        <span class="material-symbols-outlined text-2xl close-icon">close</span>
                     </button>
                 </div>
                 <form method="post" action="{% url 'gso_requests:requestor_request_feedback' req.pk %}" class="p-6 space-y-6">

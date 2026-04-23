@@ -2,7 +2,7 @@ from django.db import models
 
 
 class Unit(models.Model):
-    """GSO units: Repair & Maintenance, Utility, Electrical, Motorpool, Security."""
+    """GSO units: Repair & Maintenance, Utility, Electrical, Motorpool."""
     name = models.CharField(max_length=120)
     code = models.SlugField(max_length=50, unique=True, help_text="Short code, e.g. repair, utility")
     is_active = models.BooleanField(default=True)

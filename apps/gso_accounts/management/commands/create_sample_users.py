@@ -1,5 +1,5 @@
 """
-Create sample users (one per role) and the 5 GSO units for testing.
+Create sample users (one per role) and the 4 GSO units for testing.
 Usage: python manage.py create_sample_users
 All sample passwords: sample123
 """
@@ -17,7 +17,6 @@ UNITS = [
     ("Utility", "utility"),
     ("Electrical", "electrical"),
     ("Motorpool", "motorpool"),
-    ("Security", "security"),
 ]
 
 SAMPLE_PASSWORD = "sample123"
@@ -33,7 +32,7 @@ USERS = [
 
 
 class Command(BaseCommand):
-    help = "Create 5 GSO units and sample users (one per role). Passwords: sample123"
+    help = "Create 4 GSO units and sample users (one per role). Passwords: sample123"
 
     @transaction.atomic
     def handle(self, *args, **options):

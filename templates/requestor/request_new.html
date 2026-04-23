@@ -51,14 +51,14 @@
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
             <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Request details</h2>
             <div>
-                <label for="id_title" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-red-500">*</span></label>
-                {{ form.title }}
-                {% if form.title.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.title.errors.0 }}</p>{% endif %}
-            </div>
-            <div>
-                <label for="id_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Detailed description &amp; location <span class="text-red-500">*</span></label>
+                <label for="id_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Purpose/s <span class="text-red-500">*</span></label>
                 {{ form.description }}
                 {% if form.description.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.description.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="id_location" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location <span class="text-red-500">*</span></label>
+                {{ form.location }}
+                {% if form.location.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.location.errors.0 }}</p>{% endif %}
             </div>
         </div>
 
@@ -92,7 +92,7 @@
     </form>
 </div>
 <style>
-    #id_title, #id_description, #id_custom_full_name, #id_custom_email, #id_custom_contact_number {
+    #id_description, #id_location, #id_custom_full_name, #id_custom_email, #id_custom_contact_number {
         @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary;
     }
     #id_description { min-height: 120px; }

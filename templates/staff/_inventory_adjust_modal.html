@@ -1,10 +1,11 @@
+{% load inventory_units %}
 <form method="post" action="{{ request.path }}" class="space-y-4" id="inventory-modal-form">
   {% csrf_token %}
   {% if form.non_field_errors %}
   <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm">{{ form.non_field_errors }}</div>
   {% endif %}
   <p class="text-sm text-slate-600 dark:text-slate-300">
-    Current stock: <strong>{{ item.quantity }} {{ item.unit_of_measure }}</strong>
+    Current stock: <strong>{{ item.quantity|qty_uom:item.unit_of_measure }}</strong>
   </p>
   <div>
     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type</label>
@@ -21,6 +22,21 @@
     <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
     {{ form.quantity }}
     {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div>
+      <label for="id_arrival_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Arrival date (Stock In)</label>
+      {{ form.arrival_date }}
+      {% if form.arrival_date.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.arrival_date.errors.0 }}</p>{% endif %}
+    </div>
+    <div>
+      <label for="id_supplier_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier (optional)</label>
+      {{ form.supplier_name }}
+    </div>
+  </div>
+  <div>
+    <label for="id_delivery_reference" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Delivery ref. (optional)</label>
+    {{ form.delivery_reference }}
   </div>
   <div>
     <label for="id_notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Notes (optional)</label>

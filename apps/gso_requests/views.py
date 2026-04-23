@@ -7,6 +7,7 @@ from django.conf import settings
 from django.http import Http404, HttpResponse, FileResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 from django.views.generic import FormView, ListView, DetailView, UpdateView
 import csv
@@ -17,6 +18,13 @@ from apps.gso_units.models import Unit
 from .forms import RequestForm, RequestorCancelForm, AssignPersonnelForm, RequestMessageForm, RequestFeedbackForm
 from .models import Request, RequestAssignment, RequestMessage, RequestFeedback
 from apps.gso_reports.models import ensure_war_for_request
+
+INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
+
+
+def _requires_inspection(request_obj):
+    code = ((request_obj.unit.code if request_obj.unit_id else '') or '').lower()
+    return code in INSPECTION_REQUIRED_UNIT_CODES
 
 
 class RequestCreateView(LoginRequiredMixin, FormView):
@@ -142,7 +150,6 @@ class RequestCancelView(LoginRequiredMixin, View):
     http_method_names = ['post']
 
     def post(self, request, pk):
-        from django.utils import timezone
         req = get_object_or_404(Request.objects.select_related('unit'), pk=pk)
         user = request.user
         if not getattr(user, 'is_requestor', False) or req.requestor_id != user.id:
@@ -212,12 +219,13 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
         personnel_id = self.request.GET.get('personnel', '').strip()
         if personnel_id:
             qs = qs.filter(assignments__personnel_id=personnel_id)
-        # Search by request ID, title, requestor name, or unit
+        # Search by request ID, purpose, location, requestor name, or unit
         q = self.request.GET.get('q', '').strip()
         if q:
             qs = qs.filter(
                 Q(title__icontains=q)
                 | Q(description__icontains=q)
+                | Q(location__icontains=q)
                 | Q(unit__name__icontains=q)
                 | Q(requestor__first_name__icontains=q)
                 | Q(requestor__last_name__icontains=q)
@@ -239,6 +247,7 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
             (Request.Status.SUBMITTED, 'Submitted'),
             (Request.Status.ASSIGNED, 'Assigned'),
             (Request.Status.DIRECTOR_APPROVED, 'Approved'),
+            (Request.Status.INSPECTION, 'Inspection'),
             (Request.Status.IN_PROGRESS, 'In Progress'),
             (Request.Status.ON_HOLD, 'On Hold'),
             (Request.Status.DONE_WORKING, 'Done working'),
@@ -256,6 +265,8 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             if self.request.GET.get('partial') or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return ['requestor/request_detail_partial.html']
             return ['requestor/request_detail.html']
+        if self.request.GET.get('partial') or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return ['staff/request_detail_partial.html']
         return ['staff/request_detail.html']
 
     def get_queryset(self):
@@ -327,7 +338,12 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             is_assigned = req.assignments.filter(personnel=user).exists()
             context['can_update_work_status'] = (
                 getattr(user, 'is_personnel', False) and is_assigned
-                and req.status in (Request.Status.DIRECTOR_APPROVED, Request.Status.IN_PROGRESS, Request.Status.ON_HOLD)
+                and req.status in (
+                    Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
+                    Request.Status.IN_PROGRESS,
+                    Request.Status.ON_HOLD,
+                )
             )
             # Phase 5.3: Unit Head can complete when Done working
             context['can_complete'] = (
@@ -337,6 +353,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             # Phase 5.2: Chat messages and form (staff only) — only after Director/OIC approval and until completed
             chat_allowed_statuses = (
                 Request.Status.DIRECTOR_APPROVED,
+                Request.Status.INSPECTION,
                 Request.Status.IN_PROGRESS,
                 Request.Status.ON_HOLD,
                 Request.Status.DONE_WORKING,
@@ -347,7 +364,12 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             else:
                 context['request_messages'] = []
                 context['message_form'] = None
-            context['staff_back_url'] = reverse('gso_accounts:staff_task_management') if getattr(user, 'is_personnel', False) else reverse('gso_accounts:staff_request_management')
+            if self.request.GET.get('from') == 'history':
+                context['staff_back_url'] = reverse('gso_accounts:staff_request_history')
+            elif self.request.GET.get('from') == 'task_history':
+                context['staff_back_url'] = reverse('gso_accounts:staff_task_history')
+            else:
+                context['staff_back_url'] = reverse('gso_accounts:staff_task_management') if getattr(user, 'is_personnel', False) else reverse('gso_accounts:staff_request_management')
             # GSO Office: Send reminder to Director, Unit Head, or Personnel
             context['can_send_reminder'] = getattr(user, 'is_gso_office', False)
             context['remind_targets'] = []
@@ -358,7 +380,12 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     context['remind_targets'].append(('unit_head', 'Unit Head', 'Request needs personnel assignment'))
                 if req.status == Request.Status.DONE_WORKING:
                     context['remind_targets'].append(('unit_head', 'Unit Head', 'Work done — needs to be marked completed'))
-                if req.status in (Request.Status.DIRECTOR_APPROVED, Request.Status.IN_PROGRESS, Request.Status.ON_HOLD) and req.assignments.exists():
+                if req.status in (
+                    Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
+                    Request.Status.IN_PROGRESS,
+                    Request.Status.ON_HOLD,
+                ) and req.assignments.exists():
                     context['remind_targets'].append(('personnel', 'Assigned personnel', 'Request needs your attention'))
             # Materials issued to this request (Unit Head can add; deducts from inventory)
             context['materials_issued'] = req.inventory_issues.select_related('item', 'performed_by').order_by('-created_at')
@@ -379,7 +406,12 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             context['can_request_materials'] = (
                 getattr(user, 'is_personnel', False)
                 and req.assignments.filter(personnel=user).exists()
-                and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+                and req.status in (
+                    Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
+                    Request.Status.IN_PROGRESS,
+                    Request.Status.ON_HOLD,
+                )
             )
             if context['can_request_materials']:
                 from apps.gso_inventory.forms import RequestMaterialForm
@@ -535,7 +567,10 @@ class StaffRequestRemindView(LoginRequiredMixin, View):
             messages.warning(request, 'Unit Head reminder is for requests needing assignment or completion.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if target == 'personnel' and req.status not in (
-            Request.Status.DIRECTOR_APPROVED, Request.Status.IN_PROGRESS, Request.Status.ON_HOLD
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.INSPECTION,
+            Request.Status.IN_PROGRESS,
+            Request.Status.ON_HOLD,
         ):
             messages.warning(request, 'Personnel reminder is for requests with assigned work in progress.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
@@ -574,7 +609,12 @@ class ApproveRequestView(LoginRequiredMixin, View):
 
 # --- Phase 5: Work execution & completion ---
 
-WORK_STATUS_ALLOWED = (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD, Request.Status.DONE_WORKING)
+WORK_STATUS_ALLOWED = (
+    Request.Status.INSPECTION,
+    Request.Status.IN_PROGRESS,
+    Request.Status.ON_HOLD,
+    Request.Status.DONE_WORKING,
+)
 
 
 class UpdateWorkStatusView(LoginRequiredMixin, View):
@@ -594,8 +634,17 @@ class UpdateWorkStatusView(LoginRequiredMixin, View):
         if new_status not in (s for s, _ in Request.Status.choices if s in WORK_STATUS_ALLOWED):
             messages.error(request, 'Invalid status.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
-        if req.status == Request.Status.DIRECTOR_APPROVED and new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
-            messages.error(request, 'From Approved you can only set In Progress or On Hold.')
+        if req.status == Request.Status.DIRECTOR_APPROVED:
+            if _requires_inspection(req):
+                allowed_from_approved = (Request.Status.INSPECTION, Request.Status.IN_PROGRESS)
+                if new_status not in allowed_from_approved:
+                    messages.error(request, 'From Approved you can only set Inspection or In Progress for this unit.')
+                    return redirect('gso_accounts:staff_request_detail', pk=pk)
+            elif new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
+                messages.error(request, 'From Approved you can only set In Progress or On Hold.')
+                return redirect('gso_accounts:staff_request_detail', pk=pk)
+        if req.status == Request.Status.INSPECTION and new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
+            messages.error(request, 'From Inspection you can only set In Progress or On Hold.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if req.status == Request.Status.IN_PROGRESS and new_status not in (Request.Status.ON_HOLD, Request.Status.DONE_WORKING):
             messages.error(request, 'From In Progress you can only set On Hold or Done working.')
@@ -605,7 +654,11 @@ class UpdateWorkStatusView(LoginRequiredMixin, View):
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         old_status = req.status
         req.status = new_status
-        req.save(update_fields=['status', 'updated_at'])
+        update_fields = ['status', 'updated_at']
+        if new_status == Request.Status.IN_PROGRESS and not req.work_started_at:
+            req.work_started_at = timezone.now()
+            update_fields.append('work_started_at')
+        req.save(update_fields=update_fields)
         from apps.gso_notifications.utils import notify_after_personnel_work_status_change
         notify_after_personnel_work_status_change(req, old_status, new_status)
         messages.success(request, f'Status set to {req.get_status_display()}.')
@@ -671,6 +724,7 @@ class AddRequestMessageView(LoginRequiredMixin, View):
                 raise Http404()
         chat_allowed = req.status in (
             Request.Status.DIRECTOR_APPROVED,
+            Request.Status.INSPECTION,
             Request.Status.IN_PROGRESS,
             Request.Status.ON_HOLD,
             Request.Status.DONE_WORKING,
@@ -746,6 +800,7 @@ class PersonnelTaskListView(StaffRequiredMixin, ListView):
                 assignments__personnel=self.request.user,
                 status__in=(
                     Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
                     Request.Status.IN_PROGRESS,
                     Request.Status.ON_HOLD,
                     Request.Status.DONE_WORKING,
@@ -815,16 +870,18 @@ class RequestorRequestExportCsvView(LoginRequiredMixin, View):
             qs = qs.filter(
                 Q(title__icontains=q)
                 | Q(description__icontains=q)
+                | Q(location__icontains=q)
                 | Q(unit__name__icontains=q)
             )
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="my_requests.csv"'
         writer = csv.writer(response)
-        writer.writerow(['Request ID', 'Title', 'Unit', 'Status', 'Date submitted'])
+        writer.writerow(['Request ID', 'Purpose/s', 'Location', 'Unit', 'Status', 'Date submitted'])
         for req in qs:
             writer.writerow([
                 getattr(req, 'display_id', '') or req.pk,
-                req.title,
+                req.description,
+                req.location,
                 getattr(req, 'unit_name', '') or (req.unit.name if req.unit_id else ''),
                 req.get_status_display(),
                 req.created_at.strftime('%Y-%m-%d %H:%M'),

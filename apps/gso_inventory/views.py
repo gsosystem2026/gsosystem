@@ -18,7 +18,7 @@ from apps.gso_accounts.views import StaffRequiredMixin
 from django.utils import timezone
 
 from .forms import InventoryItemForm, InventoryItemFormAllUnits, InventoryAdjustForm, IssueMaterialForm, RequestMaterialForm
-from .models import InventoryItem, InventoryTransaction, MaterialRequest
+from .models import InventoryItem, InventoryTransaction, MaterialRequest, format_quantity_with_uom
 from django.http import JsonResponse, HttpResponse
 from django.template.loader import render_to_string
 
@@ -150,12 +150,14 @@ class InventoryCreateView(StaffRequiredMixin, InventoryAccessMixin, CreateView):
                 form.instance.updated_by = self.request.user
                 self.object = form.save()
                 if self.object.quantity > 0:
+                    initial_arrival_date = self.object.arrival_date or timezone.localdate()
                     InventoryTransaction.objects.create(
                         item=self.object,
                         transaction_type=InventoryTransaction.TransactionType.IN,
                         quantity=self.object.quantity,
                         performed_by=self.request.user,
                         notes='Initial stock',
+                        arrival_date=initial_arrival_date,
                     )
                 messages.success(self.request, f'Item "{self.object.name}" added.')
                 return JsonResponse({'success': True})
@@ -171,12 +173,14 @@ class InventoryCreateView(StaffRequiredMixin, InventoryAccessMixin, CreateView):
         form.instance.updated_by = self.request.user
         response = super().form_valid(form)
         if self.object.quantity > 0:
+            initial_arrival_date = self.object.arrival_date or timezone.localdate()
             InventoryTransaction.objects.create(
                 item=self.object,
                 transaction_type=InventoryTransaction.TransactionType.IN,
                 quantity=self.object.quantity,
                 performed_by=self.request.user,
                 notes='Initial stock',
+                arrival_date=initial_arrival_date,
             )
         return response
 
@@ -319,23 +323,36 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
                 trans_type = form.cleaned_data['transaction_type']
                 quantity = form.cleaned_data['quantity']
                 notes = form.cleaned_data.get('notes', '')
+                arrival_date = form.cleaned_data.get('arrival_date')
+                supplier_name = (form.cleaned_data.get('supplier_name') or '').strip()
+                delivery_reference = (form.cleaned_data.get('delivery_reference') or '').strip()
                 if trans_type == 'OUT' and quantity > self.item.quantity:
-                    form.add_error('quantity', f'Not enough stock. Current: {self.item.quantity}')
+                    form.add_error(
+                        'quantity',
+                        f'Not enough stock. Current: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}',
+                    )
                 else:
                     if trans_type == 'IN':
                         self.item.quantity += quantity
+                        self.item.arrival_date = arrival_date or timezone.localdate()
                     else:
                         self.item.quantity -= quantity
                     self.item.updated_by = self.request.user
-                    self.item.save(update_fields=['quantity', 'updated_by', 'updated_at'])
+                    update_fields = ['quantity', 'updated_by', 'updated_at']
+                    if trans_type == 'IN':
+                        update_fields.append('arrival_date')
+                    self.item.save(update_fields=update_fields)
                     InventoryTransaction.objects.create(
                         item=self.item,
                         transaction_type=trans_type,
                         quantity=quantity,
                         performed_by=self.request.user,
                         notes=notes,
+                        arrival_date=arrival_date if trans_type == 'IN' else None,
+                        supplier_name=supplier_name if trans_type == 'IN' else '',
+                        delivery_reference=delivery_reference if trans_type == 'IN' else '',
                     )
-                    messages.success(self.request, f'Quantity updated. New stock: {self.item.quantity} {self.item.unit_of_measure}.')
+                    messages.success(self.request, f'Quantity updated. New stock: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}.')
                     return JsonResponse({'success': True})
             context = self.get_context_data(form=form)
             html = render_to_string('staff/_inventory_adjust_modal.html', context, request=request)
@@ -346,23 +363,36 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
         trans_type = form.cleaned_data['transaction_type']
         quantity = form.cleaned_data['quantity']
         notes = form.cleaned_data.get('notes', '')
+        arrival_date = form.cleaned_data.get('arrival_date')
+        supplier_name = (form.cleaned_data.get('supplier_name') or '').strip()
+        delivery_reference = (form.cleaned_data.get('delivery_reference') or '').strip()
         if trans_type == 'OUT' and quantity > self.item.quantity:
-            form.add_error('quantity', f'Not enough stock. Current: {self.item.quantity}')
+            form.add_error(
+                'quantity',
+                f'Not enough stock. Current: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}',
+            )
             return self.form_invalid(form)
         if trans_type == 'IN':
             self.item.quantity += quantity
+            self.item.arrival_date = arrival_date or timezone.localdate()
         else:
             self.item.quantity -= quantity
         self.item.updated_by = self.request.user
-        self.item.save(update_fields=['quantity', 'updated_by', 'updated_at'])
+        update_fields = ['quantity', 'updated_by', 'updated_at']
+        if trans_type == 'IN':
+            update_fields.append('arrival_date')
+        self.item.save(update_fields=update_fields)
         InventoryTransaction.objects.create(
             item=self.item,
             transaction_type=trans_type,
             quantity=quantity,
             performed_by=self.request.user,
             notes=notes,
+            arrival_date=arrival_date if trans_type == 'IN' else None,
+            supplier_name=supplier_name if trans_type == 'IN' else '',
+            delivery_reference=delivery_reference if trans_type == 'IN' else '',
         )
-        messages.success(self.request, f'Quantity updated. New stock: {self.item.quantity} {self.item.unit_of_measure}.')
+        messages.success(self.request, f'Quantity updated. New stock: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}.')
         return redirect('gso_accounts:staff_inventory_detail', pk=self.item.pk)
 
 
@@ -402,7 +432,7 @@ class IssueMaterialToRequestView(StaffRequiredMixin, View):
         )
         messages.success(
             request,
-            f'Issued {quantity} {item.unit_of_measure} of "{item.name}" to this request. Stock updated.',
+            f'Issued {format_quantity_with_uom(quantity, item.unit_of_measure)} of "{item.name}" to this request. Stock updated.',
         )
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 
@@ -430,7 +460,7 @@ class SubmitMaterialRequestView(StaffRequiredMixin, View):
                 for err in errors:
                     messages.error(request, err)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
-        MaterialRequest.objects.create(
+        mr = MaterialRequest.objects.create(
             request=req,
             item=form.cleaned_data['item'],
             quantity=form.cleaned_data['quantity'],
@@ -438,6 +468,8 @@ class SubmitMaterialRequestView(StaffRequiredMixin, View):
             requested_by=user,
             status=MaterialRequest.Status.PENDING,
         )
+        from apps.gso_notifications.utils import notify_material_request_submitted
+        notify_material_request_submitted(mr)
         messages.success(request, 'Material request submitted. Unit Head will approve before stock is deducted.')
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 
@@ -461,7 +493,7 @@ class ApproveMaterialRequestView(StaffRequiredMixin, View):
         if mr.quantity > item.quantity:
             messages.error(
                 request,
-                f'Not enough stock. Available: {item.quantity} {item.unit_of_measure}. Request was not approved.',
+                f'Not enough stock. Available: {format_quantity_with_uom(item.quantity, item.unit_of_measure)}. Request was not approved.',
             )
             return redirect('gso_accounts:staff_request_detail', pk=req.pk)
         item.quantity -= mr.quantity
@@ -479,7 +511,9 @@ class ApproveMaterialRequestView(StaffRequiredMixin, View):
         mr.approved_by = user
         mr.approved_at = timezone.now()
         mr.save(update_fields=['status', 'approved_by', 'approved_at'])
-        messages.success(request, f'Approved: {mr.quantity} {item.unit_of_measure} of "{item.name}" deducted from inventory.')
+        from apps.gso_notifications.utils import notify_material_request_approved
+        notify_material_request_approved(mr)
+        messages.success(request, f'Approved: {format_quantity_with_uom(mr.quantity, item.unit_of_measure)} of "{item.name}" deducted from inventory.')
         return redirect('gso_accounts:staff_request_detail', pk=req.pk)
 
 
@@ -502,5 +536,7 @@ class RejectMaterialRequestView(StaffRequiredMixin, View):
         mr.approved_by = user
         mr.approved_at = timezone.now()
         mr.save(update_fields=['status', 'approved_by', 'approved_at'])
+        from apps.gso_notifications.utils import notify_material_request_rejected
+        notify_material_request_rejected(mr)
         messages.success(request, 'Material request rejected.')
         return redirect('gso_accounts:staff_request_detail', pk=req.pk)

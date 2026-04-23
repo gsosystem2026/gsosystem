@@ -27,8 +27,8 @@ class RequestForm(forms.ModelForm):
         model = Request
         fields = [
             'unit',
-            'title',
             'description',
+            'location',
             'labor',
             'materials',
             'others',
@@ -39,8 +39,8 @@ class RequestForm(forms.ModelForm):
         ]
         widgets = {
             'unit': forms.HiddenInput(),
-            'title': forms.TextInput(attrs={'placeholder': 'Brief title of the request'}),
-            'description': forms.Textarea(attrs={'placeholder': 'Detailed description and location', 'rows': 4}),
+            'description': forms.Textarea(attrs={'placeholder': 'Purpose/s (Preferably in English)', 'rows': 4}),
+            'location': forms.TextInput(attrs={'placeholder': 'IT Building - IT101'}),
             'labor': forms.CheckboxInput(),
             'materials': forms.CheckboxInput(),
             'others': forms.CheckboxInput(),
@@ -61,11 +61,27 @@ class RequestForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['title'].required = True
         self.fields['description'].required = True
+        self.fields['location'].required = True
         self.fields['labor'].required = False
         self.fields['materials'].required = False
         self.fields['others'].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        purpose = (cleaned.get('description') or '').strip()
+        location = (cleaned.get('location') or '').strip()
+        # Keep internal title auto-generated while hiding it from requestor UI.
+        cleaned['title'] = f"{purpose[:140]} @ {location}"[:255]
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        instance.title = self.cleaned_data.get('title', instance.title)
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class AssignPersonnelForm(forms.Form):

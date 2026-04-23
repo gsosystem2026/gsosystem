@@ -16,7 +16,7 @@
         {% endif %}
         {% if form.unit %}
         <div>
-            <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unit *</label>
+            <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department *</label>
             {{ form.unit }}
             {% if form.unit.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.unit.errors.0 }}</p>{% endif %}
         </div>
@@ -43,13 +43,18 @@
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <label for="id_unit_of_measure" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unit of measure</label>
+                <label for="id_unit_of_measure" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Unit of Measure (UoM)</label>
                 {{ form.unit_of_measure }}
             </div>
             <div>
                 <label for="id_reorder_level" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Reorder level</label>
                 {{ form.reorder_level }}
             </div>
+        </div>
+        <div>
+            <label for="id_arrival_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date arrived</label>
+            {{ form.arrival_date }}
+            {% if form.arrival_date.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.arrival_date.errors.0 }}</p>{% endif %}
         </div>
         <div>
             <label for="id_location" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location / remarks</label>
@@ -66,7 +71,7 @@
     </form>
 </div>
 <style>
-    #id_unit, #id_name, #id_description, #id_category, #id_quantity, #id_unit_of_measure, #id_reorder_level, #id_location, #id_serial_or_asset_number {
+    #id_unit, #id_name, #id_description, #id_category, #id_quantity, #id_unit_of_measure, #id_reorder_level, #id_arrival_date, #id_location, #id_serial_or_asset_number {
         @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary;
     }
     #id_description { min-height: 80px; }

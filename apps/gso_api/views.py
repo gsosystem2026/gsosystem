@@ -7,6 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.utils import timezone
 
 from apps.gso_accounts.models import User
 from apps.gso_requests.models import Request, RequestAssignment
@@ -23,6 +24,13 @@ from .serializers import (
     UserMeSerializer,
     NotificationSerializer,
 )
+
+INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
+
+
+def _requires_inspection(request_obj):
+    code = ((request_obj.unit.code if request_obj.unit_id else '') or '').lower()
+    return code in INSPECTION_REQUIRED_UNIT_CODES
 
 
 def _filter_requests_queryset(queryset, request):
@@ -165,7 +173,7 @@ class RequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def status(self, request, pk=None):
-        """Personnel update work status. POST { status: IN_PROGRESS | ON_HOLD | DONE_WORKING }."""
+        """Personnel update work status. POST { status: INSPECTION | IN_PROGRESS | ON_HOLD | DONE_WORKING }."""
         req = self.get_object()
         user = request.user
         if not getattr(user, 'is_personnel', False):
@@ -173,18 +181,34 @@ class RequestViewSet(viewsets.ModelViewSet):
         if not req.assignments.filter(personnel=user).exists():
             return Response({'detail': 'You are not assigned to this request.'}, status=status.HTTP_403_FORBIDDEN)
         new_status = request.data.get('status') or ''
-        allowed = (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD, Request.Status.DONE_WORKING)
+        allowed = (
+            Request.Status.INSPECTION,
+            Request.Status.IN_PROGRESS,
+            Request.Status.ON_HOLD,
+            Request.Status.DONE_WORKING,
+        )
         if new_status not in allowed:
             return Response({'detail': f'Invalid status. Use one of: {", ".join(allowed)}'}, status=status.HTTP_400_BAD_REQUEST)
-        if req.status == Request.Status.DIRECTOR_APPROVED and new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
-            return Response({'detail': 'From Approved you can only set In Progress or On Hold.'}, status=status.HTTP_400_BAD_REQUEST)
+        if req.status == Request.Status.DIRECTOR_APPROVED:
+            if _requires_inspection(req):
+                allowed_from_approved = (Request.Status.INSPECTION, Request.Status.IN_PROGRESS)
+                if new_status not in allowed_from_approved:
+                    return Response({'detail': 'From Approved you can only set Inspection or In Progress for this unit.'}, status=status.HTTP_400_BAD_REQUEST)
+            elif new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
+                return Response({'detail': 'From Approved you can only set In Progress or On Hold.'}, status=status.HTTP_400_BAD_REQUEST)
+        if req.status == Request.Status.INSPECTION and new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
+            return Response({'detail': 'From Inspection you can only set In Progress or On Hold.'}, status=status.HTTP_400_BAD_REQUEST)
         if req.status == Request.Status.IN_PROGRESS and new_status not in (Request.Status.ON_HOLD, Request.Status.DONE_WORKING):
             return Response({'detail': 'From In Progress you can only set On Hold or Done working.'}, status=status.HTTP_400_BAD_REQUEST)
         if req.status == Request.Status.ON_HOLD and new_status not in (Request.Status.IN_PROGRESS, Request.Status.DONE_WORKING):
             return Response({'detail': 'From On Hold you can only set In Progress or Done working.'}, status=status.HTTP_400_BAD_REQUEST)
         old_status = req.status
         req.status = new_status
-        req.save(update_fields=['status', 'updated_at'])
+        update_fields = ['status', 'updated_at']
+        if new_status == Request.Status.IN_PROGRESS and not req.work_started_at:
+            req.work_started_at = timezone.now()
+            update_fields.append('work_started_at')
+        req.save(update_fields=update_fields)
         from apps.gso_notifications.utils import notify_after_personnel_work_status_change
         notify_after_personnel_work_status_change(req, old_status, new_status)
         serializer = RequestDetailSerializer(req, context=self.get_serializer_context())

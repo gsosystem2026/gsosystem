@@ -1,10 +1,6 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}Request Management — GSO{% endblock %}
 {% block staff_content %}
-<p id="request-mgmt-auto-refresh-status" class="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap mb-1" aria-live="polite">
-    <span id="request-mgmt-refresh-spinner" class="hidden inline-block size-3 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
-    <span>List auto-refreshes every 15s. Last updated: <time id="request-mgmt-last-updated">—</time></span>
-</p>
 <div class="space-y-6" id="request-management-wrapper">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -13,7 +9,7 @@
         </div>
         <div class="flex items-end gap-3 flex-wrap">
             {% if request.user.is_unit_head or request.user.is_gso_office or request.user.is_director %}
-            <a href="{% url 'gso_accounts:staff_request_history' %}" class="flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-primary transition-colors flex-shrink-0" title="Request history" aria-label="Request history">
+            <a href="{% url 'gso_accounts:staff_request_history' %}" data-staff-pjax="1" class="flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-primary transition-colors flex-shrink-0" title="Request history" aria-label="Request history">
                 <span class="material-symbols-outlined text-[22px]">history</span>
             </a>
             {% endif %}
@@ -80,7 +76,7 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="text-primary hover:underline font-semibold text-sm">View</a>
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" data-staff-pjax="1" class="js-staff-request-view text-primary hover:underline font-semibold text-sm">View</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -109,22 +105,6 @@
     </div>
 </div>
 <script>
-function requestMgmtFormatNow() {
-    try {
-        return new Date().toLocaleString('en-PH', { dateStyle: 'short', timeStyle: 'short' });
-    } catch (e) {
-        return new Date().toISOString();
-    }
-}
-function requestMgmtSetLastUpdated() {
-    var el = document.getElementById('request-mgmt-last-updated');
-    if (el) el.textContent = requestMgmtFormatNow();
-}
-function requestMgmtSetRefreshing(on) {
-    var sp = document.getElementById('request-mgmt-refresh-spinner');
-    if (sp) sp.classList.toggle('hidden', !on);
-}
-
 function initRequestManagementFilters() {
     const form = document.getElementById('request-management-filter-form');
     const wrapper = document.getElementById('request-management-wrapper');
@@ -141,7 +121,6 @@ function initRequestManagementFilters() {
         const query = params.toString();
         const url = window.location.pathname + (query ? '?' + query : '');
         wrapper.classList.add('opacity-50');
-        requestMgmtSetRefreshing(true);
         fetch(url, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
@@ -154,8 +133,10 @@ function initRequestManagementFilters() {
                 if (newWrapper) {
                     wrapper.innerHTML = newWrapper.innerHTML;
                     wrapper.classList.remove('opacity-50');
-                    requestMgmtSetLastUpdated();
                     initRequestManagementFilters();
+                    if (typeof window.attachStaffPjaxHandlers === 'function') {
+                        window.attachStaffPjaxHandlers();
+                    }
                 } else {
                     wrapper.classList.remove('opacity-50');
                 }
@@ -163,9 +144,7 @@ function initRequestManagementFilters() {
             .catch(function () {
                 wrapper.classList.remove('opacity-50');
             })
-            .finally(function () {
-                requestMgmtSetRefreshing(false);
-            });
+            .finally(function () {});
     };
 
     fieldIds.forEach(function (id) {
@@ -195,8 +174,93 @@ function initRequestManagementFilters() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    requestMgmtSetLastUpdated();
+    const staffMain = document.getElementById('staff-main-content');
+    function setStaffMainLoading(isLoading) {
+        if (!staffMain) return;
+        const existing = document.getElementById('staff-main-loading-overlay');
+        if (!isLoading) {
+            if (existing) existing.remove();
+            return;
+        }
+        if (existing) return;
+        staffMain.classList.add('relative');
+        const overlay = document.createElement('div');
+        overlay.id = 'staff-main-loading-overlay';
+        overlay.className = 'absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-slate-900/80';
+        overlay.innerHTML = '' +
+            '<div class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">' +
+                '<span class="material-symbols-outlined ui-loading-spin text-primary">progress_activity</span>' +
+                '<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Loading request...</span>' +
+            '</div>';
+        staffMain.appendChild(overlay);
+    }
+    function runInlineScripts(container) {
+        if (!container) return;
+        container.querySelectorAll('script').forEach(function(oldScript) {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function(attr) {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.text = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    }
+    function loadStaffMain(url, pushStateEntry) {
+        if (!staffMain) return;
+        setStaffMainLoading(true);
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var fragment = doc.getElementById('staff-main-content-fragment');
+                var mainContent = doc.getElementById('staff-main-content');
+                var nextHtml = fragment
+                    ? fragment.innerHTML
+                    : (mainContent ? mainContent.innerHTML : html);
+                staffMain.innerHTML = nextHtml;
+                setStaffMainLoading(false);
+                runInlineScripts(staffMain);
+                if (typeof initRequestManagementFilters === 'function') initRequestManagementFilters();
+                attachStaffPjaxHandlers();
+                if (pushStateEntry) {
+                    window.history.pushState({ staffPjax: true, url: url }, '', url.replace(/[?&]partial=1\b/, '').replace(/\?$/, ''));
+                }
+            })
+            .catch(function () {
+                setStaffMainLoading(false);
+            });
+    }
+    function attachStaffPjaxHandlers() {
+        if (!staffMain) return;
+        staffMain.querySelectorAll('a[data-staff-pjax="1"]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var href = link.getAttribute('href');
+                if (!href) return;
+                var url = href;
+                if (url.indexOf('partial=1') === -1) {
+                    url += (href.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+                }
+                loadStaffMain(url, true);
+            });
+        });
+    }
+    window.attachStaffPjaxHandlers = attachStaffPjaxHandlers;
+    window.addEventListener('popstate', function() {
+        if (!staffMain) return;
+        var current = window.location.pathname + window.location.search;
+        var url = current;
+        if (window.location.pathname.indexOf('/requests/') !== -1) {
+            url += (window.location.search ? '&' : '?') + 'partial=1';
+        }
+        loadStaffMain(url, false);
+    });
+
     initRequestManagementFilters();
+    attachStaffPjaxHandlers();
     setInterval(function () {
         var form = document.getElementById('request-management-filter-form');
         var wrapper = document.getElementById('request-management-wrapper');
@@ -205,7 +269,6 @@ document.addEventListener('DOMContentLoaded', function () {
         formData.delete('page');
         var params = new URLSearchParams(formData);
         var url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
-        requestMgmtSetRefreshing(true);
         fetch(url, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
@@ -216,14 +279,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 var newWrapper = doc.getElementById('request-management-wrapper');
                 if (newWrapper) {
                     wrapper.innerHTML = newWrapper.innerHTML;
-                    requestMgmtSetLastUpdated();
                     initRequestManagementFilters();
                 }
             })
             .catch(function () {})
-            .finally(function () {
-                requestMgmtSetRefreshing(false);
-            });
+            .finally(function () {});
     }, 15000);
 });
 </script>

@@ -20,24 +20,33 @@
                     <span class="material-symbols-outlined">notifications</span>
                     <span id="staff-notif-badge" class="absolute -top-0.5 -right-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold px-1.5 ring-2 ring-white dark:ring-slate-900 hidden" aria-label="0 unread">0</span>
                 </button>
-                <div id="staff-notif-dropdown" class="hidden absolute right-0 mt-2 w-80 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-50 overflow-hidden flex flex-col max-h-[70vh]" role="menu">
-                    <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex-shrink-0">
-                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">Notifications</p>
+                <div id="staff-notif-dropdown" class="hidden absolute right-0 mt-2 w-[22rem] rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl z-50 overflow-hidden flex flex-col max-h-[78vh]" role="menu">
+                    <div class="px-4 pt-4 pb-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0">
+                        <div class="flex items-center justify-between gap-3">
+                            <p class="text-2xl leading-none font-bold text-slate-900 dark:text-slate-100">Notifications</p>
+                            <a href="{% url 'gso_accounts:staff_notifications' %}" class="text-sm font-medium text-primary hover:underline">See all</a>
+                        </div>
+                        <div class="mt-3 inline-flex items-center gap-2">
+                            <button type="button" id="staff-notif-tab-all" data-tab="all" class="rounded-full px-3 py-1.5 text-sm font-semibold bg-primary/10 text-primary">All</button>
+                            <button type="button" id="staff-notif-tab-unread" data-tab="unread" class="rounded-full px-3 py-1.5 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Unread</button>
+                        </div>
                     </div>
-                    <div id="staff-notif-list" class="overflow-y-auto flex-1 min-h-0">
+                    <div id="staff-notif-list" class="overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900">
                         {% for n in user_notifications %}
-                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
-                            <p class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ n.title }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-staff-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
+                            <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
                         </a>
                         {% empty %}
-                        <p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
+                        <p class="js-staff-notif-empty-initial px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
                         {% endfor %}
+                        <p id="staff-notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>
                     </div>
-                    <div id="staff-notif-mark-all" class="p-2 border-t border-slate-200 dark:border-slate-700 flex-shrink-0 {% if unread_notification_count == 0 %}hidden{% endif %}">
+                    <div id="staff-notif-mark-all" class="p-2 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex-shrink-0 {% if unread_notification_count == 0 %}hidden{% endif %}">
                         <form method="post" action="{% url 'gso_accounts:notification_mark_all_read' %}" class="block">
                             {% csrf_token %}
-                            <button type="submit" class="w-full text-center text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary py-2">Mark all as read</button>
+                            <button type="submit" class="w-full text-center text-sm font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg py-2">Mark all as read</button>
                         </form>
                     </div>
                 </div>
@@ -56,6 +65,10 @@
                         {% if request.user.is_director %}Director{% elif request.user.is_gso_office %}GSO Office{% elif request.user.is_unit_head %}Unit Head{% elif request.user.is_personnel %}Personnel{% else %}Staff{% endif %}
                     </p>
                 </div>
+                <button type="button" id="staff-profile-modal-settings-btn" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left" role="menuitem">
+                    <span class="material-symbols-outlined text-lg">settings</span>
+                    Settings
+                </button>
                 <div class="border-t border-slate-200 dark:border-slate-700 mt-1 pt-1">
                     <form method="post" action="{% url 'gso_accounts:logout' %}" class="block">
                         {% csrf_token %}
@@ -70,6 +83,119 @@
         </div>
     </div>
 </header>
+<div id="staff-profile-modal" class="hidden fixed inset-0 z-[100] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="staff-profile-modal-title">
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div id="staff-profile-modal-backdrop" class="fixed inset-0 bg-slate-900/55 backdrop-blur-[1px] transition-opacity"></div>
+        <div class="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div class="flex items-center justify-center px-6 py-5 bg-gradient-to-r from-primary to-blue-600 flex-shrink-0 relative">
+                <h2 id="staff-profile-modal-title" class="text-2xl font-bold text-white tracking-tight">Profile</h2>
+                <button type="button" id="staff-profile-modal-close" class="close-btn close-btn--on-primary absolute right-4 top-4" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
+                </button>
+            </div>
+            <div class="overflow-y-auto flex-1 bg-slate-100/80 dark:bg-slate-900 p-0">
+                <div id="staff-profile-modal-view" class="profile-modal-pane">
+                    <div class="px-6 pt-8 pb-7 text-center">
+                        <div class="relative inline-flex">
+                            <div class="bg-primary/20 dark:bg-primary/30 rounded-full size-36 overflow-hidden border-4 border-white/70 dark:border-slate-700 shadow-lg flex items-center justify-center">
+                                <img src="{% static request.user.avatar_static_path %}" alt="Profile avatar" class="w-full h-full object-cover"/>
+                            </div>
+                            <button type="button" id="staff-profile-modal-edit-avatar-btn" class="absolute inset-0 flex items-center justify-center rounded-full bg-slate-900/40 opacity-0 hover:opacity-100 transition-opacity text-xs font-semibold text-white">
+                                Edit avatar
+                            </button>
+                        </div>
+                        <h3 class="mt-8 text-3xl font-bold text-slate-900 dark:text-slate-100">{{ request.user.get_full_name|default:request.user.username }}</h3>
+                        <p class="mt-2 text-base text-slate-600 dark:text-slate-300">{% if request.user.is_director %}Director{% elif request.user.is_gso_office %}GSO Office{% elif request.user.is_unit_head %}Unit Head{% elif request.user.is_personnel %}Personnel{% else %}Staff{% endif %}</p>
+                        <div id="staff-profile-avatar-picker" class="mt-4 w-full hidden">
+                            <form method="post" action="{% url 'gso_accounts:staff_profile_edit' %}" id="staff-profile-avatar-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="first_name" value="{{ request.user.first_name|default:'' }}">
+                                <input type="hidden" name="last_name" value="{{ request.user.last_name|default:'' }}">
+                                <input type="hidden" name="email" value="{{ request.user.email|default:'' }}">
+                                <input type="hidden" name="avatar_code" id="staff-profile-avatar-code-input" value="{{ request.user.avatar_code|default:'man1' }}">
+                                <div class="grid grid-cols-4 gap-3 mt-2">
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man1"><img src="{% static 'img/avatars/man1.png' %}" alt="man1" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man2"><img src="{% static 'img/avatars/man2.png' %}" alt="man2" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man3"><img src="{% static 'img/avatars/man3.png' %}" alt="man3" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man4"><img src="{% static 'img/avatars/man4.png' %}" alt="man4" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man5"><img src="{% static 'img/avatars/man5.png' %}" alt="man5" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man6"><img src="{% static 'img/avatars/man6.png' %}" alt="man6" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man7"><img src="{% static 'img/avatars/man7.png' %}" alt="man7" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man8"><img src="{% static 'img/avatars/man8.png' %}" alt="man8" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="man9"><img src="{% static 'img/avatars/man9.png' %}" alt="man9" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman1"><img src="{% static 'img/avatars/woman1.png' %}" alt="woman1" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman2"><img src="{% static 'img/avatars/woman2.png' %}" alt="woman2" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman3"><img src="{% static 'img/avatars/woman3.png' %}" alt="woman3" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman4"><img src="{% static 'img/avatars/woman4.png' %}" alt="woman4" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman5"><img src="{% static 'img/avatars/woman5.png' %}" alt="woman5" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman6"><img src="{% static 'img/avatars/woman6.png' %}" alt="woman6" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman7"><img src="{% static 'img/avatars/woman7.png' %}" alt="woman7" class="w-full h-full object-cover"></button>
+                                    <button type="button" class="relative rounded-full border-2 border-transparent hover:border-primary/60 overflow-hidden h-14 w-14 flex items-center justify-center bg-slate-100 dark:bg-slate-800" data-staff-avatar-choice="woman8"><img src="{% static 'img/avatars/woman8.png' %}" alt="woman8" class="w-full h-full object-cover"></button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="px-6 pb-6 pt-6 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                        <div class="flex flex-wrap gap-3">
+                            <button type="button" id="staff-profile-modal-show-edit" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-3 rounded-xl text-sm font-semibold transition-colors shadow-sm">
+                                <span class="material-symbols-outlined text-lg">edit_square</span>
+                                Edit profile
+                            </button>
+                            <a href="{% url 'gso_accounts:password_reset' %}" class="flex-1 min-w-[170px] inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold rounded-xl border-2 border-primary/70 text-primary hover:bg-primary/5 dark:hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-lg">key</span>
+                                Change password
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div id="staff-profile-modal-edit" class="profile-modal-pane hidden px-6 py-6">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">Update Profile</h3>
+                    <form method="post" action="{% url 'gso_accounts:staff_profile_edit' %}" id="staff-profile-edit-form" class="space-y-4">
+                        {% csrf_token %}
+                        <div>
+                            <label for="id_staff_first_name_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">First name</label>
+                            <input type="text" name="first_name" id="id_staff_first_name_modal" value="{{ request.user.first_name|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_staff_last_name_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Last name</label>
+                            <input type="text" name="last_name" id="id_staff_last_name_modal" value="{{ request.user.last_name|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_staff_email_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+                            <input type="email" name="email" id="id_staff_email_modal" value="{{ request.user.email|default:'' }}" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary"/>
+                        </div>
+                        <div>
+                            <label for="id_staff_avatar_code_modal" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile avatar</label>
+                            <select name="avatar_code" id="id_staff_avatar_code_modal" class="mt-1 block w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-slate-900 dark:text-slate-100 focus:ring-primary focus:border-primary">
+                                <option value="man1" {% if request.user.avatar_code == 'man1' %}selected{% endif %}>Man 1</option>
+                                <option value="man2" {% if request.user.avatar_code == 'man2' %}selected{% endif %}>Man 2</option>
+                                <option value="man3" {% if request.user.avatar_code == 'man3' %}selected{% endif %}>Man 3</option>
+                                <option value="man4" {% if request.user.avatar_code == 'man4' %}selected{% endif %}>Man 4</option>
+                                <option value="man5" {% if request.user.avatar_code == 'man5' %}selected{% endif %}>Man 5</option>
+                                <option value="man6" {% if request.user.avatar_code == 'man6' %}selected{% endif %}>Man 6</option>
+                                <option value="man7" {% if request.user.avatar_code == 'man7' %}selected{% endif %}>Man 7</option>
+                                <option value="man8" {% if request.user.avatar_code == 'man8' %}selected{% endif %}>Man 8</option>
+                                <option value="man9" {% if request.user.avatar_code == 'man9' %}selected{% endif %}>Man 9</option>
+                                <option value="woman1" {% if request.user.avatar_code == 'woman1' %}selected{% endif %}>Woman 1</option>
+                                <option value="woman2" {% if request.user.avatar_code == 'woman2' %}selected{% endif %}>Woman 2</option>
+                                <option value="woman3" {% if request.user.avatar_code == 'woman3' %}selected{% endif %}>Woman 3</option>
+                                <option value="woman4" {% if request.user.avatar_code == 'woman4' %}selected{% endif %}>Woman 4</option>
+                                <option value="woman5" {% if request.user.avatar_code == 'woman5' %}selected{% endif %}>Woman 5</option>
+                                <option value="woman6" {% if request.user.avatar_code == 'woman6' %}selected{% endif %}>Woman 6</option>
+                                <option value="woman7" {% if request.user.avatar_code == 'woman7' %}selected{% endif %}>Woman 7</option>
+                                <option value="woman8" {% if request.user.avatar_code == 'woman8' %}selected{% endif %}>Woman 8</option>
+                            </select>
+                        </div>
+                        <div class="mt-2 flex gap-3">
+                            <button type="submit" class="bg-gradient-to-r from-primary to-blue-600 hover:from-blue-700 hover:to-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">Save changes</button>
+                            <button type="button" id="staff-profile-modal-edit-cancel" class="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 <script>
 (function() {
     var profileBtn = document.getElementById('staff-profile-dropdown-btn');
@@ -107,16 +233,93 @@
         if (notifWrap) notifWrap.addEventListener('click', function(e) { e.stopPropagation(); });
     }
 
+    var profileModal = document.getElementById('staff-profile-modal');
+    var profileModalView = document.getElementById('staff-profile-modal-view');
+    var profileModalEdit = document.getElementById('staff-profile-modal-edit');
+    var settingsBtn = document.getElementById('staff-profile-modal-settings-btn');
+    var profileModalClose = document.getElementById('staff-profile-modal-close');
+    var profileModalBackdrop = document.getElementById('staff-profile-modal-backdrop');
+    var showEditBtn = document.getElementById('staff-profile-modal-show-edit');
+    var editCancelBtn = document.getElementById('staff-profile-modal-edit-cancel');
+    var editAvatarBtn = document.getElementById('staff-profile-modal-edit-avatar-btn');
+    var avatarPicker = document.getElementById('staff-profile-avatar-picker');
+    var avatarForm = document.getElementById('staff-profile-avatar-form');
+
+    function openProfileModal(showEdit) {
+        closeProfile();
+        if (!profileModal) return;
+        profileModal.classList.remove('hidden');
+        if (showEdit) {
+            if (profileModalView) profileModalView.classList.add('hidden');
+            if (profileModalEdit) profileModalEdit.classList.remove('hidden');
+        } else {
+            if (profileModalView) profileModalView.classList.remove('hidden');
+            if (profileModalEdit) profileModalEdit.classList.add('hidden');
+        }
+    }
+    function closeProfileModal() {
+        if (!profileModal) return;
+        profileModal.classList.add('hidden');
+        if (profileModalView) profileModalView.classList.remove('hidden');
+        if (profileModalEdit) profileModalEdit.classList.add('hidden');
+    }
+    if (settingsBtn) settingsBtn.addEventListener('click', function () { openProfileModal(false); });
+    if (showEditBtn) showEditBtn.addEventListener('click', function () { openProfileModal(true); });
+    if (editCancelBtn) editCancelBtn.addEventListener('click', function () { openProfileModal(false); });
+    if (profileModalClose) profileModalClose.addEventListener('click', closeProfileModal);
+    if (profileModalBackdrop) profileModalBackdrop.addEventListener('click', closeProfileModal);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && profileModal && !profileModal.classList.contains('hidden')) closeProfileModal();
+    });
+    if (editAvatarBtn && avatarPicker) {
+        editAvatarBtn.addEventListener('click', function () { avatarPicker.classList.toggle('hidden'); });
+    }
+    if (avatarForm) {
+        avatarForm.querySelectorAll('button[data-staff-avatar-choice]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var input = document.getElementById('staff-profile-avatar-code-input');
+                if (!input) return;
+                input.value = btn.getAttribute('data-staff-avatar-choice') || '';
+                avatarForm.submit();
+            });
+        });
+    }
+
     // Auto-update notifications from API every 15s (so new requests from mobile appear)
     var notifBadge = document.getElementById('staff-notif-badge');
     var notifListEl = document.getElementById('staff-notif-list');
     var notifMarkAllEl = document.getElementById('staff-notif-mark-all');
+    var notifTabAll = document.getElementById('staff-notif-tab-all');
+    var notifTabUnread = document.getElementById('staff-notif-tab-unread');
+    var notifEmpty = document.getElementById('staff-notif-empty');
     var wrap = document.getElementById('staff-notif-dropdown-wrap');
     var initialUnread = wrap ? parseInt(wrap.getAttribute('data-initial-unread') || '0', 10) : 0;
     if (notifBadge) {
         notifBadge.textContent = initialUnread > 9 ? '9+' : String(initialUnread);
         notifBadge.classList.toggle('hidden', initialUnread === 0);
     }
+    function applyStaffNotifTab(tab) {
+        if (!notifListEl) return;
+        notifListEl.querySelectorAll('.js-staff-notif-empty-initial').forEach(function (el) { el.classList.add('hidden'); });
+        var items = Array.from(notifListEl.querySelectorAll('.js-staff-notif-item'));
+        var visible = 0;
+        items.forEach(function (el) {
+            var unread = el.getAttribute('data-read') === '0';
+            var show = tab === 'all' ? true : unread;
+            el.classList.toggle('hidden', !show);
+            if (show) visible += 1;
+        });
+        if (notifEmpty) notifEmpty.classList.toggle('hidden', visible > 0);
+        if (notifTabAll && notifTabUnread) {
+            var isAll = tab === 'all';
+            notifTabAll.className = 'rounded-full px-3 py-1.5 text-sm font-semibold ' + (isAll ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+            notifTabUnread.className = 'rounded-full px-3 py-1.5 text-sm font-semibold ' + (!isAll ? 'bg-primary/10 text-primary' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800');
+        }
+        notifListEl.setAttribute('data-active-tab', tab);
+    }
+    if (notifTabAll) notifTabAll.addEventListener('click', function () { applyStaffNotifTab('all'); });
+    if (notifTabUnread) notifTabUnread.addEventListener('click', function () { applyStaffNotifTab('unread'); });
+
     function updateStaffNotifications() {
         fetch('/api/v1/notifications/unread_count/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
@@ -144,18 +347,24 @@
                     } catch (e) { return s; }
                 }
                 if (list.length === 0) {
-                    notifListEl.innerHTML = '<p class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>';
+                    notifListEl.innerHTML = '<p id="staff-notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>';
+                    notifEmpty = document.getElementById('staff-notif-empty');
                 } else {
                     notifListEl.innerHTML = list.map(function(n) {
-                        var cls = 'block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
+                        var cls = 'js-staff-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
                         if (!n.read) cls += ' bg-primary/5 dark:bg-primary/10';
-                        return '<a href="' + goBase + n.id + '/go/" class="' + cls + '"><p class="text-sm font-medium text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + fmtDate(n.created_at) + '</p></a>';
+                        var msg = (n.message || '').replace(/</g, '&lt;');
+                        return '<a href="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></a>';
                     }).join('');
+                    notifListEl.insertAdjacentHTML('beforeend', '<p id="staff-notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>');
+                    notifEmpty = document.getElementById('staff-notif-empty');
                 }
+                applyStaffNotifTab(notifListEl.getAttribute('data-active-tab') || 'all');
             })
             .catch(function() {});
     }
     if (notifBadge && notifListEl) {
+        applyStaffNotifTab('all');
         setInterval(updateStaffNotifications, 15000);
     }
 })();

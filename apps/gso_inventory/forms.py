@@ -1,6 +1,7 @@
 """Forms for inventory CRUD and adjust quantity (Phase 3.2 / 3.3)."""
 from django import forms
 from .models import InventoryItem, InventoryTransaction
+from .models import format_quantity_with_uom
 
 
 CATEGORY_CHOICES = [
@@ -28,11 +29,12 @@ class InventoryItemForm(forms.ModelForm):
         model = InventoryItem
         fields = [
             'name', 'description', 'category', 'quantity', 'unit_of_measure',
-            'reorder_level', 'location', 'serial_or_asset_number',
+            'reorder_level', 'arrival_date', 'location', 'serial_or_asset_number',
         ]
         widgets = {
             'name': forms.TextInput(attrs={'placeholder': 'Item name'}),
             'description': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Description (optional)'}),
+            'arrival_date': forms.DateInput(attrs={'type': 'date'}),
             'location': forms.TextInput(attrs={'placeholder': 'Storage location or remarks'}),
         }
 
@@ -45,8 +47,10 @@ class InventoryItemForm(forms.ModelForm):
         )
         # Unit of measure as dropdown with common units (optional, defaults handled by model)
         self.fields['unit_of_measure'] = forms.ChoiceField(
-            choices=[('', 'Select unit (optional)')] + UNIT_OF_MEASURE_CHOICES,
+            choices=[('', 'Select UoM (optional)')] + UNIT_OF_MEASURE_CHOICES,
             required=False,
+            label='Unit of Measure (UoM)',
+            help_text='Examples: pcs, liters, box, set',
         )
 
 
@@ -55,7 +59,7 @@ class InventoryItemFormAllUnits(InventoryItemForm):
     class Meta(InventoryItemForm.Meta):
         fields = [
             'unit', 'name', 'description', 'category', 'quantity', 'unit_of_measure',
-            'reorder_level', 'location', 'serial_or_asset_number',
+            'reorder_level', 'arrival_date', 'location', 'serial_or_asset_number',
         ]
 
     def __init__(self, *args, **kwargs):
@@ -63,6 +67,8 @@ class InventoryItemFormAllUnits(InventoryItemForm):
         from apps.gso_units.models import Unit
         self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
         self.fields['unit'].required = True
+        self.fields['unit'].label = 'Department'
+        self.fields['unit'].help_text = 'Choose the service unit/department (e.g., Electrical, Utility, Motorpool)'
 
 
 class InventoryAdjustForm(forms.Form):
@@ -72,6 +78,17 @@ class InventoryAdjustForm(forms.Form):
     ]
     transaction_type = forms.ChoiceField(choices=TRANSACTION_TYPE, widget=forms.RadioSelect)
     quantity = forms.IntegerField(min_value=1, widget=forms.NumberInput(attrs={'min': 1}))
+    arrival_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}))
+    supplier_name = forms.CharField(
+        required=False,
+        max_length=255,
+        widget=forms.TextInput(attrs={'placeholder': 'Optional supplier'}),
+    )
+    delivery_reference = forms.CharField(
+        required=False,
+        max_length=120,
+        widget=forms.TextInput(attrs={'placeholder': 'Optional DR/PO ref'}),
+    )
     notes = forms.CharField(required=False, max_length=500, widget=forms.Textarea(attrs={'rows': 2, 'placeholder': 'Optional notes'}))
 
     def clean_quantity(self):
@@ -79,6 +96,13 @@ class InventoryAdjustForm(forms.Form):
         if qty is not None and qty < 1:
             raise forms.ValidationError('Quantity must be at least 1.')
         return qty
+
+    def clean(self):
+        cleaned = super().clean()
+        trans_type = cleaned.get('transaction_type')
+        if trans_type == 'IN' and not cleaned.get('arrival_date'):
+            self.add_error('arrival_date', 'Arrival date is required for stock-in entries.')
+        return cleaned
 
 
 class IssueMaterialForm(forms.Form):
@@ -88,6 +112,7 @@ class IssueMaterialForm(forms.Form):
         required=True,
         label='Item',
         help_text='Item from your unit inventory',
+        widget=forms.Select(attrs={'class': 'js-issue-material-select'}),
     )
     quantity = forms.IntegerField(
         min_value=1,
@@ -114,7 +139,7 @@ class IssueMaterialForm(forms.Form):
         item = self.cleaned_data.get('item')
         if qty is not None and item and qty > item.quantity:
             raise forms.ValidationError(
-                f'Not enough stock. Available: {item.quantity} {item.unit_of_measure}.'
+                f'Not enough stock. Available: {format_quantity_with_uom(item.quantity, item.unit_of_measure)}.'
             )
         return qty
 
@@ -126,6 +151,7 @@ class RequestMaterialForm(forms.Form):
         required=True,
         label='Item',
         help_text='Item from unit inventory',
+        widget=forms.Select(attrs={'class': 'js-request-material-select'}),
     )
     quantity = forms.IntegerField(
         min_value=1,
@@ -152,6 +178,6 @@ class RequestMaterialForm(forms.Form):
         item = self.cleaned_data.get('item')
         if qty is not None and item and qty > item.quantity:
             raise forms.ValidationError(
-                f'Not enough stock. Available: {item.quantity} {item.unit_of_measure}.'
+                f'Not enough stock. Available: {format_quantity_with_uom(item.quantity, item.unit_of_measure)}.'
             )
         return qty

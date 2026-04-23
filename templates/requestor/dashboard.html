@@ -3,12 +3,6 @@
 {% block title %}GSO Request Management Dashboard{% endblock %}
 
 {% block requestor_content %}
-{% if submitted %}
-<div class="mb-4 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 text-sm flex items-center gap-2">
-    <span class="material-symbols-outlined">check_circle</span>
-    Request(s) submitted successfully.
-</div>
-{% endif %}
 <!-- Welcome Section -->
 <div class="mb-8">
     <h1 class="text-slate-900 dark:text-slate-100 text-3xl font-bold leading-tight">Welcome back, {{ request.user.get_full_name|default:request.user.username }}</h1>
@@ -25,14 +19,14 @@
         </button>
     </div>
     <p class="text-slate-500 dark:text-slate-400 text-sm mb-4">Choose a unit to file a new request.</p>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {% for item in units %}
-        <button type="button" class="requestor-service-card group flex flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 hover:border-primary hover:shadow-lg transition-all cursor-pointer text-left w-full" data-unit-code="{{ item.unit.code }}" data-unit-name="{{ item.unit.name }}">
+        <button type="button" class="requestor-service-card group flex h-full min-h-[220px] flex-col bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 hover:border-primary hover:shadow-lg transition-all cursor-pointer text-left w-full" data-unit-code="{{ item.unit.code }}" data-unit-name="{{ item.unit.name }}">
             <div class="size-14 {{ item.display.bg }} {{ item.display.text }} rounded-xl flex items-center justify-center mb-4 group-hover:bg-primary group-hover:text-white transition-colors">
                 <span class="material-symbols-outlined text-3xl">{{ item.display.icon }}</span>
             </div>
             <h3 class="text-slate-900 dark:text-slate-100 font-bold text-lg mb-2">{{ item.unit.name }}</h3>
-            <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">{{ item.display.description }}</p>
+            <p class="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mt-auto">{{ item.display.description }}</p>
         </button>
         {% endfor %}
     </div>
@@ -46,7 +40,7 @@
                 <h2 class="text-slate-900 dark:text-slate-100 text-xl font-bold">My Requests</h2>
                 <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">View and track your submitted requests below.</p>
             </div>
-            <form method="get" action="{% url 'gso_accounts:requestor_dashboard' %}" id="my-requests-filter-form" class="flex flex-wrap items-end justify-end gap-3 text-sm">
+            <form method="get" action="{% url 'gso_accounts:requestor_dashboard' %}" id="my-requests-filter-form" data-no-loading="1" class="flex flex-wrap items-end justify-end gap-3 text-sm">
                 <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                     <span class="material-symbols-outlined text-base">tune</span>
                 </div>
@@ -61,7 +55,7 @@
                 </div>
                 <div class="flex flex-col gap-1">
                     <label for="q" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
-                    <input type="text" name="q" id="q" value="{{ filter_q }}" placeholder="Title, description, unit…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[200px]"/>
+                    <input type="text" name="q" id="q" value="{{ filter_q }}" placeholder="Purpose, location, unit…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[200px]"/>
                 </div>
                 <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-semibold rounded-lg transition-colors">Search</button>
                 <a href="{% url 'gso_accounts:requestor_dashboard' %}" id="my-requests-clear" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Clear</a>
@@ -184,8 +178,8 @@
     <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
             <h3 id="requestor-unit-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Select Service Unit</h3>
-            <button type="button" id="requestor-unit-modal-close" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Close">
-                <span class="material-symbols-outlined text-xl">close</span>
+            <button type="button" id="requestor-unit-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined text-xl close-icon">close</span>
             </button>
         </div>
         <div class="p-6 space-y-3">
@@ -222,8 +216,8 @@
         <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
             <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                 <h2 id="request-detail-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Request details</h2>
-                <button type="button" id="request-detail-modal-close" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Close">
-                    <span class="material-symbols-outlined text-xl">close</span>
+                <button type="button" id="request-detail-modal-close" class="close-btn" aria-label="Close">
+                    <span class="material-symbols-outlined text-xl close-icon">close</span>
                 </button>
             </div>
             <div id="request-detail-modal-body" class="overflow-y-auto flex-1 p-6 min-h-0">
@@ -236,28 +230,35 @@
 <!-- Request form popup (single or multiple units) -->
 <div id="request-form-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="request-form-modal-title">
     <div id="request-form-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
-    <div class="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" class="flex flex-col">
+    <div class="relative w-full max-w-5xl max-h-[92vh] rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div id="request-form-success-popup" class="hidden absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/30">
+            <div class="h-28 w-28 rounded-full border-4 border-green-200 dark:border-green-700 bg-white dark:bg-slate-900 shadow-2xl flex items-center justify-center">
+                <svg class="success-check-svg" viewBox="0 0 100 100" aria-hidden="true">
+                    <path class="success-check-path" d="M24 52 L43 70 L76 34"></path>
+                </svg>
+            </div>
+        </div>
+        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" data-no-loading="1" class="flex flex-col max-h-[92vh]">
             {% csrf_token %}
             <input type="hidden" name="units" id="request-form-units" value="">
             <!-- Header -->
-            <header class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 px-6 md:px-8 py-6 bg-slate-50/50 dark:bg-slate-800/50 flex-shrink-0">
+            <header class="flex items-center justify-between px-6 md:px-8 py-5 bg-primary text-white flex-shrink-0">
                 <div class="flex flex-col gap-1">
                     <div class="flex items-center gap-3">
-                        <div class="bg-primary/10 p-2 rounded-lg">
-                            <span class="material-symbols-outlined text-primary text-2xl">handyman</span>
+                        <div class="bg-white/20 p-2 rounded-lg">
+                            <span class="material-symbols-outlined text-white text-2xl">handyman</span>
                         </div>
-                        <h1 id="request-form-modal-title" class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white leading-tight">New Request</h1>
+                        <h1 id="request-form-modal-title" class="text-2xl font-bold tracking-tight text-white leading-tight">New Request</h1>
                     </div>
-                    <p class="text-slate-500 dark:text-slate-400 text-sm font-medium">Submitting for: <span id="request-form-unit-names" class="text-primary font-semibold"></span></p>
+                    <p class="text-white/80 text-sm font-medium">Submitting for: <span id="request-form-unit-names" class="text-white font-semibold"></span></p>
                 </div>
-                <button type="button" id="request-form-modal-close" class="flex items-center justify-center h-10 w-10 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400" aria-label="Close">
-                    <span class="material-symbols-outlined">close</span>
+                <button type="button" id="request-form-modal-close" class="close-btn close-btn--on-primary flex h-10 w-10" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
                 </button>
             </header>
-            <div class="p-6 md:p-8 space-y-10 flex-1 overflow-y-auto">
+            <div class="p-6 md:p-8 space-y-6 flex-1 overflow-y-auto bg-slate-100/70 dark:bg-slate-900">
                 <!-- Request Type -->
-                <section>
+                <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-symbols-outlined text-slate-400 text-xl">category</span>
                         <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Request Type</h3>
@@ -278,26 +279,26 @@
                     </div>
                 </section>
                 <!-- Request Details -->
-                <section>
+                <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-symbols-outlined text-slate-400 text-xl">description</span>
                         <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Request Details</h3>
                     </div>
                     <div class="space-y-6">
                         <div class="flex flex-col gap-2">
-                            <label for="id_title" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Title <span class="text-primary">*</span></label>
-                            {{ request_form.title }}
-                            {% if request_form.title.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ request_form.title.errors.0 }}</p>{% endif %}
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="id_description" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Description &amp; location <span class="text-primary">*</span></label>
+                            <label for="id_description" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Purpose/s <span class="text-primary">*</span></label>
                             {{ request_form.description }}
                             {% if request_form.description.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ request_form.description.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label for="id_location" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Location <span class="text-primary">*</span></label>
+                            {{ request_form.location }}
+                            {% if request_form.location.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ request_form.location.errors.0 }}</p>{% endif %}
                         </div>
                     </div>
                 </section>
                 <!-- Requestor Information -->
-                <section>
+                <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-symbols-outlined text-slate-400 text-xl">person</span>
                         <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Requestor Information <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span></h3>
@@ -326,9 +327,15 @@
                 </section>
             </div>
             <!-- Form Footer / Actions -->
-            <footer class="pt-6 pb-6 px-6 md:px-8 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse sm:flex-row justify-end gap-3 flex-shrink-0">
+            <footer class="pt-5 pb-5 px-6 md:px-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-3 flex-shrink-0">
+                <p id="request-form-submit-feedback" class="hidden mr-auto text-xs text-red-600 dark:text-red-400">Submission failed. Please check required fields and try again.</p>
                 <button type="button" id="request-form-modal-cancel-btn" class="px-6 py-3 rounded-lg font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
-                <button type="submit" class="px-8 py-3 rounded-lg bg-primary text-white font-bold hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary/25">Submit Request</button>
+                <button type="submit" id="request-form-submit-btn" data-loading-text="Submitting request..." class="px-8 py-3 rounded-lg bg-primary text-white font-bold hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary/25">
+                    <span class="inline-flex items-center gap-2">
+                        <span class="material-symbols-outlined text-lg">send</span>
+                        <span>Submit Request</span>
+                    </span>
+                </button>
             </footer>
         </form>
     </div>
@@ -341,6 +348,58 @@
     #request-form-modal input[type="checkbox"] { @apply h-5 w-5 rounded border-slate-300 dark:border-slate-600 text-primary focus:ring-primary focus:ring-offset-0 bg-transparent; }
     #request-form-modal input[type="file"] {
         @apply block w-full text-sm text-slate-500 dark:text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 transition-all border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 h-12 cursor-pointer;
+    }
+    /* Hand-drawn check animation */
+    .success-check-svg {
+        width: 72px;
+        height: 72px;
+        overflow: visible;
+    }
+    .success-check-path {
+        fill: none;
+        stroke: #16a34a;
+        stroke-width: 8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-dasharray: 90;
+        stroke-dashoffset: 90;
+        animation: check-draw 0.75s ease-out forwards;
+    }
+    .dark .success-check-path {
+        stroke: #22c55e;
+    }
+    @keyframes check-draw {
+        from { stroke-dashoffset: 90; }
+        to { stroke-dashoffset: 0; }
+    }
+    /* Modal scrollbar styling (matches clean dashboard look) */
+    #request-form-modal .overflow-y-auto {
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+    }
+    #request-form-modal .overflow-y-auto::-webkit-scrollbar {
+        width: 10px;
+    }
+    #request-form-modal .overflow-y-auto::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #request-form-modal .overflow-y-auto::-webkit-scrollbar-thumb {
+        background-color: #cbd5e1;
+        border-radius: 9999px;
+        border: 2px solid transparent;
+        background-clip: content-box;
+    }
+    #request-form-modal .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+        background-color: #94a3b8;
+    }
+    .dark #request-form-modal .overflow-y-auto {
+        scrollbar-color: #475569 transparent;
+    }
+    .dark #request-form-modal .overflow-y-auto::-webkit-scrollbar-thumb {
+        background-color: #475569;
+    }
+    .dark #request-form-modal .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+        background-color: #64748b;
     }
 </style>
 
@@ -358,6 +417,34 @@
     var formModalClose = document.getElementById('request-form-modal-close');
     var formModalBackdrop = document.getElementById('request-form-modal-backdrop');
     var formModalCancel = document.getElementById('request-form-modal-cancel-btn');
+    var requestForm = document.getElementById('request-form-modal-form');
+    var submitBtn = document.getElementById('request-form-submit-btn');
+    var submitFeedback = document.getElementById('request-form-submit-feedback');
+    var successPopup = document.getElementById('request-form-success-popup');
+    var requestSubmitting = false;
+
+    function setSubmitButtonIdle() {
+        if (!submitBtn) return;
+        requestSubmitting = false;
+        submitBtn.disabled = false;
+        submitBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+        submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-lg">send</span><span>Submit Request</span></span>';
+    }
+
+    function setSubmitButtonLoading() {
+        if (!submitBtn) return;
+        submitBtn.disabled = true;
+        submitBtn.classList.add('opacity-70', 'cursor-not-allowed');
+        submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined ui-loading-spin text-lg">progress_activity</span><span>Submitting...</span></span>';
+    }
+
+    function setSubmitButtonSuccess() {
+        if (!submitBtn) return;
+        submitBtn.disabled = true;
+        submitBtn.classList.remove('opacity-70');
+        submitBtn.classList.add('bg-green-600', 'shadow-green-600/30');
+        submitBtn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined text-lg">check_circle</span><span>Submitted</span></span>';
+    }
 
     function openUnitModal() {
         if (unitModal) unitModal.classList.remove('hidden');
@@ -410,6 +497,51 @@
     if (formModalBackdrop) formModalBackdrop.addEventListener('click', closeFormModal);
     if (formModalCancel) formModalCancel.addEventListener('click', closeFormModal);
     if (formModal) formModal.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeFormModal(); });
+
+    if (requestForm) {
+        requestForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (requestSubmitting) return;
+            requestSubmitting = true;
+            if (submitFeedback) submitFeedback.classList.add('hidden');
+            if (submitBtn) submitBtn.classList.remove('bg-green-600', 'shadow-green-600/30');
+            setSubmitButtonLoading();
+
+            var formData = new FormData(requestForm);
+            fetch(requestForm.getAttribute('action'), {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+            })
+            .then(function(response) {
+                if (response.redirected || (response.url && response.url.indexOf('submitted=1') !== -1)) {
+                    setSubmitButtonSuccess();
+                    if (successPopup) {
+                        // Restart check-stroke animation each successful submit.
+                        var path = successPopup.querySelector('.success-check-path');
+                        if (path) {
+                            path.style.animation = 'none';
+                            // Force reflow so the animation can restart.
+                            void path.offsetWidth;
+                            path.style.animation = '';
+                        }
+                        successPopup.classList.remove('hidden');
+                    }
+                    setTimeout(function() {
+                        closeFormModal();
+                        window.location.href = '{% url "gso_accounts:requestor_dashboard" %}?submitted=1';
+                    }, 1800);
+                    return null;
+                }
+                // Non-redirect usually means validation failed on server.
+                throw new Error('Submission did not complete.');
+            })
+            .catch(function() {
+                if (submitFeedback) submitFeedback.classList.remove('hidden');
+                setSubmitButtonIdle();
+            });
+        });
+    }
 
     var detailModal = document.getElementById('request-detail-modal');
     var detailModalBody = document.getElementById('request-detail-modal-body');

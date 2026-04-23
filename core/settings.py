@@ -161,6 +161,14 @@ EMAIL_BACKEND = os.environ.get(
     'EMAIL_BACKEND',
     'django.core.mail.backends.console.EmailBackend',
 )
+# SMTP (used when EMAIL_BACKEND is smtp backend)
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'no-reply@gso.local')
 
 # Phase 8.3: App version for "new version available" prompt (bump on deploy)
 GSO_APP_VERSION = os.environ.get('GSO_APP_VERSION', '1.0')
@@ -262,3 +270,12 @@ LOGGING = {
         },
     },
 }
+
+# On Windows dev runs, rotating file lock can break startup.
+# Keep file logging for non-debug environments.
+if DEBUG:
+    LOGGING['root']['handlers'] = ['console']
+    LOGGING['root']['level'] = 'INFO'
+    LOGGING['loggers']['django']['handlers'] = ['console']
+    LOGGING['loggers']['django']['level'] = 'INFO'
+    LOGGING['loggers']['django.request']['handlers'] = ['console']

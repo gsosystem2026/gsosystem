@@ -48,7 +48,7 @@ class RequestListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Request
         fields = [
-            'id', 'display_id', 'title', 'description',
+            'id', 'display_id', 'title', 'description', 'location',
             'unit', 'unit_name', 'requestor', 'requestor_name',
             'status', 'status_display', 'is_emergency',
             'labor', 'materials', 'others',
@@ -83,7 +83,7 @@ class RequestCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Request
         fields = [
-            'unit', 'title', 'description',
+            'unit', 'title', 'description', 'location',
             'labor', 'materials', 'others',
             'custom_full_name', 'custom_email', 'custom_contact_number',
         ]

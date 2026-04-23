@@ -4,7 +4,7 @@
 <div class="space-y-6" id="request-history-wrapper">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <a href="{% url 'gso_accounts:staff_request_management' %}" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-2">
+            <a href="{% url 'gso_accounts:staff_request_management' %}" data-staff-pjax="1" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-primary transition-colors mb-2">
                 <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Request Management
             </a>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
@@ -33,7 +33,7 @@
             </div>
             <div class="flex flex-col gap-1">
                 <label for="q" class="text-xs font-medium text-slate-600 dark:text-slate-400">Search</label>
-                <input type="text" name="q" id="q" value="{{ search_q }}" placeholder="Request ID, title, requestor, unit…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[200px] focus:ring-2 focus:ring-primary/30 focus:border-primary"/>
+                <input type="text" name="q" id="q" value="{{ search_q }}" placeholder="Request ID, purpose, location, requestor, unit…" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[200px] focus:ring-2 focus:ring-primary/30 focus:border-primary"/>
             </div>
             <a href="{% url 'gso_accounts:staff_request_history' %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Clear</a>
         </form>
@@ -85,7 +85,7 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="text-primary hover:underline font-semibold text-sm">View</a>
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}?from=history" data-staff-pjax="1" class="text-primary hover:underline font-semibold text-sm">View</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -128,7 +128,7 @@ function initRequestHistoryFilters() {
         const params = new URLSearchParams(formData);
         const query = params.toString();
         const url = window.location.pathname + (query ? '?' + query : '');
-        wrapper.classList.add('opacity-50');
+        if (typeof window.setHistoryLoading === 'function') window.setHistoryLoading(true);
         fetch(url, {
             headers: {
                 'X-Requested-With': 'XMLHttpRequest'
@@ -141,14 +141,17 @@ function initRequestHistoryFilters() {
                 const newWrapper = doc.getElementById('request-history-wrapper');
                 if (newWrapper) {
                     wrapper.innerHTML = newWrapper.innerHTML;
-                    wrapper.classList.remove('opacity-50');
+                    if (typeof window.setHistoryLoading === 'function') window.setHistoryLoading(false);
                     initRequestHistoryFilters();
+                    if (typeof window.attachStaffHistoryPjaxHandlers === 'function') {
+                        window.attachStaffHistoryPjaxHandlers();
+                    }
                 } else {
-                    wrapper.classList.remove('opacity-50');
+                    if (typeof window.setHistoryLoading === 'function') window.setHistoryLoading(false);
                 }
             })
             .catch(function () {
-                wrapper.classList.remove('opacity-50');
+                if (typeof window.setHistoryLoading === 'function') window.setHistoryLoading(false);
             });
     };
 
@@ -177,7 +180,103 @@ function initRequestHistoryFilters() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initRequestHistoryFilters);
+document.addEventListener('DOMContentLoaded', function () {
+    const staffMain = document.getElementById('staff-main-content');
+    function setHistoryLoading(isLoading) {
+        const wrapper = document.getElementById('request-history-wrapper');
+        if (!wrapper) return;
+        const existing = document.getElementById('request-history-loading-overlay');
+        if (!isLoading) {
+            if (existing) existing.remove();
+            return;
+        }
+        if (existing) return;
+        wrapper.classList.add('relative');
+        const overlay = document.createElement('div');
+        overlay.id = 'request-history-loading-overlay';
+        overlay.className = 'absolute inset-0 z-30 flex items-center justify-center bg-white/80 dark:bg-slate-900/80';
+        overlay.innerHTML = '' +
+            '<div class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">' +
+            '<span class="material-symbols-outlined ui-loading-spin text-primary">progress_activity</span>' +
+            '<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Loading request...</span>' +
+            '</div>';
+        wrapper.appendChild(overlay);
+    }
+    function runInlineScripts(container) {
+        if (!container) return;
+        container.querySelectorAll('script').forEach(function (oldScript) {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function (attr) {
+                newScript.setAttribute(attr.name, attr.value);
+            });
+            newScript.text = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    }
+    function loadStaffMain(url, pushStateEntry) {
+        if (!staffMain) return;
+        const loadingOverlayId = 'staff-main-loading-overlay';
+        const existing = document.getElementById(loadingOverlayId);
+        if (!existing) {
+            staffMain.classList.add('relative');
+            const overlay = document.createElement('div');
+            overlay.id = loadingOverlayId;
+            overlay.className = 'absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-slate-900/80';
+            overlay.innerHTML = '' +
+                '<div class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">' +
+                '<span class="material-symbols-outlined ui-loading-spin text-primary">progress_activity</span>' +
+                '<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Loading request...</span>' +
+                '</div>';
+            staffMain.appendChild(overlay);
+        }
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const fragment = doc.getElementById('staff-main-content-fragment');
+                const mainContent = doc.getElementById('staff-main-content');
+                const nextHtml = fragment ? fragment.innerHTML : (mainContent ? mainContent.innerHTML : html);
+                staffMain.innerHTML = nextHtml;
+                runInlineScripts(staffMain);
+                if (typeof initRequestHistoryFilters === 'function') initRequestHistoryFilters();
+                attachStaffHistoryPjaxHandlers();
+                if (pushStateEntry) {
+                    window.history.pushState({ staffPjax: true, url: url }, '', url.replace(/[?&]partial=1\b/, '').replace(/\?$/, ''));
+                }
+            })
+            .catch(function () {});
+    }
+    function attachStaffHistoryPjaxHandlers() {
+        if (!staffMain) return;
+        staffMain.querySelectorAll('a[data-staff-pjax="1"]').forEach(function (link) {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const href = link.getAttribute('href');
+                if (!href) return;
+                let url = href;
+                if (url.indexOf('partial=1') === -1) {
+                    url += (href.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+                }
+                loadStaffMain(url, true);
+            });
+        });
+    }
+    window.attachStaffHistoryPjaxHandlers = attachStaffHistoryPjaxHandlers;
+    window.addEventListener('popstate', function () {
+        if (!staffMain) return;
+        let current = window.location.pathname + window.location.search;
+        if (current.indexOf('partial=1') === -1) {
+            current += (window.location.search ? '&' : '?') + 'partial=1';
+        }
+        loadStaffMain(current, false);
+    });
+    window.setHistoryLoading = setHistoryLoading;
+    initRequestHistoryFilters();
+    attachStaffHistoryPjaxHandlers();
+});
 </script>
 {% endblock %}
 

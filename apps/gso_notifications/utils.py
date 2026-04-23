@@ -130,7 +130,7 @@ def notify_after_personnel_work_status_change(request_obj, old_status, new_statu
     """
     After personnel saves a work status change (web or API). Same rules as UpdateWorkStatusView.
     - DONE_WORKING → notify_done_working (unit heads + requestor).
-    - IN_PROGRESS from DIRECTOR_APPROVED → requestor "work started".
+    - IN_PROGRESS from DIRECTOR_APPROVED/INSPECTION → requestor "work started".
     - IN_PROGRESS from ON_HOLD → requestor "work resumed".
     - ON_HOLD → requestor "on hold".
     """
@@ -140,7 +140,7 @@ def notify_after_personnel_work_status_change(request_obj, old_status, new_statu
         notify_done_working(request_obj)
         return
     if new_status == Request.Status.IN_PROGRESS:
-        if old_status == Request.Status.DIRECTOR_APPROVED:
+        if old_status in (Request.Status.DIRECTOR_APPROVED, Request.Status.INSPECTION):
             notify_requestor_work_started(request_obj)
         elif old_status == Request.Status.ON_HOLD:
             notify_requestor_work_resumed(request_obj)
@@ -342,3 +342,46 @@ def notify_gso_reminder(request_obj, target):
                 message=msg,
                 link=staff_link,
             )
+
+
+def notify_material_request_submitted(material_request):
+    """Notify Unit Head(s) when personnel submit a material request."""
+    from django.apps import apps
+    from django.conf import settings
+    app_label, model_name = settings.AUTH_USER_MODEL.rsplit('.', 1)
+    UserModel = apps.get_model(app_label, model_name)
+
+    req = material_request.request
+    staff_link = reverse('gso_accounts:staff_request_detail', args=[req.pk])
+    requester_name = material_request.requested_by.get_full_name() or material_request.requested_by.username
+    title = f"Material request submitted — {req.display_id}"
+    message = (
+        f'{requester_name} requested '
+        f'{material_request.quantity} x {material_request.item.name}.'
+    )
+    for u in UserModel.objects.filter(role='UNIT_HEAD', unit_id=req.unit_id):
+        Notification.objects.create(user=u, title=title, message=message, link=staff_link)
+
+
+def notify_material_request_approved(material_request):
+    """Notify requesting personnel when Unit Head approves a material request."""
+    req = material_request.request
+    staff_link = reverse('gso_accounts:staff_request_detail', args=[req.pk])
+    Notification.objects.create(
+        user=material_request.requested_by,
+        title=f"Material request approved — {req.display_id}",
+        message=f'Your material request for "{material_request.item.name}" was approved.',
+        link=staff_link,
+    )
+
+
+def notify_material_request_rejected(material_request):
+    """Notify requesting personnel when Unit Head rejects a material request."""
+    req = material_request.request
+    staff_link = reverse('gso_accounts:staff_request_detail', args=[req.pk])
+    Notification.objects.create(
+        user=material_request.requested_by,
+        title=f"Material request rejected — {req.display_id}",
+        message=f'Your material request for "{material_request.item.name}" was rejected.',
+        link=staff_link,
+    )

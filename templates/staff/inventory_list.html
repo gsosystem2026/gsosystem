@@ -40,11 +40,12 @@
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Item</th>
                         {% if show_unit_filter %}
-                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Department</th>
                         {% endif %}
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Category</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Quantity</th>
-                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">UoM</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Date arrived</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-center">Low stock</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
                     </tr>
@@ -61,6 +62,7 @@
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.category|default:"—" }}</td>
                         <td class="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 text-right">{{ item.quantity }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.unit_of_measure }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.arrival_date|date:"M j, Y"|default:"—" }}</td>
                         <td class="px-6 py-4 text-center">
                             {% if item.is_low_stock %}
                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Low</span>
@@ -74,7 +76,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if show_unit_filter %}7{% else %}6{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No inventory items yet.{% if not user.is_personnel %} <a href="{% url 'gso_accounts:staff_inventory_add' %}" class="text-primary hover:underline font-medium">Add one</a>.{% endif %}</td>
+                        <td colspan="{% if show_unit_filter %}8{% else %}7{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No inventory items yet.{% if not user.is_personnel %} <a href="{% url 'gso_accounts:staff_inventory_add' %}" data-inventory-action="add" class="text-primary hover:underline font-medium">Add one</a>.{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -102,8 +104,8 @@
     <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h3 id="inventory-item-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Add inventory item</h3>
-            <button type="button" id="inventory-item-modal-close" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" aria-label="Close">
-                <span class="material-symbols-outlined text-xl">close</span>
+            <button type="button" id="inventory-item-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined text-xl close-icon">close</span>
             </button>
         </div>
         <div id="inventory-item-modal-body" class="p-6 max-h-[70vh] overflow-y-auto">
@@ -242,7 +244,9 @@
         var url = href + (href.indexOf('?') === -1 ? '?partial=1' : '&partial=1');
         var detailUrl = link.getAttribute('data-inventory-detail-url');
         var backUrl = detailUrl ? detailUrl + (detailUrl.indexOf('?') === -1 ? '?partial=1' : '&partial=1') : null;
-        if (action === 'view') {
+        if (action === 'add') {
+            loadContent('{% url "gso_accounts:staff_inventory_add" %}?partial=1', 'form', 'Add inventory item');
+        } else if (action === 'view') {
             loadContent(url, 'view', 'Inventory item details');
         } else if (action === 'adjust') {
             loadContent(url, 'form', 'Adjust quantity', backUrl);

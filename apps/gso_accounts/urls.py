@@ -83,6 +83,7 @@ urlpatterns = [
     path('staff/activity-log/', views.StaffActivityLogView.as_view(), name='staff_activity_log'),
     path('staff/inventory-activity-log/', views.UnitHeadInventoryActivityLogView.as_view(), name='staff_inventory_activity_log'),
     path('staff/notifications/', views.StaffNotificationsView.as_view(), name='staff_notifications'),
+    path('staff/profile/edit/', views.StaffProfileEditView.as_view(), name='staff_profile_edit'),
     path('requestor/dashboard/', views.RequestorDashboardView.as_view(), name='requestor_dashboard'),
     path('notifications/<int:pk>/go/', views.NotificationGoView.as_view(), name='notification_go'),
     path('notifications/mark-all-read/', views.MarkAllNotificationsReadView.as_view(), name='notification_mark_all_read'),

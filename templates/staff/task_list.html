@@ -1,14 +1,14 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}Task Management — GSO{% endblock %}
 {% block staff_content %}
-<div class="space-y-6">
+<div class="space-y-6" id="task-management-wrapper">
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
             <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
         </div>
         {% if request.user.is_personnel %}
-        <a href="{% url 'gso_accounts:staff_task_history' %}" class="flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-primary transition-colors flex-shrink-0" title="Task history" aria-label="Task history">
+        <a href="{% url 'gso_accounts:staff_task_history' %}" data-staff-task-pjax="1" class="flex items-center justify-center w-10 h-10 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-primary transition-colors flex-shrink-0" title="Task history" aria-label="Task history">
             <span class="material-symbols-outlined text-[22px]">history</span>
         </a>
         {% endif %}
@@ -34,7 +34,7 @@
                             {% if req.show_urgent_indicator %}
                             <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Emergency</span>
                             {% endif %}
-                            <span class="block text-sm text-slate-600 dark:text-slate-400">{{ req.title }}</span>
+                            <span class="block text-sm text-slate-600 dark:text-slate-400">{{ req.description|default:'—'|truncatechars:90 }}</span>
                         </td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.requestor.get_full_name|default:req.requestor.username }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.created_at|date:"M d, Y" }}</td>
@@ -42,7 +42,7 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" class="text-primary hover:underline font-semibold text-sm">View</a>
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" data-staff-task-pjax="1" class="text-primary hover:underline font-semibold text-sm">View</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -58,14 +58,93 @@
             <p class="text-xs text-slate-500 dark:text-slate-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
             <div class="flex gap-2">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                <a href="?page={{ page_obj.previous_page_number }}" data-staff-task-pjax="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                <a href="?page={{ page_obj.next_page_number }}" data-staff-task-pjax="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
                 {% endif %}
             </div>
         </div>
         {% endif %}
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const staffMain = document.getElementById('staff-main-content');
+    if (!staffMain) return;
+
+    function setLoading(isLoading) {
+        const existing = document.getElementById('staff-main-loading-overlay');
+        if (!isLoading) {
+            if (existing) existing.remove();
+            return;
+        }
+        if (existing) return;
+        staffMain.classList.add('relative');
+        const overlay = document.createElement('div');
+        overlay.id = 'staff-main-loading-overlay';
+        overlay.className = 'absolute inset-0 z-40 flex items-center justify-center bg-white/80 dark:bg-slate-900/80';
+        overlay.innerHTML = '<div class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm"><span class="material-symbols-outlined ui-loading-spin text-primary">progress_activity</span><span class="text-sm font-medium text-slate-700 dark:text-slate-200">Loading task...</span></div>';
+        staffMain.appendChild(overlay);
+    }
+
+    function runInlineScripts(container) {
+        container.querySelectorAll('script').forEach(function (oldScript) {
+            const newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function (attr) { newScript.setAttribute(attr.name, attr.value); });
+            newScript.text = oldScript.textContent;
+            oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    }
+
+    function loadStaffMain(url, pushStateEntry) {
+        setLoading(true);
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const fragment = doc.getElementById('staff-main-content-fragment');
+                const mainContent = doc.getElementById('staff-main-content');
+                const nextHtml = fragment ? fragment.innerHTML : (mainContent ? mainContent.innerHTML : html);
+                staffMain.innerHTML = nextHtml;
+                setLoading(false);
+                runInlineScripts(staffMain);
+                attachTaskPjaxHandlers();
+                if (pushStateEntry) {
+                    window.history.pushState({ staffPjax: true, url: url }, '', url.replace(/[?&]partial=1\b/, '').replace(/\?$/, ''));
+                }
+            })
+            .catch(function () { setLoading(false); });
+    }
+
+    function attachTaskPjaxHandlers() {
+        staffMain.querySelectorAll('a[data-staff-task-pjax="1"], a[data-staff-pjax="1"]').forEach(function (link) {
+            link.onclick = function (e) {
+                e.preventDefault();
+                const href = link.getAttribute('href');
+                if (!href) return;
+                let url = href;
+                if (/\/staff\/request-management\/\d+\/?$/.test((new URL(href, window.location.origin)).pathname) && url.indexOf('from=') === -1) {
+                    url += (href.indexOf('?') === -1 ? '?' : '&') + 'from=task_management';
+                }
+                if (url.indexOf('partial=1') === -1) {
+                    url += (url.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+                }
+                loadStaffMain(url, true);
+            };
+        });
+    }
+
+    window.addEventListener('popstate', function () {
+        let current = window.location.pathname + window.location.search;
+        if (current.indexOf('partial=1') === -1) current += (window.location.search ? '&' : '?') + 'partial=1';
+        loadStaffMain(current, false);
+    });
+
+    attachTaskPjaxHandlers();
+});
+</script>
 {% endblock %}
