@@ -162,7 +162,7 @@
                 </button>
                 <div id="profile-dropdown" class="hidden absolute right-0 mt-2 w-56 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg py-2 z-50" role="menu">
                     <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-700">
-                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{{ request.user.get_full_name|default:request.user.username }}</p>
+                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">{{ request.user.office_department|default:"Office/Department not set" }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Requestor</p>
                     </div>
                     <button type="button" id="profile-modal-settings-btn" class="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left" role="menuitem">
@@ -287,7 +287,7 @@
                                 </div>
                             </form>
                         </div>
-                        <h3 class="mt-8 text-3xl font-bold text-slate-900 dark:text-slate-100">{{ request.user.get_full_name|default:request.user.username }}</h3>
+                        <h3 class="mt-8 text-3xl font-bold text-slate-900 dark:text-slate-100">{{ request.user.office_department|default:"Office/Department not set" }}</h3>
                         <p class="mt-2 text-base text-slate-600 dark:text-slate-300">Requestor</p>
                     </div>
                     <div class="px-6 pb-6 pt-6 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
@@ -417,6 +417,88 @@
 
     // Global: form submit feedback (requestor side)
     document.addEventListener('submit', function(e) {
+        var feedbackForm = e.target && e.target.closest ? e.target.closest('#feedbackModalForm') : null;
+        if (feedbackForm) {
+            e.preventDefault();
+            var feedbackModal = document.getElementById('feedbackModal');
+            var successAlert = document.getElementById('feedbackSuccessAlert');
+            var errorAlert = document.getElementById('feedbackErrorAlert');
+            var successPopup = document.getElementById('feedbackSuccessPopup');
+            var successPopupText = document.getElementById('feedbackSuccessPopupText');
+            var submitBtn = feedbackForm.querySelector('button[type="submit"]');
+            if (successAlert) successAlert.classList.add('hidden');
+            if (errorAlert) errorAlert.classList.add('hidden');
+            if (successPopup) successPopup.classList.add('hidden');
+            setButtonLoading(submitBtn, 'Submitting...');
+
+            fetch(feedbackForm.action, {
+                method: 'POST',
+                body: new FormData(feedbackForm),
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function(r) {
+                return r.json().then(function(data) { return { ok: r.ok, data: data }; });
+            })
+            .then(function(result) {
+                if (result.ok && result.data && result.data.ok) {
+                    if (successAlert) {
+                        successAlert.textContent = result.data.message || 'Feedback submitted successfully.';
+                        successAlert.classList.remove('hidden');
+                    }
+                    if (successPopup) {
+                        if (successPopupText) {
+                            successPopupText.textContent = result.data.message || 'Thank you. Your feedback has been submitted.';
+                        }
+                        successPopup.classList.remove('hidden');
+                    }
+                    setTimeout(function() {
+                        if (feedbackModal) feedbackModal.classList.add('hidden');
+                        var detailBody = document.getElementById('request-detail-modal-body');
+                        var inDetailModal = !!(detailBody && feedbackForm.closest('#request-detail-modal-body'));
+                        var detailUrl = feedbackForm.getAttribute('data-detail-url') || '';
+                        if (inDetailModal && detailUrl) {
+                            var refreshUrl = detailUrl + (detailUrl.indexOf('?') >= 0 ? '&' : '?') + 'partial=1&modal=1';
+                            fetch(refreshUrl, {
+                                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                credentials: 'same-origin'
+                            })
+                            .then(function(r) { return r.text(); })
+                            .then(function(html) {
+                                detailBody.innerHTML = html;
+                            })
+                            .catch(function() {
+                                window.location.reload();
+                            });
+                        } else {
+                            window.location.reload();
+                        }
+                    }, 1500);
+                    return;
+                }
+                if (errorAlert) {
+                    errorAlert.textContent = (result.data && result.data.error) || 'Could not submit feedback. Please try again.';
+                    errorAlert.classList.remove('hidden');
+                }
+            })
+            .catch(function() {
+                if (errorAlert) {
+                    errorAlert.textContent = 'Could not submit feedback. Please try again.';
+                    errorAlert.classList.remove('hidden');
+                }
+            })
+            .finally(function() {
+                if (submitBtn && submitBtn.dataset.originalHtml) {
+                    submitBtn.disabled = false;
+                    submitBtn.removeAttribute('aria-busy');
+                    submitBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+                    submitBtn.innerHTML = submitBtn.dataset.originalHtml;
+                    submitBtn.dataset.loadingApplied = '0';
+                }
+            });
+            return;
+        }
+
         var form = e.target;
         if (!form || form.dataset.noLoading === '1') return;
         var submitter = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');

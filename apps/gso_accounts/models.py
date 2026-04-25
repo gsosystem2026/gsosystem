@@ -34,6 +34,11 @@ class User(AbstractUser):
         GSO_OFFICE = 'GSO_OFFICE', 'GSO Office'
         DIRECTOR = 'DIRECTOR', 'Director'
 
+    class AccountStatus(models.TextChoices):
+        ACTIVE = 'ACTIVE', 'Active'
+        SUSPENDED = 'SUSPENDED', 'Suspended'
+        DEACTIVATED = 'DEACTIVATED', 'Deactivated'
+
     role = models.CharField(
         max_length=20,
         choices=Role.choices,
@@ -46,6 +51,47 @@ class User(AbstractUser):
         blank=True,
         related_name='users',
         help_text='Unit for Unit Head / Personnel.',
+    )
+    office_department = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Office/Department for requestor accounts.',
+    )
+    account_status = models.CharField(
+        max_length=16,
+        choices=AccountStatus.choices,
+        default=AccountStatus.ACTIVE,
+        help_text='Lifecycle status for login access control.',
+    )
+    restriction_reason_category = models.CharField(
+        max_length=32,
+        blank=True,
+        default='',
+        help_text='Reason category when account is suspended/deactivated.',
+    )
+    restriction_reason_details = models.TextField(
+        blank=True,
+        default='',
+        help_text='Detailed reason when account is suspended/deactivated.',
+    )
+    suspended_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Optional end time for suspension.',
+    )
+    status_changed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when account status last changed.',
+    )
+    status_changed_by = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='status_changed_users',
+        help_text='Director who changed this account status.',
     )
     avatar_code = models.CharField(
         max_length=20,
@@ -112,6 +158,14 @@ class User(AbstractUser):
     def can_approve_requests(self):
         """True if user can approve requests (Director or designated OIC). Phase 4.2 / 4.3."""
         return self.is_director or bool(self.oic_for_director_id)
+
+    @property
+    def is_suspended_now(self):
+        if self.account_status != self.AccountStatus.SUSPENDED:
+            return False
+        if self.suspended_until and timezone.now() > self.suspended_until:
+            return False
+        return True
 
 
 def log_audit(action, user, message, target_model=None, target_id=None):

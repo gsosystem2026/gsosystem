@@ -16,32 +16,45 @@
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <form method="get" action="" id="war-filter-form" class="p-5 space-y-3">
             <div class="flex flex-wrap items-end gap-3 text-sm">
-                {% for field in form %}
-                <div class="flex flex-col gap-1 {% if field.name == 'unit' %}min-w-[220px]{% elif field.name == 'personnel' %}min-w-[220px]{% else %}min-w-[160px]{% endif %}">
-                    <label for="{{ field.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+                <div class="flex flex-col gap-1 min-w-[220px]">
+                    <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
+                    {{ form.unit }}
+                    {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
                 </div>
-                {% endfor %}
+                <div class="flex flex-col gap-1 min-w-[160px]">
+                    <label for="{{ form.month.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.month.label }}</label>
+                    {{ form.month }}
+                    {% if form.month.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.month.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex flex-col gap-1 min-w-[140px]">
+                    <label for="{{ form.year.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.year.label }}</label>
+                    {{ form.year }}
+                    {% if form.year.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.year.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        Apply
+                    </button>
+                </div>
                 <div class="flex items-end">
                     <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         Clear
                     </a>
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" name="download" value="excel" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <button type="button" id="war-download-open-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
                         <span class="material-symbols-outlined text-lg">download</span> Download WAR Excel
                     </button>
                 </div>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Filters apply automatically when changed. Use \"Download WAR Excel\" to export.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Page filter controls the table preview for the selected month/year. Use Download to choose export options.</p>
         </form>
     </div>
 
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">WAR table</h2>
-            <p class="text-sm text-slate-500 dark:text-slate-400">Showing up to 500 records. Export Excel for full data. Table structure depends on selected unit (All units = generic; Repair & Maintenance = unit-specific).</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">Showing up to 500 records. Export Excel for full data. Table structure depends on selected unit (All units = generic; Repair &amp; Maintenance and Electrical = unit-specific).</p>
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-sm text-left text-slate-700 dark:text-slate-300">
@@ -56,64 +69,36 @@
                 <tbody>
                     {% for war in war_list %}
                     <tr class="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                        {% if war_table_config_key == 'generic' %}
-                        <td class="px-4 py-3 whitespace-nowrap">
-                            <a href="{% url 'gso_accounts:staff_request_detail' war.request_id %}" class="text-primary hover:underline font-medium">{{ war.request.display_id }}</a>
-                        </td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.request.unit.name|default:"—" }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.personnel.get_full_name|default:war.personnel.username }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_start|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_end|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3">{{ war.summary|default:"—"|truncatewords:8 }}</td>
-                        <td class="px-4 py-3 max-w-xs">{{ war.accomplishments|default:"—"|truncatewords:15 }}</td>
-                        <td class="px-4 py-3">
-                            {% if war.success_indicators.exists %}
-                                {% for si in war.success_indicators.all %}{{ si.code }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                        {% for header_key, header_label in war_headers %}
+                            {% if header_key == 'request_id' %}
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    <a href="{% url 'gso_accounts:staff_request_detail' war.request_id %}" class="text-primary hover:underline font-medium">{{ war.request.display_id|default:war.request_id }}</a>
+                                </td>
+                            {% elif header_key == 'date_started' %}
+                                <td class="px-4 py-3 whitespace-nowrap">{{ war.period_start|date:"M d, Y" }}</td>
+                            {% elif header_key == 'date_completed' %}
+                                <td class="px-4 py-3 whitespace-nowrap">{{ war.period_end|date:"M d, Y" }}</td>
+                            {% elif header_key == 'name_of_project' %}
+                                <td class="px-4 py-3">{{ war.summary|default:"—"|truncatewords:10 }}</td>
+                            {% elif header_key == 'description' %}
+                                <td class="px-4 py-3 max-w-md">{{ war.accomplishments|default:"—"|truncatewords:25 }}</td>
+                            {% elif header_key == 'requesting_office' %}
+                                <td class="px-4 py-3 whitespace-nowrap">{% if war.request.requestor %}{{ war.request.requestor.get_full_name|default:war.request.requestor.username }}{% else %}—{% endif %}</td>
+                            {% elif header_key == 'personnel' %}
+                                <td class="px-4 py-3 whitespace-nowrap">{{ war.personnel.get_full_name|default:war.personnel.username }}</td>
                             {% else %}
-                                —
+                                <td class="px-4 py-3">—</td>
                             {% endif %}
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                            <a href="{% url 'gso_accounts:staff_war_edit' war.id %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                        {% endfor %}
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <a href="{% url 'gso_accounts:staff_war_edit' war.id %}" class="war-edit-modal-trigger inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" data-edit-url="{% url 'gso_accounts:staff_war_edit' war.id %}" data-next-url="{{ request.get_full_path }}">
                                 <span class="material-symbols-outlined text-sm">edit</span> Edit
                             </a>
                         </td>
-                        {% elif war_table_config_key == 'repair' %}
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_start|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_end|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3">{{ war.summary|default:"—"|truncatewords:8 }}</td>
-                        <td class="px-4 py-3 max-w-xs">{{ war.accomplishments|default:"—"|truncatewords:15 }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{% if war.request.requestor %}{{ war.request.requestor.get_full_name|default:war.request.requestor.username }}{% else %}—{% endif %}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">Completed</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 text-right">
-                            <a href="{% url 'gso_accounts:staff_war_edit' war.id %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                                <span class="material-symbols-outlined text-sm">edit</span> Edit
-                            </a>
-                        </td>
-                        {% else %}
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_start|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.period_end|date:"M d, Y" }}</td>
-                        <td class="px-4 py-3">{{ war.summary|default:"—"|truncatewords:8 }}</td>
-                        <td class="px-4 py-3 max-w-xs">{{ war.accomplishments|default:"—"|truncatewords:15 }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{% if war.request.requestor %}{{ war.request.requestor.get_full_name|default:war.request.requestor.username }}{% else %}—{% endif %}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">{{ war.personnel.get_full_name|default:war.personnel.username }}</td>
-                        <td class="px-4 py-3 whitespace-nowrap">Done</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 whitespace-nowrap">0.00</td>
-                        <td class="px-4 py-3 text-right">
-                            <a href="{% url 'gso_accounts:staff_war_edit' war.id %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
-                                <span class="material-symbols-outlined text-sm">edit</span> Edit
-                            </a>
-                        </td>
-                        {% endif %}
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{{ war_headers|length|add:'1' }}" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No Work Accomplishment Reports found. Try changing filters or adjust your date range.</td>
+                        <td colspan="{{ war_headers|length|add:'1' }}" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No Work Accomplishment Reports found. Try changing filters or selecting a different month/year.</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -122,14 +107,208 @@
     </div>
     </div>
 </div>
+<div id="war-download-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="war-download-modal-title">
+    <div id="war-download-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="war-download-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Download WAR Excel</h3>
+            <button type="button" id="war-download-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <form method="get" action="" class="p-6 space-y-4" id="war-download-form" data-no-loading="1">
+            <input type="hidden" name="download" value="excel">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label for="war-download-unit" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit</label>
+                    <select id="war-download-unit" name="unit" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        {% for option in form.unit.field.queryset %}
+                        <option value="{{ option.pk }}" {% if form.unit.value|stringformat:'s' == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.name }}</option>
+                        {% endfor %}
+                        <option value="" {% if not form.unit.value %}selected{% endif %}>All units</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="war-download-month" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Month</label>
+                    <select id="war-download-month" name="month" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        {% for value, label in form.month.field.choices %}
+                        <option value="{{ value }}" {% if form.month.value|stringformat:'s' == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="war-download-year" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Year</label>
+                    <input id="war-download-year" type="number" name="year" min="2020" max="2035" value="{{ form.year.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2">
+                </div>
+            </div>
+            <details class="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                <summary class="cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">Advanced filter</summary>
+                <div class="mt-3">
+                    <label for="war-download-personnel" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Personnel (optional)</label>
+                    <select id="war-download-personnel" name="personnel" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        <option value="">All personnel</option>
+                        {% for option in form.personnel.field.queryset %}
+                        <option value="{{ option.pk }}" {% if form.personnel.value|stringformat:'s' == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.get_full_name|default:option.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </details>
+            <p id="war-download-feedback" class="hidden text-xs text-slate-500 dark:text-slate-400">Preparing your file download...</p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="war-download-cancel" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                <button type="submit" id="war-download-submit" data-no-loading="1" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg">Download</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="war-edit-modal" class="hidden fixed inset-0 z-[125] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="war-edit-modal-title">
+    <div id="war-edit-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative w-full max-w-2xl max-h-[90vh] rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl flex flex-col">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="war-edit-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit WAR</h3>
+            <button type="button" id="war-edit-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <div id="war-edit-modal-body" class="p-6 overflow-y-auto flex-1">
+            <p class="text-slate-500 dark:text-slate-400 text-sm">Loading...</p>
+        </div>
+    </div>
+</div>
 <script>
+function initWarEditModal() {
+    const modal = document.getElementById('war-edit-modal');
+    const body = document.getElementById('war-edit-modal-body');
+    const closeBtn = document.getElementById('war-edit-modal-close');
+    const backdrop = document.getElementById('war-edit-modal-backdrop');
+    if (!modal || !body) return;
+
+    function closeModal() {
+        modal.classList.add('hidden');
+    }
+    function openModal() {
+        modal.classList.remove('hidden');
+    }
+    function loadEdit(url, nextUrl) {
+        if (!url) return;
+        body.innerHTML = '<p class="text-slate-500 dark:text-slate-400 text-sm">Loading...</p>';
+        openModal();
+        const fullUrl = url + (url.indexOf('?') === -1 ? '?' : '&') + 'partial=1&source=war&next=' + encodeURIComponent(nextUrl || window.location.href);
+        fetch(fullUrl, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.text(); })
+        .then(function(html) { body.innerHTML = html; })
+        .catch(function() {
+            body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not load WAR editor.</p>';
+        });
+    }
+
+    document.querySelectorAll('.war-edit-modal-trigger').forEach(function(link) {
+        link.onclick = function(e) {
+            e.preventDefault();
+            loadEdit(link.getAttribute('data-edit-url') || link.getAttribute('href'), link.getAttribute('data-next-url') || window.location.href);
+        };
+    });
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.js-war-edit-modal-back')) return;
+        closeModal();
+    });
+    document.addEventListener('submit', function(e) {
+        const form = e.target.closest('#war-edit-modal-form');
+        if (!form) return;
+        e.preventDefault();
+        fetch(form.getAttribute('action'), {
+            method: 'POST',
+            body: new FormData(form),
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin'
+        }).then(function(response) {
+            if (response.redirected) {
+                closeModal();
+                window.location.href = response.url;
+                return '';
+            }
+            return response.text();
+        }).then(function(html) {
+            if (html) body.innerHTML = html;
+        }).catch(function() {
+            body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not save WAR. Please try again.</p>';
+        });
+    });
+
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+}
+
+function initWarDownloadModal() {
+    const modal = document.getElementById('war-download-modal');
+    const openBtn = document.getElementById('war-download-open-btn');
+    const closeBtn = document.getElementById('war-download-modal-close');
+    const cancelBtn = document.getElementById('war-download-cancel');
+    const backdrop = document.getElementById('war-download-modal-backdrop');
+    const filterUnit = document.getElementById('id_unit');
+    const filterMonth = document.getElementById('id_month');
+    const filterYear = document.getElementById('id_year');
+    const dlUnit = document.getElementById('war-download-unit');
+    const dlMonth = document.getElementById('war-download-month');
+    const dlYear = document.getElementById('war-download-year');
+    const dlPersonnel = document.getElementById('war-download-personnel');
+    const dlForm = document.getElementById('war-download-form');
+    const dlSubmit = document.getElementById('war-download-submit');
+    const dlFeedback = document.getElementById('war-download-feedback');
+    if (!modal || !openBtn) return;
+
+    function openModal() {
+        if (dlUnit && filterUnit) dlUnit.value = filterUnit.value || '';
+        if (dlMonth && filterMonth) dlMonth.value = filterMonth.value || dlMonth.value;
+        if (dlYear && filterYear) dlYear.value = filterYear.value || dlYear.value;
+        modal.classList.remove('hidden');
+    }
+    function closeModal() {
+        modal.classList.add('hidden');
+        if (dlSubmit) {
+            dlSubmit.disabled = false;
+            dlSubmit.classList.remove('opacity-70', 'cursor-not-allowed');
+            dlSubmit.textContent = 'Download';
+        }
+        if (dlFeedback) dlFeedback.classList.add('hidden');
+    }
+    function resetPersonnelIfAllUnits() {
+        if (!dlUnit || !dlPersonnel) return;
+        if (!dlUnit.value) dlPersonnel.value = '';
+    }
+
+    // Use direct assignment so re-init replaces old handlers safely.
+    openBtn.onclick = openModal;
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+    if (dlUnit) dlUnit.onchange = resetPersonnelIfAllUnits;
+    if (dlForm) {
+        dlForm.onsubmit = function() {
+            if (dlSubmit) {
+                dlSubmit.disabled = true;
+                dlSubmit.classList.add('opacity-70', 'cursor-not-allowed');
+                dlSubmit.textContent = 'Starting download...';
+            }
+            if (dlFeedback) dlFeedback.classList.remove('hidden');
+            // Browser handles file response directly; close shortly after submit.
+            window.setTimeout(closeModal, 1400);
+        };
+    }
+}
+
 function initWarFilters() {
     const form = document.getElementById('war-filter-form');
     const wrapper = document.getElementById('war-filter-table-wrapper');
     if (!form || !wrapper) return;
 
-    const fieldIds = ['id_unit', 'id_personnel', 'id_date_from', 'id_date_to'];
-    const handleChange = function () {
+    const fieldIds = ['id_unit', 'id_month', 'id_year'];
+    const handleChange = function (event) {
+        const changedId = event && event.target ? event.target.id : null;
         const formData = new FormData(form);
         // Remove download param if present; we only want to filter
         formData.delete('download');
@@ -151,6 +330,8 @@ function initWarFilters() {
                     wrapper.classList.remove('opacity-50');
                     // Re-initialize listeners on the new form elements
                     initWarFilters();
+                    initWarDownloadModal();
+                    initWarEditModal();
                 } else {
                     wrapper.classList.remove('opacity-50');
                 }
@@ -167,6 +348,10 @@ function initWarFilters() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', initWarFilters);
+document.addEventListener('DOMContentLoaded', function() {
+    initWarFilters();
+    initWarDownloadModal();
+    initWarEditModal();
+});
 </script>
 {% endblock %}

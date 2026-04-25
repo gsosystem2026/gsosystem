@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -15,6 +16,26 @@ class GsoAuthenticationForm(AuthenticationForm):
         strip=False,
         widget=forms.PasswordInput(attrs={'placeholder': 'Password'})
     )
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        status = getattr(user, 'account_status', getattr(User.AccountStatus, 'ACTIVE', 'ACTIVE'))
+        if status == User.AccountStatus.DEACTIVATED:
+            raise ValidationError('Your account is deactivated. Please contact the administrator.', code='inactive')
+        if status == User.AccountStatus.SUSPENDED:
+            suspended_until = getattr(user, 'suspended_until', None)
+            if suspended_until and suspended_until <= timezone.now():
+                # Suspension expired; auto-restore active status.
+                user.account_status = User.AccountStatus.ACTIVE
+                user.restriction_reason_category = ''
+                user.restriction_reason_details = ''
+                user.suspended_until = None
+                user.save(update_fields=['account_status', 'restriction_reason_category', 'restriction_reason_details', 'suspended_until'])
+                return
+            if suspended_until:
+                until_str = timezone.localtime(suspended_until).strftime('%b %d, %Y %I:%M %p')
+                raise ValidationError(f'Your account is suspended until {until_str}. Please contact the administrator.', code='inactive')
+            raise ValidationError('Your account is suspended. Please contact the administrator.', code='inactive')
 
 
 class GsoPasswordResetForm(PasswordResetForm):
@@ -78,21 +99,11 @@ class RequestorProfileForm(forms.ModelForm):
 
 
 class DirectorUserCreateForm(forms.ModelForm):
-    """Director adds a new user. Password required."""
-    password1 = forms.CharField(
-        label='Password',
-        widget=forms.PasswordInput(attrs={'placeholder': 'Password', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
-        strip=False,
-    )
-    password2 = forms.CharField(
-        label='Confirm password',
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm password', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
-        strip=False,
-    )
+    """Director adds a new user; user sets password via invitation email."""
 
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit')
+        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department')
         widgets = {
             'username': forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
             'first_name': forms.TextInput(attrs={'placeholder': 'First name', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
@@ -100,6 +111,7 @@ class DirectorUserCreateForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'placeholder': 'Email', 'autocomplete': 'email', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
             'role': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'unit': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
+            'office_department': forms.TextInput(attrs={'placeholder': 'Office/Department (e.g., Registrar, HR, Accounting)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -107,7 +119,7 @@ class DirectorUserCreateForm(forms.ModelForm):
         self.fields['unit'].required = False
         from apps.gso_units.models import Unit
         self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
-        self.fields['email'].required = False
+        self.fields['email'].required = True
         # Director role is system-level; do not allow creating directors from this form.
         if 'role' in self.fields:
             self.fields['role'].choices = [
@@ -123,21 +135,34 @@ class DirectorUserCreateForm(forms.ModelForm):
 
     def clean(self):
         data = super().clean()
-        p1 = data.get('password1')
-        p2 = data.get('password2')
-        if p1 and p1 != p2:
-            self.add_error('password2', 'Passwords do not match.')
         role = data.get('role')
         unit = data.get('unit')
         if role == User.Role.DIRECTOR:
             self.add_error('role', 'Director accounts cannot be created from Account Management.')
         if role in (User.Role.UNIT_HEAD, User.Role.PERSONNEL) and not unit:
             self.add_error('unit', 'Unit is required for Unit Head and Personnel.')
+        office = (data.get('office_department') or '').strip()
+        if role == User.Role.REQUESTOR:
+            if not office:
+                self.add_error('office_department', 'Office/Department is required for Requestor.')
+            elif User.objects.filter(role=User.Role.REQUESTOR, office_department__iexact=office).exists():
+                self.add_error('office_department', 'A requestor account for this office/department already exists.')
+        else:
+            data['office_department'] = ''
         return data
+
+    def clean_email(self):
+        email = (self.cleaned_data.get('email') or '').strip()
+        if not email:
+            raise ValidationError('Email is required.')
+        if User.objects.filter(email__iexact=email).exists():
+            raise ValidationError('A user with this email already exists.')
+        return email
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password1'])
+        # Security: no default password. User sets password via invite link.
+        user.set_unusable_password()
         if commit:
             user.save()
         return user
@@ -160,7 +185,7 @@ class DirectorUserEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'is_active')
+        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department', 'is_active')
         widgets = {
             'username': forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-3 py-2 text-sm'}),
             'first_name': forms.TextInput(attrs={'placeholder': 'First name', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
@@ -168,6 +193,7 @@ class DirectorUserEditForm(forms.ModelForm):
             'email': forms.EmailInput(attrs={'placeholder': 'Email', 'autocomplete': 'email', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
             'role': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'unit': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
+            'office_department': forms.TextInput(attrs={'placeholder': 'Office/Department (e.g., Registrar, HR, Accounting)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -197,6 +223,19 @@ class DirectorUserEditForm(forms.ModelForm):
             self.add_error('role', 'Director role cannot be assigned from Account Management.')
         if role in (User.Role.UNIT_HEAD, User.Role.PERSONNEL) and not unit:
             self.add_error('unit', 'Unit is required for Unit Head and Personnel.')
+        office = (data.get('office_department') or '').strip()
+        if role == User.Role.REQUESTOR:
+            if not office:
+                self.add_error('office_department', 'Office/Department is required for Requestor.')
+            else:
+                existing = User.objects.filter(
+                    role=User.Role.REQUESTOR,
+                    office_department__iexact=office,
+                ).exclude(pk=self.instance.pk)
+                if existing.exists():
+                    self.add_error('office_department', 'A requestor account for this office/department already exists.')
+        else:
+            data['office_department'] = ''
         return data
 
     def save(self, commit=True):

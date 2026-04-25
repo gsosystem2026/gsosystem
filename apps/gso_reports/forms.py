@@ -4,34 +4,68 @@ from .models import WorkAccomplishmentReport
 
 
 class WARForm(forms.ModelForm):
+    total_cost_display = forms.DecimalField(
+        label='Total Cost',
+        required=False,
+        decimal_places=2,
+        max_digits=12,
+        disabled=True,
+        widget=forms.NumberInput(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-slate-100 dark:bg-slate-800'}),
+    )
+
     class Meta:
         model = WorkAccomplishmentReport
-        fields = ['personnel', 'period_start', 'period_end', 'summary', 'accomplishments', 'success_indicators']
+        fields = ['personnel', 'period_start', 'period_end', 'summary', 'accomplishments', 'material_cost', 'labor_cost']
         widgets = {
-            'summary': forms.TextInput(attrs={'placeholder': 'Short summary', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'accomplishments': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe work accomplished…', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'period_start': forms.DateInput(attrs={'type': 'date', 'class': 'rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'period_end': forms.DateInput(attrs={'type': 'date', 'class': 'rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'success_indicators': forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
+            'summary': forms.TextInput(attrs={'placeholder': 'Project title', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
+            'accomplishments': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe the project/work…', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
+            'material_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
+            'labor_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
         }
 
     def __init__(self, *args, request_obj=None, **kwargs):
         super().__init__(*args, **kwargs)
-        from .models import SuccessIndicator
-        self.fields['success_indicators'].queryset = SuccessIndicator.objects.filter(is_active=True).order_by('display_order', 'code')
-        self.fields['success_indicators'].required = False
+        self.fields['summary'].label = 'Name of Project'
+        self.fields['accomplishments'].label = 'Description'
+        self.fields['material_cost'].label = 'Material Cost'
+        self.fields['labor_cost'].label = 'Labor Cost'
+        self.fields['personnel'].label = 'Assigned Personnel'
+        self.fields['period_start'].label = 'Date Started'
+        self.fields['period_end'].label = 'Date Completed'
+        self.fields['total_cost_display'].initial = self.instance.total_cost if getattr(self.instance, 'pk', None) else None
+
         if request_obj is not None:
             from apps.gso_requests.models import RequestAssignment
             assigned_ids = list(request_obj.assignments.values_list('personnel_id', flat=True))
-            existing_war_personnel = list(
-                request_obj.work_accomplishment_reports.values_list('personnel_id', flat=True)
-            )
+            existing_war_personnel = list(request_obj.work_accomplishment_reports.values_list('personnel_id', flat=True))
             available = [pk for pk in assigned_ids if pk not in existing_war_personnel]
+            # Keep currently assigned personnel available when editing an existing WAR.
+            if getattr(self.instance, 'pk', None) and self.instance.personnel_id:
+                available = sorted(set(available + [self.instance.personnel_id]))
             from apps.gso_accounts.models import User
             self.fields['personnel'].queryset = User.objects.filter(pk__in=available).order_by('first_name', 'last_name', 'username')
-            if len(available) == 1:
+            if len(available) == 1 and not getattr(self.instance, 'pk', None):
                 self.fields['personnel'].initial = available[0]
-                self.fields['personnel'].widget = forms.HiddenInput()
+
+        if getattr(self.instance, 'pk', None):
+            # Edit mode: personnel and period are fixed for this WAR entry.
+            self.fields['personnel'].disabled = True
+            self.fields['period_start'].disabled = True
+            self.fields['period_end'].disabled = True
+
+    def clean(self):
+        cleaned = super().clean()
+        material = cleaned.get('material_cost')
+        labor = cleaned.get('labor_cost')
+        if material is not None and material < 0:
+            self.add_error('material_cost', 'Material cost cannot be negative.')
+        if labor is not None and labor < 0:
+            self.add_error('labor_cost', 'Labor cost cannot be negative.')
+        if getattr(self.instance, 'pk', None):
+            cleaned['personnel'] = self.instance.personnel
+            cleaned['period_start'] = self.instance.period_start
+            cleaned['period_end'] = self.instance.period_end
+        return cleaned
 
 
 MONTH_CHOICES = [(i, f'{i:02d} — {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i-1]}') for i in range(1, 13)]
@@ -73,7 +107,7 @@ class IPMTReportForm(forms.Form):
 
 
 class WARExportForm(forms.Form):
-    """Phase 6.4: Filter WAR for export (unit, personnel and/or date range)."""
+    """Phase 6.4: Filter WAR for export (unit, optional personnel, month/year)."""
     unit = forms.ModelChoiceField(
         queryset=None,
         label='Unit (optional)',
@@ -88,15 +122,17 @@ class WARExportForm(forms.Form):
         empty_label='All personnel',
         widget=forms.Select(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
     )
-    date_from = forms.DateField(
-        label='From date',
-        required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+    year = forms.IntegerField(
+        min_value=2020,
+        max_value=2035,
+        label='Year',
+        widget=forms.NumberInput(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2', 'min': 2020, 'max': 2035}),
     )
-    date_to = forms.DateField(
-        label='To date',
-        required=False,
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+    month = forms.TypedChoiceField(
+        choices=MONTH_CHOICES,
+        coerce=int,
+        label='Month',
+        widget=forms.Select(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
     )
 
     def __init__(self, *args, **kwargs):
@@ -133,6 +169,10 @@ class WARExportForm(forms.Form):
 
         self.fields['personnel'].queryset = personnel_qs.order_by('first_name', 'last_name', 'username')
         self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
+        from datetime import date
+        today = date.today()
+        if not self.initial and not self.data:
+            self.initial = {'year': today.year, 'month': today.month}
 
 
 class FeedbackExportForm(forms.Form):

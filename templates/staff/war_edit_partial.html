@@ -1,0 +1,92 @@
+<div class="space-y-5">
+    <div class="flex items-center justify-between gap-3">
+        <div></div>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Request {{ req.display_id }}</p>
+    </div>
+
+    {% if form.non_field_errors %}
+    <div class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post" action="{% url 'gso_accounts:staff_war_edit' war.pk %}?partial=1&source={{ war_edit_source }}" class="space-y-4" id="war-edit-modal-form">
+        {% csrf_token %}
+        <input type="hidden" name="partial" value="1">
+        <input type="hidden" name="source" value="{{ war_edit_source }}">
+        <input type="hidden" name="next" value="{{ war_edit_next_url }}">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Assigned Personnel</label>
+                <div class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                    {{ war.personnel.get_full_name|default:war.personnel.username }}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date Started</label>
+                <div class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                    {{ war.period_start|date:"Y-m-d" }}
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date Completed</label>
+                <div class="w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
+                    {{ war.period_end|date:"Y-m-d" }}
+                </div>
+            </div>
+        </div>
+        <div>
+            <label for="{{ form.summary.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.summary.label }}</label>
+            {{ form.summary }}
+            {% if form.summary.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.summary.errors.0 }}</p>{% endif %}
+        </div>
+        <div>
+            <label for="{{ form.accomplishments.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.accomplishments.label }}</label>
+            {{ form.accomplishments }}
+            {% if form.accomplishments.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.accomplishments.errors.0 }}</p>{% endif %}
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+                <label for="{{ form.material_cost.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.material_cost.label }}</label>
+                {{ form.material_cost }}
+                {% if form.material_cost.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.material_cost.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="{{ form.labor_cost.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.labor_cost.label }}</label>
+                {{ form.labor_cost }}
+                {% if form.labor_cost.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.labor_cost.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="{{ form.total_cost_display.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.total_cost_display.label }}</label>
+                {{ form.total_cost_display }}
+            </div>
+        </div>
+        <div class="flex flex-wrap justify-end gap-3 pt-1">
+            <button type="button" class="js-war-edit-modal-back px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+            <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Save WAR</button>
+        </div>
+    </form>
+</div>
+<script>
+(function() {
+    var materialInput = document.getElementById('id_material_cost');
+    var laborInput = document.getElementById('id_labor_cost');
+    var totalInput = document.getElementById('id_total_cost_display');
+    if (!materialInput || !laborInput || !totalInput) return;
+    function parseAmount(value) {
+        var n = parseFloat(value);
+        return Number.isFinite(n) ? n : null;
+    }
+    function syncTotal() {
+        var m = parseAmount(materialInput.value);
+        var l = parseAmount(laborInput.value);
+        if (m === null && l === null) {
+            totalInput.value = '';
+            return;
+        }
+        var total = (m || 0) + (l || 0);
+        totalInput.value = total.toFixed(2);
+    }
+    materialInput.addEventListener('input', syncTotal);
+    laborInput.addEventListener('input', syncTotal);
+    syncTotal();
+})();
+</script>

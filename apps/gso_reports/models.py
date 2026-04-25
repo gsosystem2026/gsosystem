@@ -4,6 +4,7 @@ Phase 6.2: Success indicators — master data; WAR entries can be tagged with in
 """
 from django.conf import settings
 from django.db import models
+from decimal import Decimal
 from django.utils import timezone
 
 
@@ -61,6 +62,27 @@ class WorkAccomplishmentReport(models.Model):
         blank=True,
         help_text='Description of work accomplished.',
     )
+    material_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Material cost for this work entry.',
+    )
+    labor_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Labor cost for this work entry.',
+    )
+    total_cost = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text='Auto-computed total cost (material + labor).',
+    )
     success_indicators = models.ManyToManyField(
         SuccessIndicator,
         related_name='work_accomplishment_reports',
@@ -85,6 +107,15 @@ class WorkAccomplishmentReport(models.Model):
 
     def __str__(self):
         return f"WAR: {self.request.display_id} — {self.personnel.get_full_name() or self.personnel.username}"
+
+    def save(self, *args, **kwargs):
+        material = self.material_cost if self.material_cost is not None else Decimal('0')
+        labor = self.labor_cost if self.labor_cost is not None else Decimal('0')
+        if self.material_cost is None and self.labor_cost is None:
+            self.total_cost = None
+        else:
+            self.total_cost = material + labor
+        super().save(*args, **kwargs)
 
 
 def ensure_war_for_request(request_obj, created_by=None):
@@ -133,5 +164,8 @@ def ensure_war_for_request(request_obj, created_by=None):
             period_end=period_end,
             summary="To be filled",
             accomplishments="To be filled",
+            material_cost=None,
+            labor_cost=None,
+            total_cost=None,
             created_by=created_by,
         )

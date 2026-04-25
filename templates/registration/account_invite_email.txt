@@ -1,0 +1,13 @@
+Hello {{ user.get_full_name|default:user.username }},
+
+An account has been created for you in the GSO Request Management System.
+
+Username: {{ user.username }}
+Role: {{ user.get_role_display }}
+
+To activate your account, set your password using this link:
+{{ invite_url }}
+
+If you did not expect this invitation, please ignore this email and contact the administrator.
+
+Thank you.

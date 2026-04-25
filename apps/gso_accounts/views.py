@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.http import JsonResponse
 from django.core.mail import send_mail
 from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth.views import (
     LoginView,
@@ -16,6 +17,9 @@ from django.db.models import Q, Count
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime, parse_date
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.encoding import force_bytes
 from django.template.loader import render_to_string
 from datetime import timedelta
 import secrets
@@ -309,6 +313,9 @@ class StaffActivityLogView(StaffRequiredMixin, ListView):
             ('oic_revoke', 'OIC Revoked'),
             ('user_create', 'User Created'),
             ('user_edit', 'User Edited'),
+            ('user_suspend', 'User Suspended'),
+            ('user_deactivate', 'User Deactivated'),
+            ('user_reactivate', 'User Reactivated'),
             ('requestor_edit_request', 'Requestor Edited Request'),
             ('requestor_cancel_request', 'Requestor Cancelled Request'),
         ]
@@ -611,11 +618,9 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
         unit_id = self.request.GET.get('unit', '').strip()
         if unit_id:
             qs = qs.filter(unit_id=unit_id)
-        active = self.request.GET.get('active', '')
-        if active == '1':
-            qs = qs.filter(is_active=True)
-        elif active == '0':
-            qs = qs.filter(is_active=False)
+        status = self.request.GET.get('status', '').strip()
+        if status in (User.AccountStatus.ACTIVE, User.AccountStatus.SUSPENDED, User.AccountStatus.DEACTIVATED):
+            qs = qs.filter(account_status=status)
         q = self.request.GET.get('q', '').strip()
         if q:
             qs = qs.filter(
@@ -636,7 +641,7 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
         context['gso_users'] = User.objects.filter(role=User.Role.GSO_OFFICE, is_active=True).order_by('first_name', 'last_name', 'username')
         context['filter_role'] = self.request.GET.get('role', '')
         context['filter_unit'] = self.request.GET.get('unit', '')
-        context['filter_active'] = self.request.GET.get('active', '')
+        context['filter_status'] = self.request.GET.get('status', '')
         context['filter_q'] = self.request.GET.get('q', '')
         context['units'] = Unit.objects.filter(is_active=True).order_by('name')
         context['role_choices'] = [
@@ -646,6 +651,20 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
             (User.Role.PERSONNEL, 'Personnel'),
             (User.Role.GSO_OFFICE, 'GSO Office'),
         ]
+        context['status_choices'] = [
+            ('', 'All statuses'),
+            (User.AccountStatus.ACTIVE, 'Active'),
+            (User.AccountStatus.SUSPENDED, 'Suspended'),
+            (User.AccountStatus.DEACTIVATED, 'Deactivated'),
+        ]
+        context['restriction_reason_choices'] = [
+            ('POLICY_VIOLATION', 'Policy violation'),
+            ('SECURITY_CONCERN', 'Security concern'),
+            ('INACTIVITY', 'Inactivity'),
+            ('DUPLICATE_ACCOUNT', 'Duplicate account'),
+            ('OTHER', 'Other'),
+        ]
+        context['create_user_form'] = DirectorUserCreateForm()
         return context
 
 
@@ -654,12 +673,19 @@ class AssignOICView(LoginRequiredMixin, View):
     http_method_names = ['post']
 
     def post(self, request):
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if not getattr(request.user, 'is_director', False):
-            messages.error(request, 'Only the Director can assign OIC.')
+            msg = 'Only the Director can assign OIC.'
+            if is_ajax:
+                return JsonResponse({'ok': False, 'error': msg}, status=403)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_dashboard')
         user_id = request.POST.get('user_id', '').strip()
         if not user_id:
-            messages.error(request, 'Please select a user.')
+            msg = 'Please select a user.'
+            if is_ajax:
+                return JsonResponse({'ok': False, 'error': msg}, status=400)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_account_management')
         oic_user = get_object_or_404(User, pk=user_id, role=User.Role.GSO_OFFICE, is_active=True)
         director = request.user
@@ -671,7 +697,14 @@ class AssignOICView(LoginRequiredMixin, View):
         notify_oic_assigned(oic_user, director)
         from apps.gso_accounts.models import log_audit
         log_audit('oic_assign', request.user, f'Assigned OIC: {oic_user.get_full_name() or oic_user.username} (id={oic_user.pk})', target_model='gso_accounts.User', target_id=str(oic_user.pk))
-        messages.success(request, f'{oic_user.get_full_name() or oic_user.username} is now Officer-in-Charge and can approve requests.')
+        success_msg = f'{oic_user.get_full_name() or oic_user.username} is now Officer-in-Charge and can approve requests.'
+        if is_ajax:
+            return JsonResponse({
+                'ok': True,
+                'message': success_msg,
+                'oic_name': oic_user.get_full_name() or oic_user.username,
+            })
+        messages.success(request, success_msg)
         return redirect('gso_accounts:staff_account_management')
 
 
@@ -693,6 +726,97 @@ class RevokeOICView(LoginRequiredMixin, View):
             log_audit('oic_revoke', request.user, f'Revoked OIC: {previous_oic.get_full_name() or previous_oic.username} (id={previous_oic.pk})', target_model='gso_accounts.User', target_id=str(previous_oic.pk))
         messages.success(request, 'OIC revoked. Only the Director can approve requests now.')
         return redirect('gso_accounts:staff_account_management')
+
+
+class UserStatusActionView(LoginRequiredMixin, View):
+    """Director controls account lifecycle: suspend, deactivate, reactivate."""
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        if not getattr(request.user, 'is_director', False):
+            messages.error(request, 'Only the Director can manage account restrictions.')
+            return redirect('gso_accounts:staff_dashboard')
+        target = get_object_or_404(User, pk=pk)
+        if target.role == User.Role.DIRECTOR:
+            return JsonResponse({'ok': False, 'error': 'Director accounts cannot be restricted here.'}, status=400)
+        if target.pk == request.user.pk:
+            return JsonResponse({'ok': False, 'error': 'You cannot restrict your own account.'}, status=400)
+
+        action = (request.POST.get('action') or '').strip().lower()
+        reason_category = (request.POST.get('reason_category') or '').strip()
+        reason_details = (request.POST.get('reason_details') or '').strip()
+        suspended_until_raw = (request.POST.get('suspended_until') or '').strip()
+
+        status_before = target.account_status
+        log_action = ''
+        log_message = ''
+
+        if action == 'suspend':
+            if not reason_category or not reason_details:
+                return JsonResponse({'ok': False, 'error': 'Reason category and details are required for suspension.'}, status=400)
+            target.account_status = User.AccountStatus.SUSPENDED
+            target.is_active = True
+            target.restriction_reason_category = reason_category
+            target.restriction_reason_details = reason_details
+            target.suspended_until = None
+            if suspended_until_raw:
+                dt = parse_datetime(suspended_until_raw)
+                if dt is None:
+                    d = parse_date(suspended_until_raw)
+                    if d:
+                        dt = timezone.datetime.combine(d, timezone.datetime.max.time())
+                if dt is not None:
+                    if timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                    target.suspended_until = dt
+            log_action = 'user_suspend'
+            log_message = f'Suspended user {target.get_full_name() or target.username} (id={target.pk}).'
+        elif action == 'deactivate':
+            if not reason_category or not reason_details:
+                return JsonResponse({'ok': False, 'error': 'Reason category and details are required for deactivation.'}, status=400)
+            target.account_status = User.AccountStatus.DEACTIVATED
+            target.is_active = False
+            target.restriction_reason_category = reason_category
+            target.restriction_reason_details = reason_details
+            target.suspended_until = None
+            log_action = 'user_deactivate'
+            log_message = f'Deactivated user {target.get_full_name() or target.username} (id={target.pk}).'
+        elif action in ('reactivate', 'reinstate'):
+            target.account_status = User.AccountStatus.ACTIVE
+            target.is_active = True
+            target.restriction_reason_category = ''
+            target.restriction_reason_details = ''
+            target.suspended_until = None
+            log_action = 'user_reactivate'
+            log_message = f'Reactivated user {target.get_full_name() or target.username} (id={target.pk}).'
+        else:
+            return JsonResponse({'ok': False, 'error': 'Invalid status action.'}, status=400)
+
+        target.status_changed_at = timezone.now()
+        target.status_changed_by = request.user
+        target.save(update_fields=[
+            'account_status',
+            'is_active',
+            'restriction_reason_category',
+            'restriction_reason_details',
+            'suspended_until',
+            'status_changed_at',
+            'status_changed_by',
+        ])
+        from apps.gso_accounts.models import log_audit
+        log_audit(
+            log_action,
+            request.user,
+            f'{log_message} Status: {status_before} -> {target.account_status}. Reason: {reason_category or "-"} {reason_details or "-"}',
+            target_model='gso_accounts.User',
+            target_id=str(target.pk),
+        )
+        return JsonResponse({
+            'ok': True,
+            'message': f'Account status updated to {target.get_account_status_display()}.',
+            'status': target.account_status,
+            'status_display': target.get_account_status_display(),
+        })
 
 
 class DirectorUserCreateView(StaffRequiredMixin, CreateView):
@@ -718,9 +842,23 @@ class DirectorUserCreateView(StaffRequiredMixin, CreateView):
         context['page_description'] = 'Create a new user account. Set role and unit (for Unit Head/Personnel).'
         return context
 
+    def _wants_json(self):
+        requested_with = (self.request.headers.get('X-Requested-With') or '').lower()
+        accept = (self.request.headers.get('Accept') or '').lower()
+        return (
+            requested_with == 'xmlhttprequest'
+            or self.request.POST.get('ajax') == '1'
+            or 'application/json' in accept
+        )
+
     def form_valid(self, form):
         from .models import log_audit
-        response = super().form_valid(form)
+        is_ajax = self._wants_json()
+        if is_ajax:
+            self.object = form.save()
+        else:
+            response = super().form_valid(form)
+        invite_sent = self._send_set_password_invite(self.object)
         log_audit(
             'user_create',
             self.request.user,
@@ -728,8 +866,59 @@ class DirectorUserCreateView(StaffRequiredMixin, CreateView):
             target_model='gso_accounts.User',
             target_id=str(self.object.pk),
         )
-        messages.success(self.request, f'User "{self.object.username}" has been created.')
+        if is_ajax:
+            if invite_sent:
+                return JsonResponse({
+                    'ok': True,
+                    'message': f'User "{self.object.username}" created. Invitation email sent to {self.object.email}.',
+                })
+            return JsonResponse({
+                'ok': True,
+                'message': f'User "{self.object.username}" created, but invite email could not be sent. Check email settings.',
+            })
+        if invite_sent:
+            messages.success(self.request, f'User "{self.object.username}" has been created. A set-password email was sent to {self.object.email}.')
+        else:
+            messages.warning(self.request, f'User "{self.object.username}" was created, but invite email could not be sent. Check email settings and resend by creating again or using password reset.')
         return response
+
+    def form_invalid(self, form):
+        if self._wants_json():
+            return JsonResponse({
+                'ok': False,
+                'errors': form.errors,
+                'non_field_errors': form.non_field_errors(),
+            }, status=400)
+        return super().form_invalid(form)
+
+    def _send_set_password_invite(self, user):
+        try:
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = default_token_generator.make_token(user)
+            invite_path = reverse('gso_accounts:invite_set_password', kwargs={'uidb64': uid, 'token': token})
+            base_url = (getattr(settings, 'GSO_SITE_URL', '') or '').rstrip('/')
+            if base_url:
+                invite_url = f'{base_url}{invite_path}'
+            else:
+                invite_url = self.request.build_absolute_uri(invite_path)
+            body = render_to_string(
+                'registration/account_invite_email.txt',
+                {
+                    'user': user,
+                    'invited_by': self.request.user,
+                    'invite_url': invite_url,
+                },
+            )
+            send_mail(
+                subject='GSO System - Set your account password',
+                message=body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                fail_silently=False,
+            )
+            return True
+        except Exception:
+            return False
 
 
 class DirectorUserEditView(StaffRequiredMixin, UpdateView):
@@ -739,6 +928,23 @@ class DirectorUserEditView(StaffRequiredMixin, UpdateView):
     template_name = 'staff/director_user_form.html'
     context_object_name = 'user_obj'
     success_url = reverse_lazy('gso_accounts:staff_account_management')
+
+    def _wants_json(self):
+        requested_with = (self.request.headers.get('X-Requested-With') or '').lower()
+        accept = (self.request.headers.get('Accept') or '').lower()
+        return (
+            requested_with == 'xmlhttprequest'
+            or self.request.POST.get('ajax') == '1'
+            or 'application/json' in accept
+        )
+
+    def _wants_partial(self):
+        requested_with = (self.request.headers.get('X-Requested-With') or '').lower()
+        return bool(
+            self.request.GET.get('partial')
+            or self.request.POST.get('partial')
+            or requested_with == 'xmlhttprequest'
+        )
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -758,6 +964,11 @@ class DirectorUserEditView(StaffRequiredMixin, UpdateView):
             pass
         return super().dispatch(request, *args, **kwargs)
 
+    def get_template_names(self):
+        if self._wants_partial():
+            return ['staff/_account_user_edit_form.html']
+        return [self.template_name]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Edit user'
@@ -767,7 +978,11 @@ class DirectorUserEditView(StaffRequiredMixin, UpdateView):
 
     def form_valid(self, form):
         from .models import log_audit
-        response = super().form_valid(form)
+        is_ajax = self._wants_json()
+        if is_ajax:
+            self.object = form.save()
+        else:
+            response = super().form_valid(form)
         log_audit(
             'user_edit',
             self.request.user,
@@ -775,8 +990,22 @@ class DirectorUserEditView(StaffRequiredMixin, UpdateView):
             target_model='gso_accounts.User',
             target_id=str(self.object.pk),
         )
+        if is_ajax:
+            return JsonResponse({
+                'ok': True,
+                'message': f'User "{self.object.username}" has been updated.',
+            })
         messages.success(self.request, f'User "{self.object.username}" has been updated.')
         return response
+
+    def form_invalid(self, form):
+        if self._wants_json():
+            return JsonResponse({
+                'ok': False,
+                'errors': form.errors,
+                'non_field_errors': form.non_field_errors(),
+            }, status=400)
+        return super().form_invalid(form)
 
 
 # Unit display for requestor dashboard (icon + description by unit code)
@@ -1203,3 +1432,43 @@ class GsoPasswordResetConfirmView(FormView):
 
 class GsoPasswordResetCompleteView(TemplateView):
     template_name = 'registration/password_reset_complete.html'
+
+
+class AccountInviteSetPasswordView(FormView):
+    """User sets first password from invitation link."""
+    form_class = GsoSetPasswordForm
+    template_name = 'registration/account_invite_set_password.html'
+    success_url = reverse_lazy('gso_accounts:login')
+
+    def dispatch(self, request, *args, **kwargs):
+        self.invite_user = self._get_invite_user()
+        self.invite_valid = bool(
+            self.invite_user and default_token_generator.check_token(self.invite_user, kwargs.get('token', ''))
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def _get_invite_user(self):
+        uidb64 = self.kwargs.get('uidb64', '')
+        try:
+            uid = urlsafe_base64_decode(uidb64).decode()
+            return User.objects.get(pk=uid, is_active=True)
+        except Exception:
+            return None
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['user'] = self.invite_user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['invite_valid'] = self.invite_valid
+        return context
+
+    def form_valid(self, form):
+        if not self.invite_valid:
+            messages.error(self.request, 'This invitation link is invalid or expired.')
+            return self.render_to_response(self.get_context_data(form=form))
+        form.save()
+        messages.success(self.request, 'Your password has been set. You can now log in.')
+        return super().form_valid(form)

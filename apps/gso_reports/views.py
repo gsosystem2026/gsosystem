@@ -1,11 +1,13 @@
 """Phase 6.1: WAR create. Phase 6.3/6.4: Work Reports landing, IPMT and WAR Excel export."""
-from datetime import date as _date
+from datetime import date as _date, timedelta
 
 from django.contrib import messages
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F
 from django.http import HttpResponse
 from django.shortcuts import redirect, get_object_or_404, render
+from django.template.response import TemplateResponse
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.generic import CreateView, FormView, TemplateView, UpdateView
 
@@ -80,6 +82,36 @@ class WARUpdateView(StaffRequiredMixin, UpdateView):
     template_name = 'staff/war_form.html'
     context_object_name = 'war'
 
+    def _wants_partial(self):
+        return bool(
+            self.request.GET.get('partial')
+            or self.request.POST.get('partial')
+            or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
+
+    def _requested_source(self):
+        return (self.request.GET.get('source') or self.request.POST.get('source') or '').strip().lower()
+
+    def _next_url(self):
+        raw_next = (self.request.GET.get('next') or self.request.POST.get('next') or '').strip()
+        if raw_next and url_has_allowed_host_and_scheme(
+            raw_next,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            return raw_next
+        req = getattr(self, 'request_obj', None) or getattr(self.object, 'request', None)
+        if self._requested_source() == 'war':
+            return reverse('gso_accounts:staff_work_reports_war_export')
+        if req:
+            return reverse('gso_accounts:staff_request_detail', args=[req.pk])
+        return reverse('gso_accounts:staff_work_reports_war_export')
+
+    def get_template_names(self):
+        if self._wants_partial():
+            return ['staff/war_edit_partial.html']
+        return [self.template_name]
+
     def dispatch(self, request, *args, **kwargs):
         war = get_object_or_404(WorkAccomplishmentReport.objects.select_related('request'), pk=kwargs['pk'])
         user = request.user
@@ -97,12 +129,29 @@ class WARUpdateView(StaffRequiredMixin, UpdateView):
         context['page_title'] = 'Edit Work Accomplishment Report'
         context['page_description'] = f'Update report for request {req.display_id}.'
         context['is_edit'] = True
+        context['war_edit_source'] = self._requested_source() or 'request'
+        context['war_edit_next_url'] = self._next_url()
         return context
 
-    def get_success_url(self):
-        req = getattr(self, 'request_obj', None) or self.object.request
+    def form_valid(self, form):
+        response = super().form_valid(form)
         messages.success(self.request, 'Work Accomplishment Report updated.')
-        return reverse('gso_accounts:staff_request_detail', args=[req.pk])
+        if self._wants_partial():
+            return redirect(self._next_url())
+        return response
+
+    def form_invalid(self, form):
+        if self._wants_partial():
+            return TemplateResponse(
+                self.request,
+                self.get_template_names(),
+                self.get_context_data(form=form),
+                status=400,
+            )
+        return super().form_invalid(form)
+
+    def get_success_url(self):
+        return self._next_url()
 
 
 def _can_access_work_reports(user):
@@ -348,7 +397,7 @@ class IPMTReportView(StaffRequiredMixin, FormView):
 
 
 class WARExportView(StaffRequiredMixin, FormView):
-    """Phase 6.4: Export WAR to Excel — optional filter by personnel and date range. Uses GET for download."""
+    """Phase 6.4: Export WAR to Excel — optional filter by personnel, with month/year period."""
     form_class = WARExportForm
     template_name = 'staff/war_export.html'
 
@@ -365,20 +414,44 @@ class WARExportView(StaffRequiredMixin, FormView):
     def get(self, request, *args, **kwargs):
         if request.GET and request.GET.get('download') == 'excel':
             form = self.get_form()
-            if form.is_valid():
-                personnel = form.cleaned_data.get('personnel')
-                unit = form.cleaned_data.get('unit')
-                date_from = form.cleaned_data.get('date_from')
-                date_to = form.cleaned_data.get('date_to')
-                qs = get_war_queryset(personnel=personnel, unit=unit, date_from=date_from, date_to=date_to)
-                buf, name_suffix = build_war_export_excel(qs, title="WAR_Export", unit=unit)
-                filename = f"WAR_export_{name_suffix}.xlsx"
-                response = HttpResponse(
-                    buf.getvalue(),
-                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                )
-                response['Content-Disposition'] = f'attachment; filename="{filename}"'
-                return response
+            if not form.is_valid():
+                # Common case: selected personnel is no longer valid after changing unit.
+                # Fallback by dropping personnel filter so export still works.
+                fallback_data = request.GET.copy()
+                if 'personnel' in fallback_data:
+                    fallback_data['personnel'] = ''
+                fallback_form = self.form_class(data=fallback_data)
+                if fallback_form.is_valid():
+                    form = fallback_form
+                    messages.warning(
+                        request,
+                        'Selected personnel filter was not valid for the chosen unit, so WAR export used broader filters.',
+                    )
+                else:
+                    messages.error(
+                        request,
+                        'WAR export could not proceed because filter values are invalid. Please review filters and try again.',
+                    )
+                    return super().get(request, *args, **kwargs)
+
+            personnel = form.cleaned_data.get('personnel')
+            unit = form.cleaned_data.get('unit')
+            year = form.cleaned_data.get('year')
+            month = form.cleaned_data.get('month')
+            date_from = _date(year, month, 1)
+            if month == 12:
+                date_to = _date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                date_to = _date(year, month + 1, 1) - timedelta(days=1)
+            qs = get_war_queryset(personnel=personnel, unit=unit, date_from=date_from, date_to=date_to)
+            buf, name_suffix = build_war_export_excel(qs, title=f"WAR_{year}_{month:02d}", unit=unit, split_by_unit_when_all=True)
+            filename = f"WAR_export_{name_suffix}.xlsx"
+            response = HttpResponse(
+                buf.getvalue(),
+                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            )
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
         return super().get(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -390,19 +463,34 @@ class WARExportView(StaffRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'WAR (Work Accomplishment Report)'
-        context['page_description'] = 'View and export Work Accomplishment Reports. Filter by unit, personnel, or date range. Table and Excel structure vary by unit.'
+        context['page_description'] = 'View and export Work Accomplishment Reports. Filter by unit and month/year; personnel is optional. Table and Excel structure vary by unit.'
         form = context.get('form') or self.get_form()
         unit = None
         if form.is_bound and form.is_valid():
             unit = form.cleaned_data.get('unit')
+            year = form.cleaned_data.get('year')
+            month = form.cleaned_data.get('month')
+            date_from = _date(year, month, 1)
+            if month == 12:
+                date_to = _date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                date_to = _date(year, month + 1, 1) - timedelta(days=1)
             qs = get_war_queryset(
                 personnel=form.cleaned_data.get('personnel'),
                 unit=unit,
-                date_from=form.cleaned_data.get('date_from'),
-                date_to=form.cleaned_data.get('date_to'),
+                date_from=date_from,
+                date_to=date_to,
             )
         else:
-            qs = get_war_queryset()
+            today = timezone.localdate()
+            year = today.year
+            month = today.month
+            date_from = _date(year, month, 1)
+            if month == 12:
+                date_to = _date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                date_to = _date(year, month + 1, 1) - timedelta(days=1)
+            qs = get_war_queryset(date_from=date_from, date_to=date_to)
         context['war_list'] = list(qs[:500])  # cap for page load; export has no cap
         config_key, config = get_war_table_config(unit)
         context['war_table_config_key'] = config_key

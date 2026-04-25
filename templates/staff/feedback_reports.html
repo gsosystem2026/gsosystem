@@ -1,7 +1,7 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}Feedback Reports — GSO{% endblock %}
 {% block staff_content %}
-<div class="max-w-4xl space-y-6">
+<div class="max-w-6xl space-y-6">
     <div>
         <a href="{% url 'gso_accounts:staff_work_reports' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
             <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Work Reports
@@ -11,26 +11,42 @@
         <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
         <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
     </div>
+    <div id="feedback-filter-table-wrapper" class="space-y-6">
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-        <form method="get" action="" class="p-6 space-y-4">
+        <form method="get" action="" id="feedback-filter-form" class="p-5 space-y-3">
             <div class="flex flex-wrap items-end gap-3 text-sm">
-                {% for field in form %}
-                <div class="flex flex-col gap-1 {% if field.name == 'unit' %}min-w-[220px]{% else %}min-w-[160px]{% endif %}">
-                    <label for="{{ field.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+                <div class="flex flex-col gap-1 min-w-[170px]">
+                    <label for="{{ form.date_from.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.date_from.label }}</label>
+                    {{ form.date_from }}
+                    {% if form.date_from.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_from.errors.0 }}</p>{% endif %}
                 </div>
-                {% endfor %}
-                <div class="flex items-end gap-2">
-                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-sm font-semibold rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">
-                        Apply filters
+                <div class="flex flex-col gap-1 min-w-[170px]">
+                    <label for="{{ form.date_to.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.date_to.label }}</label>
+                    {{ form.date_to }}
+                    {% if form.date_to.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_to.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex flex-col gap-1 min-w-[220px]">
+                    <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
+                    {{ form.unit }}
+                    {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        Apply
                     </button>
-                    <button type="submit" name="download" value="excel" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                </div>
+                <div class="flex items-end">
+                    <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        Clear
+                    </a>
+                </div>
+                <div class="flex items-end">
+                    <button type="button" id="feedback-download-open-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
                         <span class="material-symbols-outlined text-lg">download</span> Download Excel
                     </button>
                 </div>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Filter by date range or unit. Leave empty to see latest feedback.</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Filter by date range and unit. Use Download to export with the same fields.</p>
         </form>
     </div>
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
@@ -46,6 +62,7 @@
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Unit</th>
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Requestor</th>
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Submitted</th>
+                        <th class="text-right px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -57,7 +74,74 @@
                         <td class="px-6 py-3 text-slate-700 dark:text-slate-300">{{ fb.request.unit.name|default:"—" }}</td>
                         <td class="px-6 py-3 text-slate-700 dark:text-slate-300">{{ fb.user.get_full_name|default:fb.user.username }}</td>
                         <td class="px-6 py-3 text-slate-600 dark:text-slate-400">{{ fb.created_at|date:"M j, Y g:i A" }}</td>
+                        <td class="px-6 py-3 text-right">
+                            <button
+                                type="button"
+                                class="feedback-view-btn inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                                data-feedback-target="feedback-detail-{{ fb.pk }}"
+                            >
+                                <span class="material-symbols-outlined text-sm">visibility</span>
+                                View
+                            </button>
+                        </td>
                     </tr>
+                    <template id="feedback-detail-{{ fb.pk }}">
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Request</p>
+                                    <p class="text-sm text-slate-900 dark:text-slate-100 mt-1">{{ fb.request.display_id }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Unit</p>
+                                    <p class="text-sm text-slate-900 dark:text-slate-100 mt-1">{{ fb.request.unit.name|default:"—" }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Requestor</p>
+                                    <p class="text-sm text-slate-900 dark:text-slate-100 mt-1">{{ fb.user.get_full_name|default:fb.user.username }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Submitted</p>
+                                    <p class="text-sm text-slate-900 dark:text-slate-100 mt-1">{{ fb.created_at|date:"M j, Y g:i A" }}</p>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Citizen's Charter Awareness (CC1-CC3)</h4>
+                                <dl class="space-y-2">
+                                    <div><dt class="text-xs text-slate-500 dark:text-slate-400">CC1</dt><dd class="text-sm text-slate-800 dark:text-slate-200">{{ fb.get_cc1_display|default:fb.cc1|default:"—" }}</dd></div>
+                                    <div><dt class="text-xs text-slate-500 dark:text-slate-400">CC2</dt><dd class="text-sm text-slate-800 dark:text-slate-200">{{ fb.get_cc2_display|default:fb.cc2|default:"—" }}</dd></div>
+                                    <div><dt class="text-xs text-slate-500 dark:text-slate-400">CC3</dt><dd class="text-sm text-slate-800 dark:text-slate-200">{{ fb.get_cc3_display|default:fb.cc3|default:"—" }}</dd></div>
+                                </dl>
+                            </div>
+
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4">
+                                <h4 class="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">Service Quality (SQD1-SQD9)</h4>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD1:</span> {{ fb.sqd1|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD2:</span> {{ fb.sqd2|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD3:</span> {{ fb.sqd3|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD4:</span> {{ fb.sqd4|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD5:</span> {{ fb.sqd5|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD6:</span> {{ fb.sqd6|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD7:</span> {{ fb.sqd7|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD8:</span> {{ fb.sqd8|default:"—" }}</p>
+                                    <p><span class="text-slate-500 dark:text-slate-400">SQD9:</span> {{ fb.sqd9|default:"—" }}</p>
+                                </div>
+                            </div>
+
+                            <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Suggestions</p>
+                                    <p class="text-sm text-slate-800 dark:text-slate-200 whitespace-pre-wrap mt-1">{{ fb.suggestions|default:"—" }}</p>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Email (optional)</p>
+                                    <p class="text-sm text-slate-800 dark:text-slate-200 mt-1">{{ fb.email|default:"—" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                     {% endfor %}
                 </tbody>
             </table>
@@ -66,5 +150,179 @@
         <div class="px-6 py-8 text-center text-slate-500 dark:text-slate-400 text-sm">No feedback found. Requestors submit feedback on completed requests.</div>
         {% endif %}
     </div>
+    </div>
 </div>
+<div id="feedback-detail-modal" class="hidden fixed inset-0 z-[121] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="feedback-detail-modal-title">
+    <div id="feedback-detail-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-3xl max-h-[90vh] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl flex flex-col">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 id="feedback-detail-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Feedback Details</h3>
+                <button type="button" id="feedback-detail-modal-close" class="close-btn" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
+                </button>
+            </div>
+            <div id="feedback-detail-modal-body" class="p-6 overflow-y-auto flex-1">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="feedback-download-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="feedback-download-modal-title">
+    <div id="feedback-download-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="feedback-download-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Download Feedback Excel</h3>
+            <button type="button" id="feedback-download-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <form method="get" action="" class="p-6 space-y-4" id="feedback-download-form" data-no-loading="1">
+            <input type="hidden" name="download" value="excel">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                    <label for="feedback-download-date-from" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">From date</label>
+                    <input id="feedback-download-date-from" type="date" name="date_from" value="{{ form.date_from.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                </div>
+                <div>
+                    <label for="feedback-download-date-to" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">To date</label>
+                    <input id="feedback-download-date-to" type="date" name="date_to" value="{{ form.date_to.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                </div>
+                <div>
+                    <label for="feedback-download-unit" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit</label>
+                    <select id="feedback-download-unit" name="unit" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        {% for option in form.unit.field.queryset %}
+                        <option value="{{ option.pk }}" {% if form.unit.value|stringformat:'s' == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.name }}</option>
+                        {% endfor %}
+                        <option value="" {% if not form.unit.value %}selected{% endif %}>All units</option>
+                    </select>
+                </div>
+            </div>
+            <p id="feedback-download-feedback" class="hidden text-xs text-slate-500 dark:text-slate-400">Preparing your file download...</p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="feedback-download-cancel" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                <button type="submit" id="feedback-download-submit" data-no-loading="1" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg">Download</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function initFeedbackDownloadModal() {
+    var modal = document.getElementById('feedback-download-modal');
+    var openBtn = document.getElementById('feedback-download-open-btn');
+    var closeBtn = document.getElementById('feedback-download-modal-close');
+    var cancelBtn = document.getElementById('feedback-download-cancel');
+    var backdrop = document.getElementById('feedback-download-modal-backdrop');
+    var filterFrom = document.getElementById('id_date_from');
+    var filterTo = document.getElementById('id_date_to');
+    var filterUnit = document.getElementById('id_unit');
+    var dlFrom = document.getElementById('feedback-download-date-from');
+    var dlTo = document.getElementById('feedback-download-date-to');
+    var dlUnit = document.getElementById('feedback-download-unit');
+    var dlForm = document.getElementById('feedback-download-form');
+    var dlSubmit = document.getElementById('feedback-download-submit');
+    var dlFeedback = document.getElementById('feedback-download-feedback');
+    if (!modal || !openBtn) return;
+
+    function openModal() {
+        if (dlFrom && filterFrom) dlFrom.value = filterFrom.value || '';
+        if (dlTo && filterTo) dlTo.value = filterTo.value || '';
+        if (dlUnit && filterUnit) dlUnit.value = filterUnit.value || '';
+        modal.classList.remove('hidden');
+    }
+    function closeModal() {
+        modal.classList.add('hidden');
+        if (dlSubmit) {
+            dlSubmit.disabled = false;
+            dlSubmit.classList.remove('opacity-70', 'cursor-not-allowed');
+            dlSubmit.textContent = 'Download';
+        }
+        if (dlFeedback) dlFeedback.classList.add('hidden');
+    }
+    openBtn.onclick = openModal;
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+    if (dlForm) {
+        dlForm.onsubmit = function() {
+            if (dlSubmit) {
+                dlSubmit.disabled = true;
+                dlSubmit.classList.add('opacity-70', 'cursor-not-allowed');
+                dlSubmit.textContent = 'Starting download...';
+            }
+            if (dlFeedback) dlFeedback.classList.remove('hidden');
+            window.setTimeout(closeModal, 1400);
+        };
+    }
+}
+
+function initFeedbackFilters() {
+        var form = document.getElementById('feedback-filter-form');
+        var wrapper = document.getElementById('feedback-filter-table-wrapper');
+        if (!form || !wrapper) return;
+        var fieldIds = ['id_date_from', 'id_date_to', 'id_unit'];
+        function handleChange() {
+            var formData = new FormData(form);
+            formData.delete('download');
+            var params = new URLSearchParams(formData);
+            var url = window.location.pathname + '?' + params.toString();
+            wrapper.classList.add('opacity-50');
+            fetch(url, {
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin'
+            })
+            .then(function(response) { return response.text(); })
+            .then(function(html) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var newWrapper = doc.getElementById('feedback-filter-table-wrapper');
+                if (newWrapper) {
+                    wrapper.innerHTML = newWrapper.innerHTML;
+                    wrapper.classList.remove('opacity-50');
+                    initFeedbackFilters();
+                    initFeedbackDownloadModal();
+                    initFeedbackDetailModal();
+                } else {
+                    wrapper.classList.remove('opacity-50');
+                }
+            })
+            .catch(function() {
+                wrapper.classList.remove('opacity-50');
+            });
+        }
+        fieldIds.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.onchange = handleChange;
+        });
+}
+
+function initFeedbackDetailModal() {
+    var modal = document.getElementById('feedback-detail-modal');
+    var modalBody = document.getElementById('feedback-detail-modal-body');
+    var closeBtn = document.getElementById('feedback-detail-modal-close');
+    var backdrop = document.getElementById('feedback-detail-modal-backdrop');
+    if (!modal || !modalBody) return;
+    function openModal() { modal.classList.remove('hidden'); }
+    function closeModal() { modal.classList.add('hidden'); }
+
+    document.querySelectorAll('.feedback-view-btn').forEach(function(btn) {
+        btn.onclick = function() {
+            var targetId = btn.getAttribute('data-feedback-target');
+            var tpl = targetId ? document.getElementById(targetId) : null;
+            if (!tpl) return;
+            modalBody.innerHTML = tpl.innerHTML;
+            openModal();
+        };
+    });
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initFeedbackFilters();
+    initFeedbackDownloadModal();
+    initFeedbackDetailModal();
+});
+</script>
 {% endblock %}

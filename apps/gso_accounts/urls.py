@@ -78,6 +78,7 @@ urlpatterns = [
     path('staff/account-management/', views.StaffAccountManagementView.as_view(), name='staff_account_management'),
     path('staff/account-management/user/add/', views.DirectorUserCreateView.as_view(), name='staff_account_user_add'),
     path('staff/account-management/user/<int:pk>/edit/', views.DirectorUserEditView.as_view(), name='staff_account_user_edit'),
+    path('staff/account-management/user/<int:pk>/status-action/', views.UserStatusActionView.as_view(), name='staff_account_user_status_action'),
     path('staff/account-management/assign-oic/', views.AssignOICView.as_view(), name='staff_assign_oic'),
     path('staff/account-management/revoke-oic/', views.RevokeOICView.as_view(), name='staff_revoke_oic'),
     path('staff/activity-log/', views.StaffActivityLogView.as_view(), name='staff_activity_log'),
@@ -98,4 +99,5 @@ urlpatterns = [
     path('password-reset/resend-otp/', views.GsoPasswordResetOTPResendView.as_view(), name='password_reset_resend_otp'),
     path('password-reset/new-password/', views.GsoPasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('password-reset/complete/', views.GsoPasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('invite/set-password/<uidb64>/<token>/', views.AccountInviteSetPasswordView.as_view(), name='invite_set_password'),
 ]

@@ -690,7 +690,7 @@
                 <div class="mt-2 flex items-center justify-between gap-3">
                     <p class="text-xs text-slate-500 dark:text-slate-400">{{ war.period_start|date:"M d, Y" }} – {{ war.period_end|date:"M d, Y" }}{% if war.created_at %} · Added {{ war.created_at|date:"M j, Y" }}{% endif %}</p>
                     {% if can_edit_war %}
-                    <a href="{% url 'gso_accounts:staff_war_edit' war.pk %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                    <a href="{% url 'gso_accounts:staff_war_edit' war.pk %}" class="request-war-edit-btn inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" data-edit-url="{% url 'gso_accounts:staff_war_edit' war.pk %}" data-next-url="{{ request.get_full_path }}">
                         <span class="material-symbols-outlined text-sm">edit</span> Edit WAR
                     </a>
                     {% endif %}
@@ -728,15 +728,26 @@
     <div id="feedbackModal" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
         <div class="fixed inset-0 bg-black/50 transition-opacity" onclick="document.getElementById('feedbackModal').classList.add('hidden')"></div>
         <div class="flex min-h-full items-center justify-center p-4">
-            <div class="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+            <div class="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl flex flex-col">
+                <div id="feedbackSuccessPopup" class="hidden absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/30">
+                    <div class="w-full max-w-xs rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 shadow-2xl p-5 text-center">
+                        <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
+                        </div>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-slate-100">Feedback submitted</h4>
+                        <p id="feedbackSuccessPopupText" class="mt-1 text-sm text-slate-500 dark:text-slate-400">Thank you. Your feedback has been submitted.</p>
+                    </div>
+                </div>
                 <div class="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-6 py-4">
                     <h3 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Client Satisfaction Measurement (CSM) Form</h3>
                     <button type="button" onclick="document.getElementById('feedbackModal').classList.add('hidden')" class="close-btn" aria-label="Close">
                         <span class="material-symbols-outlined text-2xl close-icon">close</span>
                     </button>
                 </div>
-                <form method="post" action="{% url 'gso_requests:requestor_request_feedback' req.pk %}" class="p-6 space-y-6">
+                <form id="feedbackModalForm" method="post" action="{% url 'gso_requests:requestor_request_feedback' req.pk %}" data-detail-url="{% url 'gso_requests:requestor_request_detail' req.pk %}" class="p-6 space-y-6 overflow-y-auto flex-1">
                     {% csrf_token %}
+                    <div id="feedbackSuccessAlert" class="hidden rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300"></div>
+                    <div id="feedbackErrorAlert" class="hidden rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-3 text-sm text-red-700 dark:text-red-300"></div>
                     <div>
                         <h4 class="text-xs font-semibold text-primary uppercase tracking-wide mb-3">Part I: Citizen's Charter Awareness (CC1–CC3)</h4>
                         <div class="space-y-3">
@@ -786,5 +797,91 @@
         </div>
     </div>
     {% endif %}
+    {% endif %}
+
+    {% if not is_requestor_layout and can_edit_war %}
+    <div id="request-war-edit-modal" class="hidden fixed inset-0 z-[120] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="request-war-edit-modal-title">
+        <div id="request-war-edit-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
+        <div class="flex min-h-full items-center justify-center p-4">
+            <div class="relative w-full max-w-2xl max-h-[90vh] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl flex flex-col">
+                <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 id="request-war-edit-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit WAR</h3>
+                    <button type="button" id="request-war-edit-modal-close" class="close-btn" aria-label="Close">
+                        <span class="material-symbols-outlined close-icon">close</span>
+                    </button>
+                </div>
+                <div id="request-war-edit-modal-body" class="p-6 overflow-y-auto flex-1">
+                    <p class="text-slate-500 dark:text-slate-400 text-sm">Loading...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var modal = document.getElementById('request-war-edit-modal');
+        var body = document.getElementById('request-war-edit-modal-body');
+        var closeBtn = document.getElementById('request-war-edit-modal-close');
+        var backdrop = document.getElementById('request-war-edit-modal-backdrop');
+        if (!modal || !body) return;
+
+        function openModal() { modal.classList.remove('hidden'); }
+        function closeModal() { modal.classList.add('hidden'); }
+        function loadForm(url, nextUrl) {
+            if (!url) return;
+            body.innerHTML = '<p class="text-slate-500 dark:text-slate-400 text-sm">Loading...</p>';
+            openModal();
+            var fullUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'partial=1&source=request&next=' + encodeURIComponent(nextUrl || window.location.href);
+            fetch(fullUrl, {
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin'
+            })
+            .then(function(r) { return r.text(); })
+            .then(function(html) { body.innerHTML = html; })
+            .catch(function() {
+                body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not load WAR editor.</p>';
+            });
+        }
+
+        document.querySelectorAll('.request-war-edit-btn').forEach(function(btn) {
+            btn.onclick = function(e) {
+                e.preventDefault();
+                loadForm(btn.getAttribute('data-edit-url') || btn.getAttribute('href'), btn.getAttribute('data-next-url') || window.location.href);
+            };
+        });
+
+        document.addEventListener('click', function (e) {
+            if (!e.target.closest('.js-war-edit-modal-back')) return;
+            closeModal();
+        });
+        document.addEventListener('submit', function (e) {
+            var form = e.target.closest('#war-edit-modal-form');
+            if (!form) return;
+            e.preventDefault();
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin'
+            })
+            .then(function(response) {
+                if (response.redirected) {
+                    closeModal();
+                    window.location.href = response.url;
+                    return '';
+                }
+                return response.text();
+            })
+            .then(function(html) {
+                if (html) body.innerHTML = html;
+            })
+            .catch(function() {
+                body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not save WAR. Please try again.</p>';
+            });
+        });
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (backdrop) backdrop.onclick = closeModal;
+    })();
+    </script>
     {% endif %}
 </div>

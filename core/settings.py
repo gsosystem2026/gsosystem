@@ -212,6 +212,9 @@ GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS = int(os.environ.get('GSO_PASSWORD_RESET_OTP
 GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
     os.environ.get('GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS', '60')
 )
+# Invitation / password-reset token lifetime (used by Django token generator).
+# Default 24 hours for account invitation links.
+PASSWORD_RESET_TIMEOUT = int(os.environ.get('GSO_INVITE_LINK_TIMEOUT_SECONDS', '86400'))
 
 # Phase 8.3: App version for "new version available" prompt (bump on deploy)
 GSO_APP_VERSION = os.environ.get('GSO_APP_VERSION', '1.0')

@@ -4,7 +4,7 @@ import mimetypes
 import os
 
 from django.conf import settings
-from django.http import Http404, HttpResponse, FileResponse
+from django.http import Http404, HttpResponse, FileResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -769,17 +769,29 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
     """Phase 7.1: Submit CSM feedback. Requestor only, for completed requests; one per request."""
     http_method_names = ['post']
 
+    def _is_ajax(self, request):
+        return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
     def post(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit'), pk=pk)
         user = request.user
         if not getattr(user, 'is_requestor', False) or req.requestor_id != user.id:
-            messages.error(request, 'Only the requestor can submit feedback for this request.')
+            msg = 'Only the requestor can submit feedback for this request.'
+            if self._is_ajax(request):
+                return JsonResponse({'ok': False, 'error': msg}, status=403)
+            messages.error(request, msg)
             return redirect('gso_requests:requestor_request_detail', pk=pk)
         if req.status != Request.Status.COMPLETED:
-            messages.warning(request, 'Feedback can only be submitted for completed requests.')
+            msg = 'Feedback can only be submitted for completed requests.'
+            if self._is_ajax(request):
+                return JsonResponse({'ok': False, 'error': msg}, status=400)
+            messages.warning(request, msg)
             return redirect('gso_requests:requestor_request_detail', pk=pk)
         if req.feedback.filter(user=user).exists():
-            messages.warning(request, 'You have already submitted feedback for this request.')
+            msg = 'You have already submitted feedback for this request.'
+            if self._is_ajax(request):
+                return JsonResponse({'ok': False, 'error': msg}, status=400)
+            messages.warning(request, msg)
             return redirect('gso_requests:requestor_request_detail', pk=pk)
         form = RequestFeedbackForm(request.POST)
         if form.is_valid():
@@ -801,9 +813,15 @@ class SubmitFeedbackView(LoginRequiredMixin, View):
                 suggestions=form.cleaned_data.get('suggestions', ''),
                 email=form.cleaned_data.get('email', ''),
             )
-            messages.success(request, 'Thank you. Your feedback has been submitted.')
+            success_msg = 'Thank you. Your feedback has been submitted.'
+            if self._is_ajax(request):
+                return JsonResponse({'ok': True, 'message': success_msg})
+            messages.success(request, success_msg)
         else:
-            messages.error(request, 'Please complete the required fields (CC1 and SQD1–SQD9).')
+            err_msg = 'Please complete the required fields (CC1 and SQD1–SQD9).'
+            if self._is_ajax(request):
+                return JsonResponse({'ok': False, 'error': err_msg}, status=400)
+            messages.error(request, err_msg)
         return redirect('gso_requests:requestor_request_detail', pk=pk)
 
 
