@@ -1,15 +1,18 @@
 """Phase 6.1: WAR create. Phase 6.3/6.4: Work Reports landing, IPMT and WAR Excel export."""
+import json
 from datetime import date as _date, timedelta
 
+from django.contrib.auth import get_user_model
 from django.contrib import messages
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F
-from django.http import HttpResponse
+from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404, render
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils import timezone
 from django.views.generic import CreateView, FormView, TemplateView, UpdateView
+from django.views.decorators.http import require_POST
 
 from apps.gso_accounts.views import StaffRequiredMixin
 from apps.gso_requests.models import Request, RequestFeedback
@@ -21,9 +24,10 @@ from .excel_export import (
     get_war_queryset,
     get_feedback_queryset,
 )
-from .forms import WARForm, IPMTReportForm, WARExportForm, FeedbackExportForm
+from .forms import WARForm, IPMTReportForm, WARExportForm, FeedbackExportForm, SuccessIndicatorForm
 from .war_config import get_war_table_config
-from .models import WorkAccomplishmentReport
+from .models import SuccessIndicator, WorkAccomplishmentReport, IPMTDraft
+from .ai_service import generate_ipmt_accomplishment, is_ai_configured
 
 
 class WARCreateView(StaffRequiredMixin, CreateView):
@@ -132,6 +136,13 @@ class WARUpdateView(StaffRequiredMixin, UpdateView):
         context['war_edit_source'] = self._requested_source() or 'request'
         context['war_edit_next_url'] = self._next_url()
         return context
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        req = getattr(self, 'request_obj', None)
+        if req is not None:
+            kwargs['request_obj'] = req
+        return kwargs
 
     def form_valid(self, form):
         response = super().form_valid(form)
@@ -373,15 +384,162 @@ class IPMTReportView(StaffRequiredMixin, FormView):
                 personnel = form.cleaned_data['personnel']
                 year = form.cleaned_data['year']
                 month = form.cleaned_data['month']
-                buf, _ = build_ipmt_excel(personnel, year, month)
-                filename = f"IPMT_{personnel.username}_{year}_{month:02d}.xlsx"
-                response = HttpResponse(
-                    buf.getvalue(),
-                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                )
-                response['Content-Disposition'] = f'attachment; filename="{filename}"'
-                return response
+                action = (request.GET.get('action') or 'preview').strip().lower()
+                preview_rows = self._build_preview_rows(personnel, year, month)
+                self.preview_rows = preview_rows
+                self.preview_personnel = personnel
+                self.preview_year = year
+                self.preview_month = month
+                draft = IPMTDraft.objects.filter(
+                    personnel=personnel,
+                    year=year,
+                    month=month,
+                ).first()
+                if action == 'download':
+                    edited_rows = self._parse_preview_edits(request.GET.get('preview_edits', ''))
+                    rows_for_export = edited_rows or preview_rows
+                    IPMTDraft.objects.update_or_create(
+                        personnel=personnel,
+                        year=year,
+                        month=month,
+                        defaults={
+                            'rows_json': rows_for_export,
+                            'updated_by': request.user,
+                        }
+                    )
+                    buf, _ = build_ipmt_excel(personnel, year, month, preview_rows=rows_for_export)
+                    filename = f"IPMT_{personnel.username}_{year}_{month:02d}.xlsx"
+                    response = HttpResponse(
+                        buf.getvalue(),
+                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    return response
+                if action == 'preview':
+                    # Draft-first behavior: show saved work by default when available.
+                    if draft and isinstance(draft.rows_json, list) and draft.rows_json:
+                        self.preview_rows = draft.rows_json
+                    IPMTDraft.objects.update_or_create(
+                        personnel=personnel,
+                        year=year,
+                        month=month,
+                        defaults={
+                            'rows_json': self.preview_rows,
+                            'updated_by': request.user,
+                        }
+                    )
+                if action == 'save_draft':
+                    edited_rows = self._parse_preview_edits(request.GET.get('preview_edits', ''))
+                    rows_for_draft = edited_rows or preview_rows
+                    IPMTDraft.objects.update_or_create(
+                        personnel=personnel,
+                        year=year,
+                        month=month,
+                        defaults={
+                            'rows_json': rows_for_draft,
+                            'updated_by': request.user,
+                        }
+                    )
+                    self.preview_rows = rows_for_draft
+                    messages.success(request, 'IPMT draft saved.')
+                if action == 'load_draft':
+                    if draft and isinstance(draft.rows_json, list) and draft.rows_json:
+                        self.preview_rows = draft.rows_json
+                        messages.success(request, 'Latest IPMT draft loaded.')
+                    else:
+                        messages.info(request, 'No saved draft found for this personnel and month.')
+                if action == 'refresh':
+                    self.preview_rows = preview_rows
+                    messages.success(request, 'Preview refreshed from WAR source data.')
         return super().get(request, *args, **kwargs)
+
+    def _build_preview_rows(self, personnel, year, month):
+        start = _date(year, month, 1)
+        if month == 12:
+            end = _date(year, 12, 31)
+        else:
+            end = _date(year, month + 1, 1) - timedelta(days=1)
+        qs = WorkAccomplishmentReport.objects.filter(
+            personnel=personnel,
+            period_start__lte=end,
+            period_end__gte=start,
+        ).select_related('request').prefetch_related('success_indicators').order_by('period_start')
+
+        grouped = {}
+        for war in qs:
+            accomplishment = (war.accomplishments or war.summary or '').strip()
+            if not accomplishment:
+                accomplishment = f"{war.period_start:%b %d} - {war.period_end:%b %d, %Y}: Completed work activity"
+            indicators = list(war.success_indicators.all())
+            if not indicators:
+                continue
+            for indicator in indicators:
+                bucket = grouped.setdefault(
+                    indicator.pk,
+                    {
+                        "order": indicator.display_order or 0,
+                        "indicator": f"{indicator.code}. {indicator.name}" if indicator.code else indicator.name,
+                        "accomplishments": [],
+                        "comment": "Complied",
+                    },
+                )
+                bucket["accomplishments"].append(accomplishment)
+
+        rows = []
+        for payload in sorted(grouped.values(), key=lambda p: (p["order"], p["indicator"].lower())):
+            seen = set()
+            normalized = []
+            for item in payload["accomplishments"]:
+                key = item.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                normalized.append(item)
+            rows.append(
+                {
+                    "indicator": payload["indicator"],
+                    "accomplishments": normalized or [""],
+                    "comment": payload["comment"],
+                }
+            )
+        if not rows:
+            rows = [
+                {
+                    "indicator": "No success indicators tagged yet.",
+                    "accomplishments": ["Tag indicators in WAR first, then regenerate IPMT."],
+                    "comment": "",
+                }
+            ]
+        return rows
+
+    def _parse_preview_edits(self, raw_payload):
+        if not raw_payload:
+            return []
+        try:
+            payload = json.loads(raw_payload)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return []
+        if not isinstance(payload, list):
+            return []
+        parsed = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            indicator = (item.get('indicator') or '').strip()
+            if not indicator:
+                continue
+            accomplishments = item.get('accomplishments') or []
+            if not isinstance(accomplishments, list):
+                accomplishments = [str(accomplishments)]
+            clean_acc = [str(acc).strip() for acc in accomplishments if str(acc).strip()]
+            parsed.append(
+                {
+                    "indicator": indicator,
+                    "accomplishments": clean_acc or [""],
+                    "comment": (item.get('comment') or '').strip(),
+                }
+            )
+        return parsed
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
@@ -392,7 +550,255 @@ class IPMTReportView(StaffRequiredMixin, FormView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'IPMT Report'
-        context['page_description'] = 'Select personnel and period (month/year). Download Excel aligned to success indicators.'
+        context['page_description'] = 'Filter first, preview/edit IPMT rows, then download Excel.'
+        context['preview_rows'] = getattr(self, 'preview_rows', [])
+        context['preview_indicator_options'] = self._get_indicator_options(getattr(self, 'preview_personnel', None))
+        context['preview_personnel'] = getattr(self, 'preview_personnel', None)
+        context['preview_year'] = getattr(self, 'preview_year', None)
+        context['preview_month'] = getattr(self, 'preview_month', None)
+        draft = None
+        if context['preview_personnel'] and context['preview_year'] and context['preview_month']:
+            draft = IPMTDraft.objects.filter(
+                personnel=context['preview_personnel'],
+                year=context['preview_year'],
+                month=context['preview_month'],
+            ).first()
+        context['ipmt_draft'] = draft
+        return context
+
+    def _get_indicator_options(self, personnel):
+        qs = self._get_allowed_indicators_queryset(personnel)
+        options = []
+        for indicator in qs.order_by('display_order', 'code'):
+            label = f"{indicator.code}. {indicator.name}" if indicator.code else indicator.name
+            options.append(label)
+        return options
+
+    def _get_allowed_indicators_queryset(self, personnel):
+        if not personnel:
+            return SuccessIndicator.objects.none()
+        qs = SuccessIndicator.objects.filter(is_active=True)
+        qs = qs.filter(Q(target_unit__isnull=True) | Q(target_unit=personnel.unit))
+        position_title = (getattr(personnel, 'position_title', '') or '').strip()
+        if position_title:
+            qs = qs.filter(Q(target_position='') | Q(target_position__iexact=position_title))
+        else:
+            qs = qs.filter(Q(target_position=''))
+        return qs
+
+
+@require_POST
+def ipmt_generate_accomplishment_view(request):
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'Authentication required.'}, status=401)
+    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user):
+        return JsonResponse({'ok': False, 'error': 'You are not allowed to generate IPMT text.'}, status=403)
+    if not is_ai_configured():
+        return JsonResponse({'ok': False, 'error': 'AI is not configured. Set OPENROUTER_API_KEY first.'}, status=400)
+
+    try:
+        personnel_id = int((request.POST.get('personnel_id') or '').strip())
+        year = int((request.POST.get('year') or '').strip())
+        month = int((request.POST.get('month') or '').strip())
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid personnel or period values.'}, status=400)
+
+    indicator_label = (request.POST.get('indicator') or '').strip()
+    if not indicator_label:
+        return JsonResponse({'ok': False, 'error': 'Select a success indicator first.'}, status=400)
+
+    User = get_user_model()
+    personnel = get_object_or_404(User, pk=personnel_id, role=User.Role.PERSONNEL)
+    helper = IPMTReportView()
+    allowed_indicators = helper._get_allowed_indicators_queryset(personnel).order_by('display_order', 'code')
+
+    indicator_obj = None
+    for indicator in allowed_indicators:
+        label = f"{indicator.code}. {indicator.name}" if indicator.code else indicator.name
+        if label == indicator_label:
+            indicator_obj = indicator
+            break
+    if indicator_obj is None:
+        return JsonResponse({'ok': False, 'error': 'Selected indicator is not valid for this personnel.'}, status=400)
+
+    start = _date(year, month, 1)
+    if month == 12:
+        end = _date(year, 12, 31)
+    else:
+        end = _date(year, month + 1, 1) - timedelta(days=1)
+
+    wars_qs = WorkAccomplishmentReport.objects.filter(
+        personnel=personnel,
+        period_start__lte=end,
+        period_end__gte=start,
+    ).select_related('request').prefetch_related('success_indicators')
+
+    wars_for_indicator = wars_qs.filter(success_indicators=indicator_obj)
+    source_qs = wars_for_indicator if wars_for_indicator.exists() else wars_qs
+    war_accomplishments = []
+    for war in source_qs:
+        text = (war.accomplishments or war.summary or '').strip()
+        if text:
+            war_accomplishments.append(text)
+
+    try:
+        generated = generate_ipmt_accomplishment(
+            indicator_label=indicator_label,
+            indicator_description=indicator_obj.description or '',
+            personnel_name=personnel.get_full_name() or personnel.username,
+            unit_name=personnel.unit.name if personnel.unit_id else 'N/A',
+            year=year,
+            month=month,
+            war_accomplishments=war_accomplishments,
+        )
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'error': f'Generation failed: {exc}'}, status=502)
+
+    return JsonResponse({'ok': True, 'accomplishment': generated.strip()})
+
+
+@require_POST
+def ipmt_autosave_draft_view(request):
+    user = request.user
+    if not user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'Authentication required.'}, status=401)
+    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user):
+        return JsonResponse({'ok': False, 'error': 'You are not allowed to save IPMT drafts.'}, status=403)
+
+    try:
+        personnel_id = int((request.POST.get('personnel_id') or '').strip())
+        year = int((request.POST.get('year') or '').strip())
+        month = int((request.POST.get('month') or '').strip())
+    except (TypeError, ValueError):
+        return JsonResponse({'ok': False, 'error': 'Invalid personnel or period values.'}, status=400)
+
+    raw_rows = request.POST.get('preview_edits', '')
+    try:
+        payload = json.loads(raw_rows) if raw_rows else []
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid preview payload.'}, status=400)
+    if not isinstance(payload, list):
+        return JsonResponse({'ok': False, 'error': 'Invalid preview rows format.'}, status=400)
+
+    User = get_user_model()
+    personnel = get_object_or_404(User, pk=personnel_id, role=User.Role.PERSONNEL)
+
+    clean_rows = []
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        indicator = (item.get('indicator') or '').strip()
+        if not indicator:
+            continue
+        accomplishments = item.get('accomplishments') or []
+        if not isinstance(accomplishments, list):
+            accomplishments = [str(accomplishments)]
+        clean_accomplishments = [str(v).strip() for v in accomplishments if str(v).strip()]
+        clean_rows.append(
+            {
+                'indicator': indicator,
+                'accomplishments': clean_accomplishments or [''],
+                'comment': (item.get('comment') or '').strip(),
+            }
+        )
+
+    IPMTDraft.objects.update_or_create(
+        personnel=personnel,
+        year=year,
+        month=month,
+        defaults={
+            'rows_json': clean_rows,
+            'updated_by': user,
+        }
+    )
+    return JsonResponse({'ok': True})
+
+
+class SuccessIndicatorManageView(StaffRequiredMixin, FormView):
+    """Manage IPMT success indicators from the staff Work Reports area."""
+    template_name = 'staff/success_indicator_manage.html'
+    form_class = SuccessIndicatorForm
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('gso_accounts:login')
+        if getattr(request.user, 'is_requestor', False):
+            return redirect('gso_accounts:requestor_dashboard')
+        if not _can_access_work_reports(request.user):
+            messages.info(request, 'Success Indicators are for GSO Office and Director only.')
+            return redirect('gso_accounts:staff_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Success indicator added.')
+        return redirect('gso_accounts:staff_work_reports_success_indicators')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Success Indicators'
+        context['page_description'] = 'Manage the IPMT success indicator list used when tagging WAR entries.'
+        context['indicators'] = SuccessIndicator.objects.select_related('target_unit').order_by('display_order', 'code')
+        return context
+
+
+class SuccessIndicatorUpdateView(StaffRequiredMixin, UpdateView):
+    """Edit one IPMT success indicator."""
+    model = SuccessIndicator
+    form_class = SuccessIndicatorForm
+    template_name = 'staff/success_indicator_form.html'
+    context_object_name = 'indicator'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('gso_accounts:login')
+        if getattr(request.user, 'is_requestor', False):
+            return redirect('gso_accounts:requestor_dashboard')
+        if not _can_access_work_reports(request.user):
+            messages.info(request, 'Success Indicators are for GSO Office and Director only.')
+            return redirect('gso_accounts:staff_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        self.object = form.save()
+        if self._wants_json():
+            return JsonResponse({'ok': True, 'message': 'Success indicator updated.'})
+        messages.success(self.request, 'Success indicator updated.')
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        if self._wants_json():
+            return JsonResponse({'ok': False, 'errors': form.errors, 'non_field_errors': form.non_field_errors()}, status=400)
+        return super().form_invalid(form)
+
+    def _wants_partial(self):
+        return bool(
+            self.request.GET.get('partial')
+            or self.request.POST.get('partial')
+            or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
+
+    def _wants_json(self):
+        accepts = (self.request.headers.get('Accept') or '').lower()
+        return bool(
+            self.request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            or self.request.POST.get('ajax')
+            or 'application/json' in accepts
+        )
+
+    def get_template_names(self):
+        if self._wants_partial():
+            return ['staff/_success_indicator_edit_form.html']
+        return [self.template_name]
+
+    def get_success_url(self):
+        return reverse('gso_accounts:staff_work_reports_success_indicators')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Edit Success Indicator'
+        context['page_description'] = 'Update the indicator details used by WAR and IPMT.'
         return context
 
 

@@ -16,6 +16,20 @@ class SuccessIndicator(models.Model):
     code = models.CharField(max_length=50, unique=True, help_text='Short code, e.g. SI-01')
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    target_position = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Optional position this indicator applies to, e.g. Carpenter. Leave blank for all positions.',
+    )
+    target_unit = models.ForeignKey(
+        'gso_units.Unit',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='success_indicators',
+        help_text='Optional GSO service unit this indicator applies to. Leave blank for all units.',
+    )
     display_order = models.PositiveSmallIntegerField(default=0, help_text='Order in lists/dropdowns')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -118,6 +132,39 @@ class WorkAccomplishmentReport(models.Model):
         super().save(*args, **kwargs)
 
 
+class IPMTDraft(models.Model):
+    """Saved editable IPMT draft per personnel and period."""
+
+    personnel = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='ipmt_drafts',
+        limit_choices_to={'role': 'PERSONNEL'},
+    )
+    year = models.PositiveSmallIntegerField()
+    month = models.PositiveSmallIntegerField()
+    rows_json = models.JSONField(default=list, blank=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ipmt_drafts_updated',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        unique_together = [('personnel', 'year', 'month')]
+        verbose_name = 'IPMT draft'
+        verbose_name_plural = 'IPMT drafts'
+
+    def __str__(self):
+        person = self.personnel.get_full_name() or self.personnel.username
+        return f"IPMT Draft: {person} ({self.year}-{self.month:02d})"
+
+
 def ensure_war_for_request(request_obj, created_by=None):
     """
     Ensure that a completed request has one WAR per assigned personnel.
@@ -154,16 +201,28 @@ def ensure_war_for_request(request_obj, created_by=None):
     period_end = completed_date.date()
 
     from apps.gso_accounts.models import User  # local import
+    from .ai_service import generate_war_draft, is_ai_configured  # local import
 
     personnel_qs = User.objects.filter(pk__in=to_create_ids)
+    can_generate_ai = is_ai_configured()
     for personnel in personnel_qs:
+        summary = "To be filled"
+        accomplishments = "To be filled"
+        if can_generate_ai:
+            try:
+                ai_draft = generate_war_draft(request_obj=request_obj, personnel=personnel)
+                summary = ai_draft.get("summary") or summary
+                accomplishments = ai_draft.get("accomplishments") or accomplishments
+            except Exception:
+                # Fail open: request completion/WAR creation should continue even if AI fails.
+                pass
         WorkAccomplishmentReport.objects.create(
             request=request_obj,
             personnel=personnel,
             period_start=period_start,
             period_end=period_end,
-            summary="To be filled",
-            accomplishments="To be filled",
+            summary=summary,
+            accomplishments=accomplishments,
             material_cost=None,
             labor_cost=None,
             total_cost=None,

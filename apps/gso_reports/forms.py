@@ -1,6 +1,7 @@
 """Phase 6.1: Work Accomplishment Report form."""
 from django import forms
-from .models import WorkAccomplishmentReport
+from django.db.models import Q
+from .models import SuccessIndicator, WorkAccomplishmentReport
 
 
 class WARForm(forms.ModelForm):
@@ -15,10 +16,11 @@ class WARForm(forms.ModelForm):
 
     class Meta:
         model = WorkAccomplishmentReport
-        fields = ['personnel', 'period_start', 'period_end', 'summary', 'accomplishments', 'material_cost', 'labor_cost']
+        fields = ['personnel', 'period_start', 'period_end', 'summary', 'accomplishments', 'success_indicators', 'material_cost', 'labor_cost']
         widgets = {
             'summary': forms.TextInput(attrs={'placeholder': 'Project title', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'accomplishments': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe the project/work…', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
+            'success_indicators': forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
             'material_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'labor_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
         }
@@ -32,6 +34,10 @@ class WARForm(forms.ModelForm):
         self.fields['personnel'].label = 'Assigned Personnel'
         self.fields['period_start'].label = 'Date Started'
         self.fields['period_end'].label = 'Date Completed'
+        self.fields['success_indicators'].label = 'Success Indicators'
+        self.fields['success_indicators'].required = False
+        self.fields['success_indicators'].help_text = 'Select the indicators this work supports. These are used later in IPMT.'
+        self.fields['success_indicators'].queryset = SuccessIndicator.objects.filter(is_active=True).order_by('display_order', 'code')
         self.fields['total_cost_display'].initial = self.instance.total_cost if getattr(self.instance, 'pk', None) else None
 
         if request_obj is not None:
@@ -46,6 +52,11 @@ class WARForm(forms.ModelForm):
             self.fields['personnel'].queryset = User.objects.filter(pk__in=available).order_by('first_name', 'last_name', 'username')
             if len(available) == 1 and not getattr(self.instance, 'pk', None):
                 self.fields['personnel'].initial = available[0]
+            self.fields['success_indicators'].queryset = SuccessIndicator.objects.filter(
+                is_active=True,
+            ).filter(
+                Q(target_unit__isnull=True) | Q(target_unit=request_obj.unit)
+            ).order_by('display_order', 'code')
 
         if getattr(self.instance, 'pk', None):
             # Edit mode: personnel and period are fixed for this WAR entry.
@@ -73,6 +84,13 @@ MONTH_CHOICES = [(i, f'{i:02d} — {["Jan","Feb","Mar","Apr","May","Jun","Jul","
 
 class IPMTReportForm(forms.Form):
     """Phase 6.3: Select personnel and period for IPMT report."""
+    unit = forms.ModelChoiceField(
+        queryset=None,
+        label='Unit (optional)',
+        required=False,
+        empty_label='All units',
+        widget=forms.Select(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+    )
     personnel = forms.ModelChoiceField(
         queryset=None,
         label='Personnel',
@@ -96,14 +114,60 @@ class IPMTReportForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from apps.gso_accounts.models import User
-        self.fields['personnel'].queryset = User.objects.filter(
+        from apps.gso_units.models import Unit
+
+        personnel_qs = User.objects.filter(
             role=User.Role.PERSONNEL,
             is_active=True,
-        ).order_by('first_name', 'last_name', 'username')
+        )
+        self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
+
+        unit_value = None
+        if self.data.get('unit'):
+            unit_value = self.data.get('unit')
+        elif self.initial.get('unit'):
+            unit_value = self.initial.get('unit')
+
+        self.fields['personnel'].queryset = personnel_qs.order_by('first_name', 'last_name', 'username')
         from datetime import date
         today = date.today()
         if not self.initial and not self.data:
             self.initial = {'year': today.year, 'month': today.month}
+
+    def clean(self):
+        cleaned = super().clean()
+        unit = cleaned.get('unit')
+        personnel = cleaned.get('personnel')
+        if unit and personnel and getattr(personnel, 'unit_id', None) != unit.id:
+            self.add_error('personnel', 'Selected personnel is not assigned to the selected unit.')
+        return cleaned
+
+
+class SuccessIndicatorForm(forms.ModelForm):
+    """Staff-side form for IPMT success indicator master data."""
+
+    class Meta:
+        model = SuccessIndicator
+        fields = ['code', 'name', 'description', 'target_unit', 'target_position', 'display_order', 'is_active']
+        widgets = {
+            'code': forms.TextInput(attrs={'placeholder': 'e.g., SI-01', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'name': forms.TextInput(attrs={'placeholder': 'Success indicator title', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'description': forms.Textarea(attrs={'rows': 3, 'placeholder': 'Optional details or expected output', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'target_unit': forms.Select(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'target_position': forms.TextInput(attrs={'placeholder': 'Optional, e.g., Carpenter', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'display_order': forms.NumberInput(attrs={'min': 0, 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'rounded border-slate-300 text-primary focus:ring-primary'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.gso_units.models import Unit
+        self.fields['target_unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
+        self.fields['target_unit'].required = False
+        self.fields['target_unit'].empty_label = 'All units'
+        self.fields['target_position'].required = False
+        self.fields['description'].required = False
+        self.fields['display_order'].initial = self.fields['display_order'].initial or 0
 
 
 class WARExportForm(forms.Form):

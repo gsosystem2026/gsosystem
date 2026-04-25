@@ -1,0 +1,261 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Success Indicators — GSO{% endblock %}
+{% block staff_content %}
+<div class="max-w-6xl space-y-6">
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm mb-3">
+                <span class="material-symbols-outlined text-lg">arrow_back</span> Back to IPMT Report
+            </a>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-6">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Add Indicator</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Use target unit/position only when an indicator applies to a specific group.</p>
+            </div>
+            <form method="post" class="p-6 space-y-4">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                <div class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">{{ form.non_field_errors }}</div>
+                {% endif %}
+                <div>
+                    <label for="{{ form.code.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Code <span class="text-red-500">*</span></label>
+                    {{ form.code }}
+                    {% if form.code.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.code.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Indicator <span class="text-red-500">*</span></label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Description</label>
+                    {{ form.description }}
+                    {% if form.description.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.description.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="{{ form.target_unit.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target unit</label>
+                        {{ form.target_unit }}
+                        {% if form.target_unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.target_unit.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div>
+                        <label for="{{ form.target_position.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target position</label>
+                        {{ form.target_position }}
+                        {% if form.target_position.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.target_position.errors.0 }}</p>{% endif %}
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label for="{{ form.display_order.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Display order</label>
+                        {{ form.display_order }}
+                        {% if form.display_order.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.display_order.errors.0 }}</p>{% endif %}
+                    </div>
+                    <label for="{{ form.is_active.id_for_label }}" class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">
+                        {{ form.is_active }}
+                        Active
+                    </label>
+                </div>
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-lg">add_circle</span>
+                    Add indicator
+                </button>
+            </form>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Current Indicators</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">These appear in WAR tagging, then feed into IPMT.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-slate-50 dark:bg-slate-800/50">
+                        <tr>
+                            <th class="px-5 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Indicator</th>
+                            <th class="px-5 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Target</th>
+                            <th class="px-5 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                            <th class="px-5 py-3 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
+                        {% for indicator in indicators %}
+                        <tr>
+                            <td class="px-5 py-4">
+                                <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ indicator.code }} — {{ indicator.name }}</p>
+                                {% if indicator.description %}<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ indicator.description|truncatechars:120 }}</p>{% endif %}
+                            </td>
+                            <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400">
+                                <p>{% if indicator.target_unit %}{{ indicator.target_unit.name }}{% else %}All units{% endif %}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-500">{% if indicator.target_position %}{{ indicator.target_position }}{% else %}All positions{% endif %}</p>
+                            </td>
+                            <td class="px-5 py-4">
+                                {% if indicator.is_active %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
+                                {% else %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-5 py-4">
+                                <button
+                                    type="button"
+                                    class="js-edit-si-btn text-sm font-semibold text-primary hover:text-primary/80"
+                                    data-edit-url="{% url 'gso_accounts:staff_work_reports_success_indicator_edit' indicator.pk %}"
+                                    data-indicator-label="{{ indicator.code }} — {{ indicator.name }}"
+                                >
+                                    Edit
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="px-5 py-8 text-center text-sm text-slate-500 dark:text-slate-400">No success indicators yet. Add the first one on the left.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="editSiModal" class="hidden fixed inset-0 z-[125] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="editSiModalTitle">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" data-edit-si-close="1"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-2xl rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 id="editSiModalTitle" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Edit success indicator</h3>
+                <button type="button" class="close-btn" data-edit-si-close="1" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
+                </button>
+            </div>
+            <div id="editSiModalBody" class="p-6">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="editSiSuccessPopup" class="hidden fixed inset-0 z-[126]">
+    <div class="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 shadow-2xl p-5 text-center">
+            <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400">task_alt</span>
+            </div>
+            <h4 class="text-base font-bold text-slate-900 dark:text-slate-100">Saved</h4>
+            <p id="editSiSuccessText" class="mt-1 text-sm text-slate-500 dark:text-slate-400"></p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var editSiModal = document.getElementById('editSiModal');
+    var editSiModalBody = document.getElementById('editSiModalBody');
+    var editSiModalTitle = document.getElementById('editSiModalTitle');
+    var editSiSuccessPopup = document.getElementById('editSiSuccessPopup');
+    var editSiSuccessText = document.getElementById('editSiSuccessText');
+    var activeEditUrl = '';
+
+    function openModal(el) { if (el) el.classList.remove('hidden'); }
+    function closeModal(el) { if (el) el.classList.add('hidden'); }
+
+    function bindEditSiHandlers() {
+        if (!editSiModalBody) return;
+        var cancelBtn = editSiModalBody.querySelector('#editSiCancelBtn');
+        if (cancelBtn) cancelBtn.addEventListener('click', function () { closeModal(editSiModal); });
+    }
+
+    function loadEditSiForm(url, label) {
+        if (!url || !editSiModalBody) return;
+        activeEditUrl = url;
+        if (editSiModalTitle) editSiModalTitle.textContent = 'Edit success indicator';
+        editSiModalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>';
+        openModal(editSiModal);
+        fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'partial=1', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(function (res) { return res.text(); })
+        .then(function (html) {
+            editSiModalBody.innerHTML = html;
+            if (editSiModalTitle && label) editSiModalTitle.textContent = 'Edit: ' + label;
+            bindEditSiHandlers();
+        })
+        .catch(function () {
+            editSiModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load form.</p>';
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.js-edit-si-btn');
+        if (btn) {
+            loadEditSiForm(btn.getAttribute('data-edit-url'), btn.getAttribute('data-indicator-label'));
+            return;
+        }
+        if (e.target.closest('[data-edit-si-close="1"]')) {
+            closeModal(editSiModal);
+        }
+    });
+
+    document.addEventListener('submit', function (e) {
+        var form = e.target.closest('#editSuccessIndicatorForm');
+        if (!form) return;
+        e.preventDefault();
+        var submitBtn = form.querySelector('#editSiSubmitBtn');
+        if (window.GSOUI && typeof window.GSOUI.setButtonLoading === 'function') {
+            window.GSOUI.setButtonLoading(submitBtn, 'Saving...');
+        }
+        var nonField = form.querySelector('#editSiNonFieldError');
+        if (nonField) { nonField.classList.add('hidden'); nonField.textContent = ''; }
+        ['code', 'name', 'description', 'target_unit', 'target_position', 'display_order'].forEach(function (name) {
+            var slot = form.querySelector('#editSiErr_' + name);
+            if (slot) { slot.classList.add('hidden'); slot.textContent = ''; }
+        });
+
+        fetch(activeEditUrl, {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+        .then(function (result) {
+            if (result.ok && result.data && result.data.ok) {
+                closeModal(editSiModal);
+                if (editSiSuccessText) editSiSuccessText.textContent = result.data.message || 'Success indicator updated.';
+                openModal(editSiSuccessPopup);
+                setTimeout(function () { window.location.reload(); }, 900);
+                return;
+            }
+            if (nonField) {
+                var nf = (result.data && result.data.non_field_errors && result.data.non_field_errors[0]) || '';
+                if (nf) { nonField.textContent = nf; nonField.classList.remove('hidden'); }
+            }
+            var errors = (result.data && result.data.errors) || {};
+            Object.keys(errors).forEach(function (field) {
+                var slot = form.querySelector('#editSiErr_' + field);
+                if (slot) { slot.textContent = errors[field][0]; slot.classList.remove('hidden'); }
+            });
+        })
+        .catch(function () {
+            if (nonField) { nonField.textContent = 'Could not save changes. Please try again.'; nonField.classList.remove('hidden'); }
+        })
+        .finally(function () {
+            if (submitBtn && submitBtn.dataset.originalHtml) {
+                submitBtn.disabled = false;
+                submitBtn.removeAttribute('aria-busy');
+                submitBtn.classList.remove('opacity-70', 'cursor-not-allowed');
+                submitBtn.innerHTML = submitBtn.dataset.originalHtml;
+                submitBtn.dataset.loadingApplied = '0';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

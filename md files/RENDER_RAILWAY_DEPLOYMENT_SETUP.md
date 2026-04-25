@@ -34,6 +34,8 @@ Important for new account creation:
 - Director-created users now receive an email invitation to set their password.
 - This requires working SMTP settings in production (`EMAIL_*` + `DEFAULT_FROM_EMAIL` + valid `GSO_SITE_URL`).
 - If email is misconfigured, user account may be created but invite delivery will fail.
+- Account Management uses lifecycle statuses (`Active`, `Suspended`, `Deactivated`). Suspended/deactivated users are blocked at login.
+- Requestor accounts require an **Office/Department**. This is separate from GSO service units (Repair, Electrical, Utility, Motorpool).
 
 Google OAuth:
 
@@ -122,6 +124,8 @@ If `gunicorn` is not yet in `requirements.txt`, add it before go-live.
 6. Request lifecycle sends in-app + email notifications.
 7. Static files load correctly (styles/icons/logo).
 8. Add User sends invitation email and invited user can open link and set password.
+9. Account Management: edit user modal works; requestor Office/Department saves; OIC assign/revoke works.
+10. Account lifecycle: suspend/deactivate blocks login; reinstate/reactivate restores login.
 
 ---
 
@@ -143,6 +147,7 @@ Before major deploy updates:
 - `django_site` still set to `example.com`.
 - Wrong Gmail app password or blocked SMTP.
 - `GSO_SITE_URL` not set to the live HTTPS domain (invite links become wrong).
+- Forgetting to run migrations after deploy (`office_department` and account lifecycle fields must exist).
 
 ---
 
@@ -154,5 +159,7 @@ Before major deploy updates:
 - [ ] Migrations + collectstatic completed.
 - [ ] Auth flows validated (password + Google).
 - [ ] Notification emails validated.
+- [ ] Add User invitation email validated.
+- [ ] Account lifecycle validated (suspend/deactivate/reactivate + login block).
 - [ ] Backup policy enabled.
 

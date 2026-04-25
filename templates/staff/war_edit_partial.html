@@ -43,6 +43,14 @@
             {{ form.accomplishments }}
             {% if form.accomplishments.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.accomplishments.errors.0 }}</p>{% endif %}
         </div>
+        <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.success_indicators.label }}</label>
+            <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                {{ form.success_indicators }}
+            </div>
+            {% if form.success_indicators.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.success_indicators.errors.0 }}</p>{% endif %}
+            {% if form.success_indicators.help_text %}<p class="text-slate-500 dark:text-slate-400 text-xs mt-1">{{ form.success_indicators.help_text }}</p>{% endif %}
+        </div>
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
                 <label for="{{ form.material_cost.id_for_label }}" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.material_cost.label }}</label>

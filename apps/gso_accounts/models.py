@@ -58,6 +58,18 @@ class User(AbstractUser):
         default='',
         help_text='Office/Department for requestor accounts.',
     )
+    employment_status = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Employment status for staff/personnel reports, e.g. Job Order, Permanent.',
+    )
+    position_title = models.CharField(
+        max_length=150,
+        blank=True,
+        default='',
+        help_text='Position title for staff/personnel reports, e.g. Admin Aide-III.',
+    )
     account_status = models.CharField(
         max_length=16,
         choices=AccountStatus.choices,

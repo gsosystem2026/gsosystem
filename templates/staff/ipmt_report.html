@@ -1,34 +1,522 @@
 {% extends "layouts/base_staff.html" %}
 {% block title %}IPMT Report — GSO{% endblock %}
 {% block staff_content %}
-<div class="max-w-xl space-y-6">
+<div class="max-w-6xl space-y-6">
     <div>
         <a href="{% url 'gso_accounts:staff_work_reports' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
             <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Work Reports
         </a>
     </div>
-    <div>
-        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
-        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+        </div>
+        <a href="{% url 'gso_accounts:staff_work_reports_success_indicators' %}" class="inline-flex items-center justify-center gap-2 px-4 py-2 border border-primary/30 bg-primary/10 hover:bg-primary/15 text-primary text-sm font-semibold rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-lg">fact_check</span>
+            Manage Success Indicators
+        </a>
     </div>
-    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
-        <form method="get" action="" class="p-6 space-y-4">
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-visible shadow-sm"
+         id="ipmtPreviewContainer"
+         data-ai-url="{% url 'gso_accounts:staff_work_reports_ipmt_generate_accomplishment' %}"
+         data-autosave-url="{% url 'gso_accounts:staff_work_reports_ipmt_autosave_draft' %}"
+         data-personnel-id="{% if preview_personnel %}{{ preview_personnel.pk }}{% endif %}"
+         data-year="{% if preview_year %}{{ preview_year }}{% endif %}"
+         data-month="{% if preview_month %}{{ preview_month }}{% endif %}">
+        <form method="get" action="" class="p-6 space-y-4" data-no-loading="1" id="ipmtFilterForm">
+            <input type="hidden" name="preview_edits" id="ipmtPreviewEditsInput" value="">
             <div class="flex flex-wrap items-end gap-3 text-sm">
-                {% for field in form %}
-                <div class="flex flex-col gap-1 {% if field.name == 'personnel' %}min-w-[240px]{% elif field.name == 'year' %}min-w-[120px]{% else %}min-w-[180px]{% endif %}">
-                    <label for="{{ field.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ field.errors.0 }}</p>{% endif %}
+                <div class="flex flex-col gap-1 min-w-[190px]">
+                    <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
+                    {{ form.unit }}
+                    {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
                 </div>
-                {% endfor %}
+                <div class="flex flex-col gap-1 min-w-[240px] flex-1">
+                    <label for="{{ form.personnel.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.personnel.label }}</label>
+                    <select name="personnel" id="{{ form.personnel.id_for_label }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        <option value="">Select personnel...</option>
+                        {% with selected_personnel=form.personnel.value|stringformat:"s" %}
+                        {% for p in form.fields.personnel.queryset %}
+                        <option value="{{ p.pk }}" data-unit-id="{{ p.unit_id|default:'' }}" {% if selected_personnel == p.pk|stringformat:"s" %}selected{% endif %}>
+                            {{ p.get_full_name|default:p.username }} ({{ p.get_role_display }})
+                        </option>
+                        {% endfor %}
+                        {% endwith %}
+                    </select>
+                    {% if form.personnel.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.personnel.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex flex-col gap-1 min-w-[120px]">
+                    <label for="{{ form.year.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.year.label }}</label>
+                    {{ form.year }}
+                    {% if form.year.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.year.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="flex flex-col gap-1 min-w-[140px]">
+                    <label for="{{ form.month.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.month.label }}</label>
+                    {{ form.month }}
+                    {% if form.month.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.month.errors.0 }}</p>{% endif %}
+                </div>
                 <div class="flex items-end">
-                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
-                        <span class="material-symbols-outlined text-lg">download</span> Download IPMT Excel
+                    <button type="submit" name="action" value="preview" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                        <span class="material-symbols-outlined text-lg">visibility</span> Generate Preview
                     </button>
                 </div>
+                <div class="group/more relative flex items-end">
+                    <button type="button" class="inline-flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        <span class="material-symbols-outlined text-lg">more_horiz</span> More
+                    </button>
+                    <div class="invisible opacity-0 pointer-events-none absolute right-0 top-full min-w-[220px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-20 p-2 space-y-1 transition-opacity duration-150 group-hover/more:visible group-hover/more:opacity-100 group-hover/more:pointer-events-auto">
+                        <button type="submit" name="action" value="load_draft" class="w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                            <span class="material-symbols-outlined text-base">history</span> Load Saved
+                        </button>
+                        <button type="submit" name="action" value="refresh" class="w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-md">
+                            <span class="material-symbols-outlined text-base">refresh</span> Refresh from WAR
+                        </button>
+                    </div>
+                </div>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400">Tip: Select personnel + month/year, then download. (Filters are compact for consistency.)</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Tip: Preview auto-saves your progress. Edit rows if needed, then download from the preview panel.</p>
+            {% if ipmt_draft %}
+            <p class="text-xs text-emerald-600 dark:text-emerald-400">Saved draft exists for this selection (last updated: {{ ipmt_draft.updated_at|date:"M d, Y h:i A" }}).</p>
+            {% endif %}
         </form>
     </div>
+
+    {% if preview_rows %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-visible shadow-sm">
+        <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">IPMT Preview</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    {% if preview_personnel %}{{ preview_personnel.get_full_name|default:preview_personnel.username }}{% endif %}
+                    {% if preview_year and preview_month %} · {{ preview_year }}-{{ preview_month|stringformat:"02d" }}{% endif %}
+                </p>
+            </div>
+            <button
+                type="submit"
+                id="ipmtDownloadBtn"
+                form="ipmtFilterForm"
+                name="action"
+                value="download"
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors"
+            >
+                <span class="material-symbols-outlined text-lg">download</span> Download IPMT Excel
+            </button>
+        </div>
+        <div class="overflow-visible">
+            <table class="w-full text-sm text-left text-slate-700 dark:text-slate-300">
+                <thead class="text-xs uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                    <tr>
+                        <th class="px-4 py-3 w-[28%]">Success Indicator</th>
+                        <th class="px-4 py-3 w-[44%]">Actual Accomplishments</th>
+                        <th class="px-4 py-3 w-[16%]">Comments / Remarks</th>
+                        <th class="px-4 py-3 w-[12%] text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-800" id="ipmtPreviewBody">
+                    {% for row in preview_rows %}
+                    <tr class="align-top" data-preview-row="1" data-editing="0">
+                        <td class="px-4 py-3">
+                            <p class="ipmt-view-indicator whitespace-pre-line text-slate-800 dark:text-slate-200">{{ row.indicator }}</p>
+                            <select class="ipmt-edit-indicator hidden w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+                                <option value="{{ row.indicator }}" selected>{{ row.indicator }}</option>
+                                {% for opt in preview_indicator_options %}
+                                {% if opt != row.indicator %}
+                                <option value="{{ opt }}">{{ opt }}</option>
+                                {% endif %}
+                                {% endfor %}
+                            </select>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="ipmt-view-accomplishment space-y-1">
+                            {% for accomplishment in row.accomplishments %}
+                            <p class="whitespace-pre-line text-slate-700 dark:text-slate-300">{{ accomplishment }}</p>
+                            {% endfor %}
+                            </div>
+                            <textarea class="ipmt-edit-accomplishment hidden w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100" rows="4">{% for accomplishment in row.accomplishments %}{{ accomplishment }}{% if not forloop.last %}&#10;{% endif %}{% endfor %}</textarea>
+                        </td>
+                        <td class="px-4 py-3">
+                            <p class="ipmt-view-comment whitespace-pre-line text-slate-700 dark:text-slate-300">{{ row.comment|default:'Complied' }}</p>
+                            <input type="text" class="ipmt-edit-comment hidden w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100" value="{{ row.comment|default:'Complied' }}" />
+                        </td>
+                        <td class="px-4 py-3 text-center">
+                            <div class="group/actions relative inline-block text-left">
+                                <button type="button" class="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-haspopup="true" aria-expanded="false">
+                                    <span class="material-symbols-outlined text-lg">more_horiz</span>
+                                </button>
+                                <div data-row-actions-menu="1" class="invisible opacity-0 pointer-events-none absolute right-0 top-full min-w-[220px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-30 p-2 space-y-1 transition-opacity duration-150 group-hover/actions:visible group-hover/actions:opacity-100 group-hover/actions:pointer-events-auto">
+                                    <button type="button" class="ipmt-edit-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">edit</span> Edit
+                                    </button>
+                                    <button type="button" class="ipmt-save-btn hidden w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">check</span> Save
+                                    </button>
+                                    <button type="button" class="ipmt-cancel-btn hidden w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">close</span> Cancel
+                                    </button>
+                                    <button type="button" class="ipmt-add-row-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-primary hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">add</span> Add below
+                                    </button>
+                                    <button type="button" class="ipmt-remove-row-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">delete</span> Remove row
+                                    </button>
+                                    <button type="button" class="ipmt-ai-generate-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md">
+                                        <span class="material-symbols-outlined text-sm">auto_awesome</span> Generate
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <template id="ipmtAddRowTemplate">
+            <tr class="align-top bg-amber-50/70 dark:bg-amber-900/10" data-preview-row="1" data-editing="1">
+                <td class="px-4 py-3">
+                    <p class="ipmt-view-indicator hidden whitespace-pre-line text-slate-800 dark:text-slate-200"></p>
+                    <select class="ipmt-edit-indicator w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100">
+                        <option value="">Select indicator...</option>
+                        {% for opt in preview_indicator_options %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="ipmt-view-accomplishment hidden space-y-1"></div>
+                    <textarea class="ipmt-edit-accomplishment w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100" rows="4" placeholder="Enter accomplishment..."></textarea>
+                </td>
+                <td class="px-4 py-3">
+                    <p class="ipmt-view-comment hidden whitespace-pre-line text-slate-700 dark:text-slate-300"></p>
+                    <input type="text" class="ipmt-edit-comment w-full rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100" value="Complied" />
+                </td>
+                <td class="px-4 py-3 text-center">
+                    <div class="group/actions relative inline-block text-left">
+                        <button type="button" class="inline-flex items-center justify-center h-8 w-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-haspopup="true" aria-expanded="false">
+                            <span class="material-symbols-outlined text-lg">more_horiz</span>
+                        </button>
+                        <div data-row-actions-menu="1" class="invisible opacity-0 pointer-events-none absolute right-0 top-full min-w-[220px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-30 p-2 space-y-1 transition-opacity duration-150 group-hover/actions:visible group-hover/actions:opacity-100 group-hover/actions:pointer-events-auto">
+                            <button type="button" class="ipmt-edit-btn hidden w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                <span class="material-symbols-outlined text-sm">edit</span> Edit
+                            </button>
+                            <button type="button" class="ipmt-save-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-md">
+                                <span class="material-symbols-outlined text-sm">check</span> Save
+                            </button>
+                            <button type="button" class="ipmt-cancel-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                <span class="material-symbols-outlined text-sm">close</span> Cancel
+                            </button>
+                            <button type="button" class="ipmt-add-row-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-primary hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md">
+                                <span class="material-symbols-outlined text-sm">add</span> Add below
+                            </button>
+                            <button type="button" class="ipmt-remove-row-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md">
+                                <span class="material-symbols-outlined text-sm">delete</span> Remove row
+                            </button>
+                            <button type="button" class="ipmt-ai-generate-btn w-full inline-flex items-center gap-2 px-3 py-2 text-left text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-md">
+                                <span class="material-symbols-outlined text-sm">auto_awesome</span> Generate
+                            </button>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        </template>
+    </div>
+    {% endif %}
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var form = document.getElementById('ipmtFilterForm');
+    var downloadBtn = document.getElementById('ipmtDownloadBtn');
+    var previewPayloadInput = document.getElementById('ipmtPreviewEditsInput');
+    var unitSelect = document.getElementById('id_unit');
+    var personnelSelect = document.getElementById('id_personnel');
+    var previewContainer = document.getElementById('ipmtPreviewContainer');
+    var aiUrl = previewContainer ? (previewContainer.dataset.aiUrl || '') : '';
+    var autosaveUrl = previewContainer ? (previewContainer.dataset.autosaveUrl || '') : '';
+    var previewPersonnelId = previewContainer ? (previewContainer.dataset.personnelId || '') : '';
+    var previewYear = previewContainer ? (previewContainer.dataset.year || '') : '';
+    var previewMonth = previewContainer ? (previewContainer.dataset.month || '') : '';
+    if (!form || !previewPayloadInput) return;
+
+    function getCookie(name) {
+        var value = '; ' + document.cookie;
+        var parts = value.split('; ' + name + '=');
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return '';
+    }
+
+    function filterPersonnelByUnit() {
+        if (!unitSelect || !personnelSelect) return;
+        var unitId = unitSelect.value || '';
+        var hasVisible = false;
+        Array.from(personnelSelect.options).forEach(function (opt, idx) {
+            if (idx === 0) {
+                opt.hidden = false;
+                return;
+            }
+            var optUnitId = opt.getAttribute('data-unit-id') || '';
+            var visible = !unitId || (optUnitId === unitId);
+            opt.hidden = !visible;
+            if (visible) hasVisible = true;
+            if (!visible && opt.selected) {
+                personnelSelect.value = '';
+            }
+        });
+        if (unitId && !hasVisible) {
+            personnelSelect.value = '';
+        }
+    }
+
+    function setRowMode(rowEl, isEditing) {
+        rowEl.dataset.editing = isEditing ? '1' : '0';
+        rowEl.querySelectorAll('.ipmt-view-indicator, .ipmt-view-accomplishment, .ipmt-view-comment').forEach(function (el) {
+            el.classList.toggle('hidden', isEditing);
+        });
+        rowEl.querySelectorAll('.ipmt-edit-indicator, .ipmt-edit-accomplishment, .ipmt-edit-comment').forEach(function (el) {
+            el.classList.toggle('hidden', !isEditing);
+        });
+        var editBtn = rowEl.querySelector('.ipmt-edit-btn');
+        var saveBtn = rowEl.querySelector('.ipmt-save-btn');
+        var cancelBtn = rowEl.querySelector('.ipmt-cancel-btn');
+        if (editBtn) editBtn.classList.toggle('hidden', isEditing);
+        if (saveBtn) saveBtn.classList.toggle('hidden', !isEditing);
+        if (cancelBtn) cancelBtn.classList.toggle('hidden', !isEditing);
+    }
+
+    function renderRowView(rowEl) {
+        var indicatorSelect = rowEl.querySelector('.ipmt-edit-indicator');
+        var accomplishmentArea = rowEl.querySelector('.ipmt-edit-accomplishment');
+        var commentInput = rowEl.querySelector('.ipmt-edit-comment');
+        var viewIndicator = rowEl.querySelector('.ipmt-view-indicator');
+        var viewAccomplishment = rowEl.querySelector('.ipmt-view-accomplishment');
+        var viewComment = rowEl.querySelector('.ipmt-view-comment');
+        if (!indicatorSelect || !accomplishmentArea || !commentInput || !viewIndicator || !viewAccomplishment || !viewComment) return;
+        viewIndicator.textContent = indicatorSelect.value || '';
+        viewComment.textContent = commentInput.value || '';
+        viewAccomplishment.innerHTML = '';
+        (accomplishmentArea.value || '').split('\n').map(function (line) { return line.trim(); }).filter(Boolean).forEach(function (line) {
+            var p = document.createElement('p');
+            p.className = 'whitespace-pre-line text-slate-700 dark:text-slate-300';
+            p.textContent = line;
+            viewAccomplishment.appendChild(p);
+        });
+        if (!viewAccomplishment.children.length) {
+            var p = document.createElement('p');
+            p.className = 'whitespace-pre-line text-slate-500 dark:text-slate-400 italic';
+            p.textContent = 'No accomplishment entered.';
+            viewAccomplishment.appendChild(p);
+        }
+    }
+
+    function collectPreviewEdits() {
+        var rows = [];
+        document.querySelectorAll('#ipmtPreviewBody tr[data-preview-row="1"]').forEach(function (rowEl) {
+            var indicatorEl = rowEl.querySelector('.ipmt-edit-indicator');
+            var commentEl = rowEl.querySelector('.ipmt-edit-comment');
+            var accomplishmentEl = rowEl.querySelector('.ipmt-edit-accomplishment');
+            var indicator = indicatorEl ? indicatorEl.value.trim() : '';
+            if (!indicator) return;
+            var accomplishments = (accomplishmentEl ? (accomplishmentEl.value || '') : '')
+                .split('\n')
+                .map(function (v) { return v.trim(); })
+                .filter(Boolean);
+            rows.push({
+                indicator: indicator,
+                accomplishments: accomplishments,
+                comment: commentEl ? (commentEl.value || '').trim() : ''
+            });
+        });
+        return rows;
+    }
+
+    function autosaveDraftInBackground() {
+        if (!autosaveUrl || !previewPersonnelId || !previewYear || !previewMonth) return;
+        var fd = new FormData();
+        fd.append('personnel_id', previewPersonnelId);
+        fd.append('year', previewYear);
+        fd.append('month', previewMonth);
+        fd.append('preview_edits', JSON.stringify(collectPreviewEdits()));
+        fetch(autosaveUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: fd,
+            credentials: 'same-origin'
+        }).catch(function () {
+            // Silent fail: autosave should not block editing flow.
+        });
+    }
+
+    document.querySelectorAll('#ipmtPreviewBody tr[data-preview-row="1"]').forEach(function (rowEl) {
+        renderRowView(rowEl);
+        setRowMode(rowEl, false);
+    });
+
+    if (unitSelect && personnelSelect) {
+        unitSelect.addEventListener('change', filterPersonnelByUnit);
+        filterPersonnelByUnit();
+    }
+
+    // Match filter-menu behavior: open downward by default.
+    // If there's not enough viewport space below, flip upward to avoid clipping.
+    document.querySelectorAll('.group\\/actions').forEach(function (groupEl) {
+        groupEl.addEventListener('mouseenter', function () {
+            var menuEl = groupEl.querySelector('[data-row-actions-menu="1"]');
+            if (!menuEl) return;
+            menuEl.classList.remove('top-full', 'bottom-full');
+            menuEl.classList.add('top-full');
+            var menuRect = menuEl.getBoundingClientRect();
+            if (menuRect.bottom > (window.innerHeight - 8)) {
+                menuEl.classList.remove('top-full');
+                menuEl.classList.add('bottom-full');
+            }
+        });
+    });
+
+    document.addEventListener('click', function (e) {
+        var editBtn = e.target.closest('.ipmt-edit-btn');
+        if (editBtn) {
+            var row = editBtn.closest('tr[data-preview-row="1"]');
+            if (!row) return;
+            row.dataset.originalIndicator = (row.querySelector('.ipmt-edit-indicator') || {}).value || '';
+            row.dataset.originalAccomplishment = (row.querySelector('.ipmt-edit-accomplishment') || {}).value || '';
+            row.dataset.originalComment = (row.querySelector('.ipmt-edit-comment') || {}).value || '';
+            setRowMode(row, true);
+            return;
+        }
+
+        var saveBtn = e.target.closest('.ipmt-save-btn');
+        if (saveBtn) {
+            var rowSave = saveBtn.closest('tr[data-preview-row="1"]');
+            if (!rowSave) return;
+            var indicatorValue = ((rowSave.querySelector('.ipmt-edit-indicator') || {}).value || '').trim();
+            if (!indicatorValue) {
+                alert('Please select a success indicator.');
+                return;
+            }
+            renderRowView(rowSave);
+            setRowMode(rowSave, false);
+            rowSave.classList.remove('bg-amber-50/70', 'dark:bg-amber-900/10');
+            autosaveDraftInBackground();
+            return;
+        }
+
+        var cancelBtn = e.target.closest('.ipmt-cancel-btn');
+        if (cancelBtn) {
+            var rowCancel = cancelBtn.closest('tr[data-preview-row="1"]');
+            if (!rowCancel) return;
+            var indicatorInput = rowCancel.querySelector('.ipmt-edit-indicator');
+            var accomplishmentInput = rowCancel.querySelector('.ipmt-edit-accomplishment');
+            var commentInput = rowCancel.querySelector('.ipmt-edit-comment');
+            if (indicatorInput && rowCancel.dataset.originalIndicator !== undefined) indicatorInput.value = rowCancel.dataset.originalIndicator;
+            if (accomplishmentInput && rowCancel.dataset.originalAccomplishment !== undefined) accomplishmentInput.value = rowCancel.dataset.originalAccomplishment;
+            if (commentInput && rowCancel.dataset.originalComment !== undefined) commentInput.value = rowCancel.dataset.originalComment;
+            renderRowView(rowCancel);
+            setRowMode(rowCancel, false);
+            if (!rowCancel.querySelector('.ipmt-view-indicator') || !rowCancel.querySelector('.ipmt-view-indicator').textContent.trim()) {
+                rowCancel.remove();
+            }
+            return;
+        }
+
+        var addBtn = e.target.closest('.ipmt-add-row-btn');
+        if (addBtn) {
+            var anchorRow = addBtn.closest('tr[data-preview-row="1"]');
+            var tbody = document.getElementById('ipmtPreviewBody');
+            var tpl = document.getElementById('ipmtAddRowTemplate');
+            if (!anchorRow || !tbody || !tpl) return;
+            var fragment = tpl.content.cloneNode(true);
+            var newRow = fragment.querySelector('tr[data-preview-row="1"]');
+            if (!newRow) return;
+            anchorRow.insertAdjacentElement('afterend', newRow);
+            setRowMode(newRow, true);
+            return;
+        }
+
+        var removeBtn = e.target.closest('.ipmt-remove-row-btn');
+        if (removeBtn) {
+            var rowRemove = removeBtn.closest('tr[data-preview-row="1"]');
+            if (!rowRemove) return;
+            var totalRows = document.querySelectorAll('#ipmtPreviewBody tr[data-preview-row="1"]').length;
+            if (totalRows <= 1) {
+                alert('At least one row is required in the preview.');
+                return;
+            }
+            rowRemove.remove();
+            autosaveDraftInBackground();
+            return;
+        }
+
+        var aiBtn = e.target.closest('.ipmt-ai-generate-btn');
+        if (aiBtn) {
+            var rowAi = aiBtn.closest('tr[data-preview-row="1"]');
+            if (!rowAi) return;
+            if (!aiUrl || !previewPersonnelId || !previewYear || !previewMonth) {
+                alert('Preview personnel and period are required before generating.');
+                return;
+            }
+            var indicatorInput = rowAi.querySelector('.ipmt-edit-indicator');
+            var accomplishmentInput = rowAi.querySelector('.ipmt-edit-accomplishment');
+            if (!indicatorInput || !accomplishmentInput) return;
+            var indicatorValue = (indicatorInput.value || '').trim();
+            if (!indicatorValue) {
+                alert('Please select a success indicator first.');
+                return;
+            }
+
+            var originalText = aiBtn.innerHTML;
+            aiBtn.disabled = true;
+            aiBtn.innerHTML = '<span class="material-symbols-outlined text-sm">hourglass_top</span> Generating...';
+
+            var formData = new FormData();
+            formData.append('personnel_id', previewPersonnelId);
+            formData.append('year', previewYear);
+            formData.append('month', previewMonth);
+            formData.append('indicator', indicatorValue);
+
+            fetch(aiUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (payload) {
+                if (!payload.ok) {
+                    throw new Error(payload.error || 'Failed to generate accomplishment.');
+                }
+                accomplishmentInput.value = payload.accomplishment || '';
+                renderRowView(rowAi);
+                setRowMode(rowAi, false);
+                rowAi.classList.remove('bg-amber-50/70', 'dark:bg-amber-900/10');
+                autosaveDraftInBackground();
+            })
+            .catch(function (err) {
+                alert(err.message || 'Failed to generate accomplishment.');
+            })
+            .finally(function () {
+                aiBtn.disabled = false;
+                aiBtn.innerHTML = originalText;
+            });
+        }
+    });
+
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function () {
+            document.querySelectorAll('#ipmtPreviewBody tr[data-preview-row="1"]').forEach(function (rowEl) {
+                if (rowEl.dataset.editing === '1') {
+                    renderRowView(rowEl);
+                    setRowMode(rowEl, false);
+                }
+            });
+            var payload = collectPreviewEdits();
+            previewPayloadInput.value = JSON.stringify(payload);
+        });
+    }
+
+});
+</script>
 {% endblock %}

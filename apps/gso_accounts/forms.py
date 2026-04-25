@@ -103,7 +103,7 @@ class DirectorUserCreateForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department')
+        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department', 'employment_status', 'position_title')
         widgets = {
             'username': forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
             'first_name': forms.TextInput(attrs={'placeholder': 'First name', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
@@ -112,6 +112,8 @@ class DirectorUserCreateForm(forms.ModelForm):
             'role': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'unit': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'office_department': forms.TextInput(attrs={'placeholder': 'Office/Department (e.g., Registrar, HR, Accounting)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+            'employment_status': forms.TextInput(attrs={'placeholder': 'Employment status (e.g., Permanent, Job Order)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+            'position_title': forms.TextInput(attrs={'placeholder': 'Position title (e.g., Carpenter, Admin Aide-III)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -137,10 +139,20 @@ class DirectorUserCreateForm(forms.ModelForm):
         data = super().clean()
         role = data.get('role')
         unit = data.get('unit')
+        employment_status = (data.get('employment_status') or '').strip()
+        position_title = (data.get('position_title') or '').strip()
         if role == User.Role.DIRECTOR:
             self.add_error('role', 'Director accounts cannot be created from Account Management.')
         if role in (User.Role.UNIT_HEAD, User.Role.PERSONNEL) and not unit:
             self.add_error('unit', 'Unit is required for Unit Head and Personnel.')
+        if role == User.Role.PERSONNEL:
+            if not employment_status:
+                self.add_error('employment_status', 'Employment status is required for Personnel.')
+            if not position_title:
+                self.add_error('position_title', 'Position title is required for Personnel.')
+        elif role == User.Role.REQUESTOR:
+            data['employment_status'] = ''
+            data['position_title'] = ''
         office = (data.get('office_department') or '').strip()
         if role == User.Role.REQUESTOR:
             if not office:
@@ -185,7 +197,7 @@ class DirectorUserEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department', 'is_active')
+        fields = ('username', 'first_name', 'last_name', 'email', 'role', 'unit', 'office_department', 'employment_status', 'position_title', 'is_active')
         widgets = {
             'username': forms.TextInput(attrs={'placeholder': 'Username', 'autocomplete': 'username', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-3 py-2 text-sm'}),
             'first_name': forms.TextInput(attrs={'placeholder': 'First name', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
@@ -194,6 +206,8 @@ class DirectorUserEditForm(forms.ModelForm):
             'role': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'unit': forms.Select(attrs={'class': 'rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary min-w-[200px]'}),
             'office_department': forms.TextInput(attrs={'placeholder': 'Office/Department (e.g., Registrar, HR, Accounting)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+            'employment_status': forms.TextInput(attrs={'placeholder': 'Employment status (e.g., Permanent, Job Order)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+            'position_title': forms.TextInput(attrs={'placeholder': 'Position title (e.g., Carpenter, Admin Aide-III)', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -219,10 +233,20 @@ class DirectorUserEditForm(forms.ModelForm):
                 self.add_error('password2', 'Passwords do not match.')
         role = data.get('role')
         unit = data.get('unit')
+        employment_status = (data.get('employment_status') or '').strip()
+        position_title = (data.get('position_title') or '').strip()
         if role == User.Role.DIRECTOR:
             self.add_error('role', 'Director role cannot be assigned from Account Management.')
         if role in (User.Role.UNIT_HEAD, User.Role.PERSONNEL) and not unit:
             self.add_error('unit', 'Unit is required for Unit Head and Personnel.')
+        if role == User.Role.PERSONNEL:
+            if not employment_status:
+                self.add_error('employment_status', 'Employment status is required for Personnel.')
+            if not position_title:
+                self.add_error('position_title', 'Position title is required for Personnel.')
+        elif role == User.Role.REQUESTOR:
+            data['employment_status'] = ''
+            data['position_title'] = ''
         office = (data.get('office_department') or '').strip()
         if role == User.Role.REQUESTOR:
             if not office:

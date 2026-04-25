@@ -6,17 +6,17 @@ from .models import User, AuditLog
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
-    list_display = ('username', 'email', 'get_full_name', 'role', 'unit', 'is_staff', 'is_active')
-    list_filter = ('role', 'unit', 'is_staff', 'is_active')
-    search_fields = ('username', 'email', 'first_name', 'last_name')
+    list_display = ('username', 'email', 'get_full_name', 'role', 'unit', 'office_department', 'position_title', 'employment_status', 'is_staff', 'is_active')
+    list_filter = ('role', 'unit', 'employment_status', 'is_staff', 'is_active')
+    search_fields = ('username', 'email', 'first_name', 'last_name', 'office_department', 'position_title')
     ordering = ('username',)
     filter_horizontal = ('groups', 'user_permissions')
 
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('GSO', {'fields': ('role', 'unit')}),
+        ('GSO', {'fields': ('role', 'unit', 'office_department', 'position_title', 'employment_status')}),
     )
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
-        ('GSO', {'fields': ('role', 'unit')}),
+        ('GSO', {'fields': ('role', 'unit', 'office_department', 'position_title', 'employment_status')}),
     )
 
 

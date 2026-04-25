@@ -25,9 +25,9 @@
                     <p class="text-slate-900 dark:text-slate-100 font-medium mt-1">{{ current_oic.get_full_name|default:current_oic.username }}</p>
                     <p class="text-xs text-slate-500 dark:text-slate-400">{{ current_oic.email|default:current_oic.username }}</p>
                 </div>
-                <form method="post" action="{% url 'gso_accounts:staff_revoke_oic' %}" class="inline">
+                <form method="post" action="{% url 'gso_accounts:staff_revoke_oic' %}" id="revokeOicForm" class="inline">
                     {% csrf_token %}
-                    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Revoke OIC</button>
+                    <button type="button" id="openRevokeOicModalBtn" class="inline-flex items-center gap-2 px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Revoke OIC</button>
                 </form>
             </div>
             {% else %}
@@ -119,6 +119,9 @@
                                 {{ u.office_department|default:"—" }}
                             {% else %}
                                 {% if u.unit %}{{ u.unit.name }}{% else %}—{% endif %}
+                                {% if u.role == 'PERSONNEL' %}
+                                <p class="text-xs text-slate-500 dark:text-slate-500 mt-1">{{ u.position_title|default:"No position yet" }}{% if u.employment_status %} · {{ u.employment_status }}{% endif %}</p>
+                                {% endif %}
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">
@@ -337,6 +340,18 @@
                         {{ create_user_form.unit }}
                         <p id="addUserErr_unit" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
                     </div>
+                    <div id="addUserIpmtWrap" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Employment status <span class="text-red-500">*</span> <span class="normal-case text-[11px] text-slate-500 dark:text-slate-400">(for Personnel/IPMT)</span></label>
+                            {{ create_user_form.employment_status }}
+                            <p id="addUserErr_employment_status" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Position title <span class="text-red-500">*</span> <span class="normal-case text-[11px] text-slate-500 dark:text-slate-400">(for Personnel/IPMT)</span></label>
+                            {{ create_user_form.position_title }}
+                            <p id="addUserErr_position_title" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+                        </div>
+                    </div>
                     <div class="flex justify-end gap-3 pt-2">
                         <button type="button" id="addUserBackBtn" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Back</button>
                         <button type="submit" id="addUserSubmitBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors" data-loading-text="Creating user...">
@@ -431,6 +446,32 @@
         </div>
     </div>
 </div>
+
+{% if current_oic %}
+<div id="revokeOicConfirmModal" class="hidden fixed inset-0 z-[129] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="revokeOicModalTitle">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" data-revoke-oic-close="1"></div>
+    <div class="relative w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 id="revokeOicModalTitle" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Confirm OIC revoke</h3>
+            <button type="button" class="close-btn" data-revoke-oic-close="1" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300">
+            Are you sure you want to revoke OIC from
+            <span class="font-semibold text-slate-900 dark:text-slate-100">{{ current_oic.get_full_name|default:current_oic.username }}</span>?
+        </p>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">After revoke, only the Director can approve requests again.</p>
+        <div class="flex justify-end gap-3 pt-5">
+            <button type="button" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" data-revoke-oic-close="1">Cancel</button>
+            <button type="button" id="confirmRevokeOicBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors shadow-sm shadow-red-600/30">
+                <span class="material-symbols-outlined text-base">dangerous</span>
+                Yes, revoke OIC
+            </button>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -464,10 +505,12 @@
         var roleSelect = editUserModalBody.querySelector('#id_role');
         var unitWrap = editUserModalBody.querySelector('#editUserUnitWrap');
         var officeWrap = editUserModalBody.querySelector('#editUserOfficeWrap');
+        var ipmtWrap = editUserModalBody.querySelector('#editUserIpmtWrap');
         if (!roleSelect) return;
         var role = roleSelect.value;
         if (unitWrap) unitWrap.classList.toggle('hidden', !(role === 'UNIT_HEAD' || role === 'PERSONNEL'));
         if (officeWrap) officeWrap.classList.toggle('hidden', role !== 'REQUESTOR');
+        if (ipmtWrap) ipmtWrap.classList.toggle('hidden', role !== 'PERSONNEL');
     }
 
     function bindEditUserModalHandlers() {
@@ -543,7 +586,7 @@
         }
         var nonField = form.querySelector('#editUserNonFieldError');
         if (nonField) { nonField.classList.add('hidden'); nonField.textContent = ''; }
-        ['username', 'email', 'role', 'unit', 'office_department', 'password2'].forEach(function (name) {
+        ['username', 'email', 'role', 'unit', 'office_department', 'employment_status', 'position_title', 'password2'].forEach(function (name) {
             var slot = form.querySelector('#editUserErr_' + name);
             if (slot) { slot.classList.add('hidden'); slot.textContent = ''; }
         });
@@ -664,6 +707,7 @@
     var addUserNonFieldError = document.getElementById('addUserNonFieldError');
     var addUserUnitWrap = document.getElementById('addUserUnitWrap');
     var addUserOfficeWrap = document.getElementById('addUserOfficeWrap');
+    var addUserIpmtWrap = document.getElementById('addUserIpmtWrap');
     var addUserSuccessPopup = document.getElementById('addUserSuccessPopup');
     var addUserSuccessText = document.getElementById('addUserSuccessText');
 
@@ -680,6 +724,9 @@
             var needsOffice = roleValue === 'REQUESTOR';
             addUserOfficeWrap.classList.toggle('hidden', !needsOffice);
         }
+        if (addUserIpmtWrap) {
+            addUserIpmtWrap.classList.toggle('hidden', roleValue !== 'PERSONNEL');
+        }
     }
     function clearAddUserErrors() {
         if (addUserRoleError) addUserRoleError.classList.add('hidden');
@@ -687,7 +734,7 @@
             addUserNonFieldError.classList.add('hidden');
             addUserNonFieldError.textContent = '';
         }
-        ['username', 'email', 'unit', 'office_department'].forEach(function (name) {
+        ['username', 'email', 'unit', 'office_department', 'employment_status', 'position_title'].forEach(function (name) {
             var el = document.getElementById('addUserErr_' + name);
             if (el) {
                 el.classList.add('hidden');
@@ -803,6 +850,10 @@
     var confirmError = document.getElementById('oicConfirmError');
     var successText = document.getElementById('oicSuccessText');
     var assignForm = document.getElementById('oicAssignForm');
+    var openRevokeBtn = document.getElementById('openRevokeOicModalBtn');
+    var revokeModal = document.getElementById('revokeOicConfirmModal');
+    var confirmRevokeBtn = document.getElementById('confirmRevokeOicBtn');
+    var revokeForm = document.getElementById('revokeOicForm');
     if (!openBtn || !selectModal || !confirmModal || !candidateSelect || !continueBtn || !finalConfirmBtn || !assignForm) return;
 
     var pendingUserId = '';
@@ -896,6 +947,18 @@
             }
         });
     });
+
+    if (openRevokeBtn && revokeModal && confirmRevokeBtn && revokeForm) {
+        openRevokeBtn.addEventListener('click', function () {
+            openModal(revokeModal);
+        });
+        document.querySelectorAll('[data-revoke-oic-close="1"]').forEach(function (el) {
+            el.addEventListener('click', function () { closeModal(revokeModal); });
+        });
+        confirmRevokeBtn.addEventListener('click', function () {
+            revokeForm.submit();
+        });
+    }
 })();
 </script>
 {% endblock %}

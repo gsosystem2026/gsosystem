@@ -1,0 +1,51 @@
+<form id="editSuccessIndicatorForm" method="post" action="{% url 'gso_accounts:staff_work_reports_success_indicator_edit' indicator.pk %}" class="space-y-4" data-no-loading="1">
+    {% csrf_token %}
+    <input type="hidden" name="ajax" value="1" />
+    <p id="editSiNonFieldError" class="hidden text-sm text-red-600 dark:text-red-400"></p>
+
+    <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Code <span class="text-red-500">*</span></label>
+        {{ form.code }}
+        <p id="editSiErr_code" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+    </div>
+    <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Indicator <span class="text-red-500">*</span></label>
+        {{ form.name }}
+        <p id="editSiErr_name" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+    </div>
+    <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Description</label>
+        {{ form.description }}
+        <p id="editSiErr_description" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target unit</label>
+            {{ form.target_unit }}
+            <p id="editSiErr_target_unit" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target position</label>
+            {{ form.target_position }}
+            <p id="editSiErr_target_position" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+        </div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div>
+            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Display order</label>
+            {{ form.display_order }}
+            <p id="editSiErr_display_order" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+        </div>
+        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">
+            {{ form.is_active }}
+            Active
+        </label>
+    </div>
+    <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="editSiCancelBtn" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</button>
+        <button type="submit" id="editSiSubmitBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors" data-loading-text="Saving...">
+            <span class="material-symbols-outlined text-base">save</span>
+            Save changes
+        </button>
+    </div>
+</form>

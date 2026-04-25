@@ -83,6 +83,22 @@
 
 **Neon (this project):** With **`DATABASE_URL`** set to your Neon URI, **`python manage.py gso_db_check`** should show **Engine: PostgreSQL** and **Connection OK**; **`python manage.py migrate --check`** should report no pending migrations. Seed **units** for the requestor dashboard (`python manage.py create_sample_users` and/or **Admin → Units**). **Next:** deploy the **web app** to a host (Part 4) with the same env vars + HTTPS; keep Neon as the DB or use a separate Neon branch for staging.
 
+### 1.4 Account Management — **implemented / polished**
+
+Director-side Account Management is now modal-based and role-aware:
+
+| Area | Status | Notes |
+|------|--------|-------|
+| Add user | Done | Opens as popup; role is selected first; fields adapt by role. |
+| Edit user | Done | Opens as popup; no page navigation from Account Management. |
+| Requestor Office/Department | Done | Requestor accounts require `Office/Department`; one requestor account per office/department. This is separate from the four GSO service units. |
+| Password setup | Done | Director-created users do **not** receive a default password. They receive an email invitation to set their own password. |
+| OIC assignment | Done | Set OIC uses select popup + final confirmation + success feedback. |
+| Account lifecycle | Done | Users can be Active, Suspended, or Deactivated. Suspended/deactivated users are blocked at login. |
+| Audit trail | Done | User creation/edit/status changes and OIC actions are logged in Activity Log. |
+
+**Important production dependency:** account invitation emails require working SMTP settings and a correct `GSO_SITE_URL`; otherwise account creation may succeed but the user may not receive the set-password invitation.
+
 ---
 
 ## Part 2 — Database (PostgreSQL for production) — **configured**
@@ -144,7 +160,7 @@ Neon is **PostgreSQL in the cloud**. This project does not need Neon's SDK — o
 | Test | `python manage.py gso_db_check` → **Connection OK**, host like `*.neon.tech`. |
 | Schema | `python manage.py migrate` (and `migrate --check` should exit 0 when up to date). |
 | Units for requestors | At least one **`gso_units.Unit`** with **`is_active=True`** or the requestor “Service Selection” grid is empty (`create_sample_users` creates five units, or add via Admin). |
-| Users | Create requestors/staff in app or Admin as needed; Neon starts empty after migrate. |
+| Users | Create requestors/staff in Account Management. Requestor accounts require **Office/Department**; staff Unit Head/Personnel require a GSO service unit. Neon starts empty after migrate. |
 
 ### 2.4 After Neon works locally — **what to do next**
 
@@ -245,6 +261,7 @@ Your intent as I understand it:
   - “Given this success indicator and this list of work accomplishments (WARs), write one sentence describing what this person did for this indicator.”  
   - “Given this person’s WARs for this month, suggest which success indicators apply and a short description for each.”
 - **Where it plugs in:** IPMT report page (staff): “Generate descriptions” button per row or “Fill from WARs” that runs AI and pre-fills descriptions. Optionally: background job that pre-generates and stores text.
+- **Data foundation:** Personnel records now carry `position_title` and `employment_status` for IPMT header/profile data. `SuccessIndicator` can also be targeted by GSO unit and/or position, and WAR entries can be tagged to success indicators so IPMT can later be generated from real work data.
 - **Data:** Use existing `SuccessIndicator`, `WorkAccomplishmentReport`, and IPMT export (personnel + month). No need to change the IPMT Excel structure initially; AI can fill the “accomplishments” or a new “indicator description” field used in the export.
 
 **Order:** Implement WAR description/summarization first (simpler); then IPMT per-indicator description generation; then mapping/suggestion if needed.
@@ -286,25 +303,27 @@ So that the main system is “finished,” deployable, and then extended with AI
 | **1** | Deploy web app + production env | Neon DB ready (`DATABASE_URL`); deploy Django with `DEBUG=False`, HTTPS, `collectstatic`, domain; not `runserver`. |
 | **2** | Backup & rollback | Done: `gso_backup` (SQLite copy + `pg_dump -Fc` + JSON); `BACKUP_AND_ROLLBACK.md`; schedule on server. |
 | **3** | Notifications polish | Verify all notification triggers and recipients; optional email. |
-| **4** | Data migration – Excel | At least one import path (e.g. users or success indicators) via command or UI. |
-| **5** | Data migration – scan/OCR | One form type: upload scan → OCR → review screen → save to DB. |
-| **6** | AI – WAR & IPMT description & summarization | AI service + “Generate/improve description” and “Summarize” in WAR form; then IPMT descriptions. |
-| **7** | AI – IPMT mapping/suggestions | Optional: suggest indicators or “fill IPMT from work” for a person/month. |
-| **8** | Attachment offload (Google Drive) | Pending finalization phase: move request attachments to Drive via service account; keep only file ID/link in DB; keep local media fallback until verified. |
-| **9** | Flutter | After main system is stable and deployed; connect to same API. |
+| **4** | Account Management smoke test | Verify add/edit users, invite email, requestor office/department, OIC, suspend/deactivate/reactivate, and login blocking. |
+| **5** | Data migration – Excel | At least one import path (e.g. users or success indicators) via command or UI. |
+| **6** | Data migration – scan/OCR | One form type: upload scan → OCR → review screen → save to DB. |
+| **7** | AI – WAR & IPMT description & summarization | AI service + “Generate/improve description” and “Summarize” in WAR form; then IPMT descriptions. |
+| **8** | AI – IPMT mapping/suggestions | Optional: suggest indicators or “fill IPMT from work” for a person/month. |
+| **9** | Attachment offload (Google Drive) | Pending finalization phase: move request attachments to Drive via service account; keep only file ID/link in DB; keep local media fallback until verified. |
+| **10** | Flutter | After main system is stable and deployed; connect to same API. |
 
 ---
 
 ## Part 8 — Summary Checklist
 
 - **Main system “done” (Part 1):** §1.1 auto-update, §1.2 notifications, §1.3 production settings — **all complete** in code + docs.
+- **Account Management:** Modal add/edit users; requestor Office/Department; invite-based password setup; OIC double-confirm; Active/Suspended/Deactivated lifecycle; Activity Log entries.
 - **Database:** Neon — use **`DATABASE_URL`**; verify with **`gso_db_check`**; seed **units** so requestors see “Service Selection” (Part 2 §2.3). For SQLite-only local dev, leave `DATABASE_URL` unset.
 - **Backup:** Pre-deploy: Neon dashboard + optional manual `gso_backup`. After deploy: schedule + `pg_dump` + optional Drive/sync (Part 3 §3.3, `BACKUP_AND_ROLLBACK.md`).
 - **Deploy:** **Next major step** — host Django (Railway/Render/VPS/etc.), same **`DATABASE_URL`** to Neon, production env vars, HTTPS, static files; then schedule backups on the server.
 - **Attachments (pending finalization):** Keep current local upload during stabilization. Plan Google Drive offload after edge-case/UAT finalization, with role-based access check and migration of existing files.
 - **AI:** WAR & IPMT description generation and summarization only (no request description); then IPMT mapping/suggestions if needed.
 - **Data migration:** Excel import (templates + commands/UI); scan/OCR with review UI for at least one form.
-- **Order:** Deploy app + HTTPS + backup on server → notifications smoke-test → Excel import → scan → AI (WAR → IPMT) → Flutter last.
+- **Order:** Deploy app + HTTPS + backup on server → notifications + Account Management smoke-test → Excel import → scan → AI (WAR → IPMT) → Flutter last.
 
 **Current focus:** Neon is configured; **deploy the web application** (Part 4) so users reach the system on a real URL. After that: **Excel import** (Part 6), **AI** (Part 5), **Flutter** polish — as the school prioritizes.
 

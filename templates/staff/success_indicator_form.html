@@ -1,0 +1,67 @@
+{% extends "layouts/base_staff.html" %}
+{% block title %}Edit Success Indicator — GSO{% endblock %}
+{% block staff_content %}
+<div class="max-w-2xl space-y-6">
+    <div>
+        <a href="{% url 'gso_accounts:staff_work_reports_success_indicators' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm mb-3">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Success Indicators
+        </a>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    </div>
+
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+        <form method="post" class="p-6 space-y-4">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+            <div class="p-3 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">{{ form.non_field_errors }}</div>
+            {% endif %}
+            <div>
+                <label for="{{ form.code.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Code <span class="text-red-500">*</span></label>
+                {{ form.code }}
+                {% if form.code.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.code.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="{{ form.name.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Indicator <span class="text-red-500">*</span></label>
+                {{ form.name }}
+                {% if form.name.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.name.errors.0 }}</p>{% endif %}
+            </div>
+            <div>
+                <label for="{{ form.description.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Description</label>
+                {{ form.description }}
+                {% if form.description.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.description.errors.0 }}</p>{% endif %}
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="{{ form.target_unit.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target unit</label>
+                    {{ form.target_unit }}
+                    {% if form.target_unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.target_unit.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="{{ form.target_position.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target position</label>
+                    {{ form.target_position }}
+                    {% if form.target_position.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.target_position.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                <div>
+                    <label for="{{ form.display_order.id_for_label }}" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Display order</label>
+                    {{ form.display_order }}
+                    {% if form.display_order.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.display_order.errors.0 }}</p>{% endif %}
+                </div>
+                <label for="{{ form.is_active.id_for_label }}" class="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">
+                    {{ form.is_active }}
+                    Active
+                </label>
+            </div>
+            <div class="flex gap-3 pt-2">
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-lg">save</span>
+                    Save changes
+                </button>
+                <a href="{% url 'gso_accounts:staff_work_reports_success_indicators' %}" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

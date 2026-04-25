@@ -23,7 +23,7 @@ def _month_range(year: int, month: int):
     return start, end
 
 
-def build_ipmt_excel(personnel, year: int, month: int):
+def build_ipmt_excel(personnel, year: int, month: int, preview_rows=None):
     """
     Build IPMT Excel: WARs for the given personnel where period overlaps the given month.
     Columns: Request ID, Period Start, Period End, Summary, Accomplishments, Success Indicators.
@@ -36,11 +36,295 @@ def build_ipmt_excel(personnel, year: int, month: int):
         period_start__lte=end,
         period_end__gte=start,
     ).select_related('request', 'personnel').prefetch_related('success_indicators').order_by('period_start')
-    return _war_list_to_excel(
-        qs,
+    return _ipmt_list_to_excel(
+        personnel=personnel,
+        queryset=qs,
         title=f"IPMT Report — {personnel.get_full_name() or personnel.username} — {year}-{month:02d}",
         sheet_name=f"IPMT {year}-{month:02d}",
+        year=year,
+        month=month,
+        rows_override=preview_rows or [],
     )
+
+
+def _month_label(year: int, month: int):
+    start, end = _month_range(year, month)
+    return f"{start.strftime('%B').upper()} {start.day}-{end.day}, {year}"
+
+
+def _ipmt_indicator_rows(queryset):
+    """
+    Build rows for IPMT table:
+    [
+      (indicator_text, [accomplishment1, accomplishment2, ...], comment_text),
+    ]
+    """
+    rows = []
+    grouped = {}
+    for war in queryset:
+        indicators = list(war.success_indicators.all())
+        if not indicators:
+            continue
+        accomplishment_text = (war.accomplishments or war.summary or '').strip()
+        if not accomplishment_text:
+            accomplishment_text = (
+                f"{war.period_start:%b %d} - {war.period_end:%b %d, %Y}: "
+                f"{getattr(getattr(war, 'request', None), 'title', '') or 'Completed work activity'}"
+            )
+        for indicator in indicators:
+            indicator_key = indicator.pk
+            if indicator_key not in grouped:
+                label = f"{indicator.code}. {indicator.name}" if indicator.code else indicator.name
+                grouped[indicator_key] = {
+                    "indicator": label,
+                    "order": indicator.display_order or 0,
+                    "accomplishments": [],
+                }
+            grouped[indicator_key]["accomplishments"].append(accomplishment_text)
+
+    if not grouped:
+        return [("No success indicators tagged yet.", ["Tag indicators in WAR first, then regenerate IPMT."], "")]
+
+    for _, payload in sorted(grouped.items(), key=lambda item: (item[1]["order"], item[1]["indicator"].lower())):
+        unique_accomplishments = []
+        seen = set()
+        for item in payload["accomplishments"]:
+            key = item.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_accomplishments.append(item)
+        rows.append((payload["indicator"], unique_accomplishments, "Complied"))
+    return rows
+
+
+def _ipmt_list_to_excel(personnel, queryset, title="IPMT", sheet_name="IPMT", year=None, month=None, rows_override=None):
+    """
+    Build IPMT workbook matching the provided sample layout:
+    metadata rows + 3-column indicator table + signature block.
+    """
+    wb = Workbook()
+    ws = wb.active
+    ws.title = (sheet_name or "IPMT")[:31]
+
+    thin_border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+    wrap_left = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    wrap_center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # 9-column layout to mirror the formal IPMT header sample.
+    # A-C: Success Indicators | D-G: Accomplishments | H-I: Comments/Remarks
+    widths = {
+        "A": 18, "B": 18, "C": 18,
+        "D": 18, "E": 18, "F": 18, "G": 18,
+        "H": 14, "I": 14,
+    }
+    for col, width in widths.items():
+        ws.column_dimensions[col].width = width
+
+    # Header metadata block (employee + period values)
+    month_text = _month_label(year, month) if year and month else _format_period_range(queryset)
+    unit_name = (
+        getattr(getattr(personnel, "unit", None), "name", None)
+        or "General Services Office"
+    )
+    employee_name = personnel.get_full_name() or getattr(personnel, "username", "") or "—"
+    employment_status = (getattr(personnel, "employment_status", "") or "—").upper()
+    position_title = (getattr(personnel, "position_title", "") or "—").upper()
+
+    # ----- Formal top header -----
+    ws.merge_cells("A1:A4")
+    ws.merge_cells("B1:F2")
+    ws.merge_cells("B3:F4")
+
+    ws["B1"] = "INDIVIDUAL PERFORMANCE\nMONITORING TOOLS"
+    ws["B1"].font = Font(name="Calibri", size=20, bold=True)
+    ws["B1"].alignment = wrap_center
+
+    ws["B3"] = "Work Accomplishment Report"
+    ws["B3"].font = Font(name="Calibri", size=14)
+    ws["B3"].alignment = wrap_center
+
+    # Right metadata box
+    right_labels = [
+        ("G1:H1", "Doc. Ref. No.:", "I1", ""),
+        ("G2:H2", "Effective Date:", "I2", "June 30, 2023"),
+        ("G3:H3", "Revision No.:", "I3", "00"),
+        ("G4:H4", "Page No.:", "I4", "Page 1 of ___"),
+    ]
+    for label_merge, label_text, value_cell, value_text in right_labels:
+        ws.merge_cells(label_merge)
+        ws[label_merge.split(":")[0]] = label_text
+        ws[label_merge.split(":")[0]].font = Font(name="Calibri", size=10)
+        ws[label_merge.split(":")[0]].alignment = Alignment(horizontal="left", vertical="center")
+        ws[value_cell] = value_text
+        ws[value_cell].font = Font(name="Calibri", size=10, bold=True)
+        ws[value_cell].alignment = wrap_center
+
+    # Left logo if available
+    psu_path, _ = _resolve_logo_paths()
+    try:
+        from openpyxl.drawing.image import Image
+        if psu_path and os.path.isfile(psu_path):
+            img_psu = Image(psu_path)
+            # Keep logo visually centered inside the merged A1:A4 header box.
+            img_psu.height = 116
+            img_psu.width = 116
+            ws.add_image(img_psu, "A1")
+    except Exception:
+        pass
+
+    # ----- Employee information rows -----
+    info_rows = [
+        (5, "College/Campus/Department/Unit :", unit_name.upper()),
+        (6, "Name of Employee :", employee_name.upper()),
+        (7, "Status of Employment :", employment_status),
+        (8, "Position :", position_title),
+        (9, "Month:", (month_text or "—").upper()),
+    ]
+    for r, label, value in info_rows:
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3)
+        ws.merge_cells(start_row=r, start_column=4, end_row=r, end_column=9)
+        ws.cell(row=r, column=1, value=label).font = Font(name="Calibri", size=12, bold=True)
+        ws.cell(row=r, column=1).alignment = Alignment(horizontal="right", vertical="center")
+        ws.cell(row=r, column=4, value=value).font = Font(name="Calibri", size=12)
+        ws.cell(row=r, column=4).alignment = wrap_left
+
+    # ----- Table header row -----
+    table_header_row = 10
+    ws.merge_cells(start_row=table_header_row, start_column=1, end_row=table_header_row, end_column=3)
+    ws.merge_cells(start_row=table_header_row, start_column=4, end_row=table_header_row, end_column=7)
+    ws.merge_cells(start_row=table_header_row, start_column=8, end_row=table_header_row, end_column=9)
+    ws.cell(row=table_header_row, column=1, value="*Success Indicators\n(Based on the IPCR Targets)")
+    ws.cell(row=table_header_row, column=4, value="Actual Accomplishments")
+    ws.cell(row=table_header_row, column=8, value="Comments / Remarks")
+    for c in (1, 4, 8):
+        cell = ws.cell(row=table_header_row, column=c)
+        cell.font = Font(name="Calibri", size=11, bold=True)
+        cell.alignment = wrap_center
+        cell.fill = PatternFill(start_color="E7E6E6", end_color="E7E6E6", fill_type="solid")
+
+    row = table_header_row + 1
+    source_rows = []
+    if rows_override:
+        for item in rows_override:
+            indicator_text = str(item.get("indicator", "")).strip()
+            if not indicator_text:
+                continue
+            accomplishments = item.get("accomplishments") or [""]
+            if not isinstance(accomplishments, list):
+                accomplishments = [str(accomplishments)]
+            clean_accomplishments = [str(acc) for acc in accomplishments]
+            source_rows.append((indicator_text, clean_accomplishments, str(item.get("comment", "")).strip()))
+    else:
+        source_rows = _ipmt_indicator_rows(queryset)
+
+    for indicator_text, accomplishments, comment in source_rows:
+        start_row = row
+        entries = accomplishments or [""]
+        for idx, accomplishment in enumerate(entries):
+            if idx == 0:
+                ws.cell(row=row, column=1, value=indicator_text)
+            else:
+                ws.cell(row=row, column=1, value=None)
+            ws.merge_cells(start_row=row, start_column=4, end_row=row, end_column=7)
+            ws.cell(row=row, column=4, value=accomplishment)
+            ws.merge_cells(start_row=row, start_column=8, end_row=row, end_column=9)
+            ws.cell(row=row, column=8, value=comment if idx == 0 else "")
+            row += 1
+        if row - start_row > 1:
+            ws.merge_cells(start_row=start_row, start_column=1, end_row=row - 1, end_column=3)
+        else:
+            ws.merge_cells(start_row=start_row, start_column=1, end_row=start_row, end_column=3)
+        for r in range(start_row, row):
+            for c in range(1, 10):
+                cell = ws.cell(row=r, column=c)
+                cell.font = Font(name="Calibri", size=10)
+                if c <= 7:
+                    cell.alignment = wrap_left
+                else:
+                    cell.alignment = wrap_center
+                cell.border = thin_border
+
+    # Note row
+    note_row = row + 1
+    ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=9)
+    ws.cell(
+        row=note_row,
+        column=1,
+        value="*Based on the IPCR Major Final Output (MFO)/ Program, Activity and Project (PAP), "
+              "select only those success indicators where the accomplishments for the period are aligned to.",
+    )
+    note_cell = ws.cell(row=note_row, column=1)
+    note_cell.font = Font(name="Calibri", size=9, italic=True)
+    note_cell.alignment = wrap_left
+    note_cell.border = thin_border
+    for c in range(2, 10):
+        ws.cell(row=note_row, column=c).border = thin_border
+
+    # Signature block
+    sig_title_row = note_row + 2
+    ws.merge_cells(start_row=sig_title_row, start_column=1, end_row=sig_title_row, end_column=3)
+    ws.merge_cells(start_row=sig_title_row, start_column=7, end_row=sig_title_row, end_column=9)
+    ws.cell(row=sig_title_row, column=1, value="Prepared by:").font = Font(name="Calibri", size=10, bold=True)
+    ws.cell(row=sig_title_row, column=7, value="Checked and Verified by:").font = Font(name="Calibri", size=10, bold=True)
+
+    sig_name_row = sig_title_row + 3
+    ws.merge_cells(start_row=sig_name_row, start_column=1, end_row=sig_name_row, end_column=3)
+    ws.merge_cells(start_row=sig_name_row, start_column=7, end_row=sig_name_row, end_column=9)
+    ws.cell(row=sig_name_row, column=1, value=employee_name).font = Font(name="Calibri", size=10, bold=True)
+
+    from apps.gso_accounts.models import User
+    supervisor = User.objects.filter(role=User.Role.DIRECTOR, is_active=True).order_by('id').first()
+    supervisor_name = (supervisor.get_full_name() if supervisor else "") or ""
+    ws.cell(row=sig_name_row, column=7, value=supervisor_name.upper()).font = Font(name="Calibri", size=10, bold=True)
+
+    sig_role_row = sig_name_row + 1
+    ws.merge_cells(start_row=sig_role_row, start_column=1, end_row=sig_role_row, end_column=3)
+    ws.merge_cells(start_row=sig_role_row, start_column=7, end_row=sig_role_row, end_column=9)
+    ws.cell(row=sig_role_row, column=1, value="Employee").font = Font(name="Calibri", size=10)
+    ws.cell(row=sig_role_row, column=7, value="Department Head/ Supervisor").font = Font(name="Calibri", size=10)
+
+    # Border + row height tuning
+    for r in range(1, sig_role_row + 1):
+        if r >= table_header_row:
+            ws.row_dimensions[r].height = 34
+        else:
+            ws.row_dimensions[r].height = 22
+    ws.row_dimensions[1].height = 28
+    ws.row_dimensions[2].height = 28
+    ws.row_dimensions[3].height = 24
+    ws.row_dimensions[4].height = 22
+    ws.row_dimensions[note_row].height = 36
+
+    # Add borders for entire printable header and metadata area.
+    for r in range(1, table_header_row):
+        for c in range(1, 10):
+            cell = ws.cell(row=r, column=c)
+            cell.border = thin_border
+            if r >= 5:
+                cell.alignment = wrap_left if c <= 7 else wrap_center
+
+    # Make the title + subtitle feel like one connected block:
+    # keep only the outer border for B1:F4, remove internal divider lines.
+    border_none = Side(style=None)
+    for r in range(1, 5):
+        for c in range(2, 7):
+            ws.cell(row=r, column=c).border = Border(
+                left=thin_border.left if c == 2 else border_none,
+                right=thin_border.right if c == 6 else border_none,
+                top=thin_border.top if r == 1 else border_none,
+                bottom=thin_border.bottom if r == 4 else border_none,
+            )
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf, title.replace(" ", "_")[:80]
 
 
 def build_war_export_excel(queryset, title="WAR Export", unit=None, split_by_unit_when_all=False):

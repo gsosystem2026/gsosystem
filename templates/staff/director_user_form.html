@@ -55,6 +55,18 @@
                 {{ form.office_department }}
                 {% if form.office_department.errors %}<p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ form.office_department.errors.0 }}</p>{% endif %}
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="id_employment_status" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Employment status (for Personnel/IPMT)</label>
+                    {{ form.employment_status }}
+                    {% if form.employment_status.errors %}<p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ form.employment_status.errors.0 }}</p>{% endif %}
+                </div>
+                <div>
+                    <label for="id_position_title" class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Position title (for Personnel/IPMT)</label>
+                    {{ form.position_title }}
+                    {% if form.position_title.errors %}<p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ form.position_title.errors.0 }}</p>{% endif %}
+                </div>
+            </div>
             {% if is_edit %}
             <div>
                 <label for="id_is_active" class="flex items-center gap-2 cursor-pointer">
