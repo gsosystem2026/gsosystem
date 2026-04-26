@@ -33,11 +33,14 @@
                     </div>
                     <div id="staff-notif-list" class="overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900">
                         {% for n in user_notifications %}
-                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-staff-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
-                            <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
-                        </a>
+                        <form method="post" action="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-staff-notif-item block border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
+                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                            </button>
+                        </form>
                         {% empty %}
                         <p class="js-staff-notif-empty-initial px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
                         {% endfor %}
@@ -243,6 +246,10 @@
     var notifBtn = document.getElementById('staff-notif-dropdown-btn');
     var notifMenu = document.getElementById('staff-notif-dropdown');
     var notifWrap = document.getElementById('staff-notif-dropdown-wrap');
+    var hasLoadedNotifList = false;
+    var notifListLoading = false;
+    var notifListLoadedAt = 0;
+    var NOTIF_LIST_REFRESH_MS = 60000;
 
     function closeProfile() {
         if (profileMenu) profileMenu.classList.add('hidden');
@@ -266,7 +273,14 @@
         notifBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             var open = !notifMenu.classList.contains('hidden');
-            if (open) closeNotif(); else { closeProfile(); notifMenu.classList.remove('hidden'); notifBtn.setAttribute('aria-expanded', 'true'); }
+            if (open) {
+                closeNotif();
+            } else {
+                closeProfile();
+                notifMenu.classList.remove('hidden');
+                notifBtn.setAttribute('aria-expanded', 'true');
+                maybeRefreshStaffNotificationList(true);
+            }
         });
         document.addEventListener('click', closeNotif);
         if (notifWrap) notifWrap.addEventListener('click', function(e) { e.stopPropagation(); });
@@ -449,7 +463,7 @@
     if (notifTabAll) notifTabAll.addEventListener('click', function () { applyStaffNotifTab('all'); });
     if (notifTabUnread) notifTabUnread.addEventListener('click', function () { applyStaffNotifTab('unread'); });
 
-    function updateStaffNotifications() {
+    function refreshStaffUnreadCount() {
         fetch('/api/v1/notifications/unread_count/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
@@ -461,6 +475,28 @@
                 if (notifMarkAllEl) notifMarkAllEl.classList.toggle('hidden', c === 0);
             })
             .catch(function() {});
+    }
+
+    function maybeRefreshStaffNotificationList(force) {
+        var now = Date.now();
+        if (notifListLoading) return;
+        if (!force && hasLoadedNotifList && (now - notifListLoadedAt) < NOTIF_LIST_REFRESH_MS) return;
+        notifListLoading = true;
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        var csrfToken = getCookie('csrftoken') || '';
         fetch('/api/v1/notifications/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
@@ -480,21 +516,27 @@
                     notifEmpty = document.getElementById('staff-notif-empty');
                 } else {
                     notifListEl.innerHTML = list.map(function(n) {
-                        var cls = 'js-staff-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
+                        var cls = 'js-staff-notif-item block border-b border-slate-100 dark:border-slate-800';
                         if (!n.read) cls += ' bg-primary/5 dark:bg-primary/10';
                         var msg = (n.message || '').replace(/</g, '&lt;');
-                        return '<a href="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></a>';
+                        return '<form method="post" action="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><input type="hidden" name="csrfmiddlewaretoken" value="' + csrfToken + '"><button type="submit" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></button></form>';
                     }).join('');
                     notifListEl.insertAdjacentHTML('beforeend', '<p id="staff-notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>');
                     notifEmpty = document.getElementById('staff-notif-empty');
                 }
                 applyStaffNotifTab(notifListEl.getAttribute('data-active-tab') || 'all');
             })
-            .catch(function() {});
+            .catch(function() {})
+            .finally(function() {
+                hasLoadedNotifList = true;
+                notifListLoading = false;
+                notifListLoadedAt = Date.now();
+            });
     }
     if (notifBadge && notifListEl) {
         applyStaffNotifTab('all');
-        setInterval(updateStaffNotifications, 15000);
+        refreshStaffUnreadCount();
+        setInterval(refreshStaffUnreadCount, 45000);
     }
 })();
 </script>

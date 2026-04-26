@@ -1,6 +1,7 @@
 """Phase 6.3 / 6.4: Excel export for IPMT and WAR using openpyxl."""
 import io
 import os
+import logging
 from datetime import date
 
 from django.conf import settings
@@ -9,6 +10,8 @@ from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
 from openpyxl.utils import get_column_letter
 
 from .war_config import get_war_table_config
+
+logger = logging.getLogger(__name__)
 
 
 def _month_range(year: int, month: int):
@@ -175,8 +178,8 @@ def _ipmt_list_to_excel(personnel, queryset, title="IPMT", sheet_name="IPMT", ye
             img_psu.height = 116
             img_psu.width = 116
             ws.add_image(img_psu, "A1")
-    except Exception:
-        pass
+    except (ImportError, OSError, ValueError):
+        logger.exception('Unable to load IPMT logo image assets.')
 
     # ----- Employee information rows -----
     info_rows = [
@@ -376,8 +379,8 @@ def _get_requesting_office_name(req):
     office = (getattr(requestor, "office_department", "") or "").strip()
     if office:
         return office
-    # Backward-compatible fallback for older records.
-    return requestor.get_full_name() or getattr(requestor, "username", "") or ""
+    # Export should represent office source, not personal identity.
+    return ""
 
 
 def _apply_standard_header(ws, total_columns, period_label="", report_label="WORK ACCOMPLISHMENT REPORT", unit_label="ALL UNITS"):
@@ -459,9 +462,9 @@ def _apply_standard_header(ws, total_columns, period_label="", report_label="WOR
             else:
                 right_col = get_column_letter(max(1, max_col - 1))
                 ws.add_image(img_gso, f"{right_col}1")
-    except Exception:
+    except (ImportError, OSError, ValueError):
         # Export should remain functional even when image loading is unavailable.
-        pass
+        logger.exception('Unable to load WAR/feedback header logo image assets.')
 
     return 10
 

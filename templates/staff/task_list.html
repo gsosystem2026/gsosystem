@@ -42,7 +42,7 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" data-staff-task-pjax="1" class="text-primary hover:underline font-semibold text-sm">View</a>
+                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" data-request-modal="1" class="text-primary hover:underline font-semibold text-sm">View</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -68,10 +68,28 @@
         {% endif %}
     </div>
 </div>
+<div id="staff-request-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="staff-request-modal-title">
+    <div id="staff-request-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 id="staff-request-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Request details</h3>
+            <button type="button" id="staff-request-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined text-xl close-icon">close</span>
+            </button>
+        </div>
+        <div id="staff-request-modal-body" class="p-6 overflow-y-auto">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>
+        </div>
+    </div>
+</div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const staffMain = document.getElementById('staff-main-content');
     if (!staffMain) return;
+    const requestModal = document.getElementById('staff-request-modal');
+    const requestModalBackdrop = document.getElementById('staff-request-modal-backdrop');
+    const requestModalClose = document.getElementById('staff-request-modal-close');
+    const requestModalBody = document.getElementById('staff-request-modal-body');
 
     function setLoading(isLoading) {
         const existing = document.getElementById('staff-main-loading-overlay');
@@ -94,6 +112,96 @@ document.addEventListener('DOMContentLoaded', function () {
             Array.from(oldScript.attributes).forEach(function (attr) { newScript.setAttribute(attr.name, attr.value); });
             newScript.text = oldScript.textContent;
             oldScript.parentNode.replaceChild(newScript, oldScript);
+        });
+    }
+
+    function addPartialParam(url) {
+        if (!url) return '';
+        let out = url;
+        if (out.indexOf('partial=1') === -1) {
+            out += (out.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+        }
+        if (out.indexOf('modal=1') === -1) {
+            out += '&modal=1';
+        }
+        return out;
+    }
+
+    function openRequestModal() {
+        if (requestModal) requestModal.classList.remove('hidden');
+    }
+
+    function closeRequestModal() {
+        if (requestModal) requestModal.classList.add('hidden');
+    }
+
+    function refreshTaskList() {
+        const wrapper = document.getElementById('task-management-wrapper');
+        if (!wrapper) return;
+        let url = window.location.pathname + window.location.search;
+        if (url.indexOf('partial=1') === -1) {
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+        }
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const newWrapper = doc.getElementById('task-management-wrapper');
+                if (newWrapper) {
+                    wrapper.innerHTML = newWrapper.innerHTML;
+                    attachTaskPjaxHandlers();
+                }
+            })
+            .catch(function () {});
+    }
+
+    function renderModalBodyFromHtml(html) {
+        if (!requestModalBody) return;
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const fragment = doc.getElementById('staff-main-content-fragment');
+        requestModalBody.innerHTML = fragment ? fragment.innerHTML : html;
+        runInlineScripts(requestModalBody);
+    }
+
+    function loadRequestModal(url) {
+        if (!requestModalBody || !url) return;
+        openRequestModal();
+        requestModalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>';
+        fetch(addPartialParam(url), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) { renderModalBodyFromHtml(html); })
+            .catch(function () {
+                requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load request details. Please try again.</p>';
+            });
+    }
+
+    if (requestModalBody) {
+        requestModalBody.addEventListener('submit', function (event) {
+            const form = event.target.closest('form');
+            if (!form) return;
+            event.preventDefault();
+            const action = form.getAttribute('action');
+            if (!action) return;
+            fetch(addPartialParam(action), {
+                method: (form.getAttribute('method') || 'POST').toUpperCase(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.text(); })
+                .then(function (html) {
+                    renderModalBodyFromHtml(html);
+                    refreshTaskList();
+                })
+                .catch(function () {
+                    requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not submit action. Please try again.</p>';
+                });
         });
     }
 
@@ -121,6 +229,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function attachTaskPjaxHandlers() {
+        staffMain.querySelectorAll('a[data-request-modal="1"]').forEach(function (link) {
+            link.onclick = function (e) {
+                e.preventDefault();
+                const href = link.getAttribute('href');
+                if (!href) return;
+                loadRequestModal(href);
+            };
+        });
         staffMain.querySelectorAll('a[data-staff-task-pjax="1"], a[data-staff-pjax="1"]').forEach(function (link) {
             link.onclick = function (e) {
                 e.preventDefault();
@@ -145,6 +261,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     attachTaskPjaxHandlers();
+    if (requestModalClose) requestModalClose.onclick = closeRequestModal;
+    if (requestModalBackdrop) requestModalBackdrop.onclick = closeRequestModal;
 });
 </script>
 {% endblock %}

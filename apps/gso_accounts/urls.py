@@ -31,6 +31,7 @@ from apps.gso_reports.views import (
     WARCreateView,
     WARUpdateView,
     WorkReportsLandingView,
+    WorkReportsMigrationView,
     IPMTReportView,
     ipmt_generate_accomplishment_view,
     ipmt_autosave_draft_view,
@@ -76,6 +77,7 @@ urlpatterns = [
     path('staff/task-management/', PersonnelTaskListView.as_view(), name='staff_task_management'),
     path('staff/task-history/', PersonnelTaskHistoryView.as_view(), name='staff_task_history'),
     path('staff/work-reports/', WorkReportsLandingView.as_view(), name='staff_work_reports'),
+    path('staff/work-reports/migrate-report/', WorkReportsMigrationView.as_view(), name='staff_work_reports_migrate_report'),
     path('staff/work-reports/ipmt/', IPMTReportView.as_view(), name='staff_work_reports_ipmt'),
     path('staff/work-reports/ipmt/generate-accomplishment/', ipmt_generate_accomplishment_view, name='staff_work_reports_ipmt_generate_accomplishment'),
     path('staff/work-reports/ipmt/autosave-draft/', ipmt_autosave_draft_view, name='staff_work_reports_ipmt_autosave_draft'),
@@ -99,6 +101,7 @@ urlpatterns = [
     path('requestor/notifications/', views.RequestorNotificationsView.as_view(), name='requestor_notifications'),
     path('requestor/profile/', views.RequestorProfileView.as_view(), name='requestor_profile'),
     path('requestor/profile/edit/', views.RequestorProfileEditView.as_view(), name='requestor_profile_edit'),
+    path('info/<str:page>/', views.PublicInfoPageView.as_view(), name='public_info'),
     path('password-change/', views.GsoPasswordChangeView.as_view(), name='password_change'),
     # Password reset
     path('password-reset/', views.GsoPasswordResetView.as_view(), name='password_reset'),

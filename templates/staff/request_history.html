@@ -60,7 +60,12 @@
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-800">
                     {% for req in request_list %}
                     <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">{{ req.display_id }}</td>
+                        <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
+                            {{ req.display_id }}
+                            {% if req.is_legacy_migrated %}
+                            <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Migrated</span>
+                            {% endif %}
+                        </td>
                         {% if show_unit_filter %}
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ req.unit_name }}</td>
                         {% endif %}

@@ -14,14 +14,16 @@ from django.shortcuts import redirect, get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView, FormView
 from django.db.models import Q, Count
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
-from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
+from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode, url_has_allowed_host_and_scheme
 from django.utils.encoding import force_bytes
 from django.template.loader import render_to_string
 from datetime import timedelta
+import logging
 import secrets
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
@@ -29,10 +31,60 @@ from .forms import GsoAuthenticationForm, GsoPasswordResetForm, GsoPasswordReset
 from .models import User, PasswordResetOTP
 from apps.gso_requests.models import Request
 
+logger = logging.getLogger(__name__)
+
+
+def _notification_unread_cache_key(user_id):
+    return f"notif_unread_count:{user_id}"
+
+
+def _invalidate_notification_unread_cache(user_id):
+    cache.delete(_notification_unread_cache_key(user_id))
+
+
 # Lazy import to avoid circular import
 def _requestor_request_list(user):
     from apps.gso_requests.models import Request
     return Request.objects.filter(requestor=user).order_by('-created_at')[:100]
+
+
+def _invite_email_preflight_issues():
+    """
+    Return deploy-readiness warnings for account invite email delivery.
+    """
+    issues = []
+    backend = (getattr(settings, 'EMAIL_BACKEND', '') or '').strip()
+    site_url = (getattr(settings, 'GSO_SITE_URL', '') or '').strip()
+    default_from = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
+
+    non_production_backends = {
+        'django.core.mail.backends.console.EmailBackend',
+        'django.core.mail.backends.locmem.EmailBackend',
+        'django.core.mail.backends.filebased.EmailBackend',
+        'django.core.mail.backends.dummy.EmailBackend',
+    }
+    if backend in non_production_backends:
+        issues.append(
+            'EMAIL_BACKEND uses a development backend. Use SMTP backend in production.'
+        )
+    if backend == 'django.core.mail.backends.smtp.EmailBackend':
+        if not (getattr(settings, 'EMAIL_HOST', '') or '').strip():
+            issues.append('EMAIL_HOST is missing for SMTP.')
+        if not (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip():
+            issues.append('EMAIL_HOST_USER is missing for SMTP.')
+        if not (getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip():
+            issues.append('EMAIL_HOST_PASSWORD is missing for SMTP.')
+    if not default_from:
+        issues.append('DEFAULT_FROM_EMAIL is empty.')
+    if not site_url:
+        issues.append('GSO_SITE_URL is not set.')
+    else:
+        parsed = urlparse(site_url)
+        if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+            issues.append('GSO_SITE_URL must be an absolute URL with http/https.')
+        elif not getattr(settings, 'DEBUG', True) and parsed.scheme != 'https':
+            issues.append('GSO_SITE_URL must use https when DEBUG=False.')
+    return issues
 
 
 def app_version_view(request):
@@ -102,15 +154,34 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
             request_qs = request_qs.filter(unit_id=user.unit_id)
         elif getattr(user, 'is_personnel', False):
             request_qs = request_qs.filter(assignments__personnel=user).distinct()
-        context['total_requests'] = request_qs.count()
-        context['total_active_requests'] = request_qs.exclude(
-            status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)
-        ).count()
-        # New requests in the last 7 days (for dashboard trend badge)
+        # Compute dashboard counters in one aggregate query (instead of multiple count queries).
         try:
             recent_start = timezone.now() - timedelta(days=7)
-            context['new_requests_last_7_days'] = request_qs.filter(created_at__gte=recent_start).count()
+            counters = request_qs.aggregate(
+                total=Count('id'),
+                total_active=Count(
+                    'id',
+                    filter=~Q(status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)),
+                ),
+                total_completed=Count('id', filter=Q(status=Request.Status.COMPLETED)),
+                recent=Count('id', filter=Q(created_at__gte=recent_start)),
+            )
+            context['total_requests'] = counters['total'] or 0
+            context['total_active_requests'] = counters['total_active'] or 0
+            context['total_completed_requests'] = counters['total_completed'] or 0
+            context['new_requests_last_7_days'] = counters['recent'] or 0
         except Exception:
+            logger.exception(
+                'Failed computing dashboard counters (user_id=%s)',
+                getattr(user, 'id', None),
+            )
+            context['total_requests'] = request_qs.count()
+            context['total_active_requests'] = request_qs.exclude(
+                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)
+            ).count()
+            context['total_completed_requests'] = request_qs.filter(
+                status=Request.Status.COMPLETED
+            ).count()
             context['new_requests_last_7_days'] = 0
 
         # Inventory alerts (low stock) — Director/GSO see all; Unit Head their unit
@@ -123,16 +194,37 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 quantity__lte=F('reorder_level')
             ).count()
         except Exception:
+            logger.exception(
+                'Failed computing inventory alerts for dashboard (user_id=%s)',
+                getattr(user, 'id', None),
+            )
             context['inventory_alerts_count'] = 0
 
         # Unit performance (completion rate per unit) and active unit count — for Director/GSO only
         if context['show_director_dashboard']:
             units = Unit.objects.filter(is_active=True).order_by('name')
+            unit_totals = (
+                Request.objects
+                .filter(unit__in=units)
+                .values('unit_id')
+                .annotate(
+                    total=Count('id', filter=~Q(status=Request.Status.CANCELLED)),
+                    completed=Count('id', filter=Q(status=Request.Status.COMPLETED)),
+                )
+            )
+            unit_totals_map = {
+                row['unit_id']: {
+                    'total': row['total'],
+                    'completed': row['completed'],
+                }
+                for row in unit_totals
+            }
             per_unit = []
             total_pct = 0
             for u in units:
-                total = Request.objects.filter(unit=u).exclude(status=Request.Status.CANCELLED).count()
-                completed = Request.objects.filter(unit=u, status=Request.Status.COMPLETED).count()
+                totals = unit_totals_map.get(u.id, {'total': 0, 'completed': 0})
+                total = totals['total']
+                completed = totals['completed']
                 pct = round(100 * completed / total) if total else 0
                 per_unit.append({'unit': u, 'percent': pct})
                 total_pct += pct
@@ -149,17 +241,23 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
             unit_reqs = Request.objects.filter(unit_id=user.unit_id)
             context['unit_head_unit'] = getattr(user, 'unit', None)
             pending_submitted = unit_reqs.filter(status=Request.Status.SUBMITTED)
-            context['unit_head_pending_assign_count'] = pending_submitted.count()
-            context['unit_head_pending_assign'] = list(
+            unit_head_pending_assign = list(
                 pending_submitted.select_related('unit').prefetch_related('assignments__personnel').order_by('-is_emergency', '-created_at')[:10]
             )
-            total_unit = unit_reqs.exclude(status=Request.Status.CANCELLED).count()
-            completed_unit = unit_reqs.filter(status=Request.Status.COMPLETED).count()
+            context['unit_head_pending_assign'] = unit_head_pending_assign
+            context['unit_head_pending_assign_count'] = len(unit_head_pending_assign)
+            total_unit = context.get('total_requests', 0)
+            completed_unit = context.get('total_completed_requests', 0)
             context['unit_head_performance_percent'] = round(100 * completed_unit / total_unit) if total_unit else 0
             try:
                 from apps.gso_inventory.models import InventoryItem
                 context['unit_head_inventory_total'] = InventoryItem.objects.filter(unit_id=user.unit_id).count()
             except Exception:
+                logger.exception(
+                    'Failed computing unit head inventory total (user_id=%s, unit_id=%s)',
+                    getattr(user, 'id', None),
+                    getattr(user, 'unit_id', None),
+                )
                 context['unit_head_inventory_total'] = 0
         else:
             context['unit_head_unit'] = None
@@ -188,12 +286,29 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 .prefetch_related('assignments__personnel')
                 .order_by(status_order, '-created_at')[:5]
             )
-            context['personnel_assigned_total'] = personnel_reqs.count()
-            context['personnel_in_progress_count'] = personnel_reqs.filter(status=Request.Status.IN_PROGRESS).count()
-            context['personnel_completed_count'] = personnel_reqs.filter(status=Request.Status.COMPLETED).count()
-            context['personnel_active_count'] = personnel_reqs.exclude(
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)
-            ).count()
+            personnel_stats = personnel_reqs.aggregate(
+                total=Count('id', distinct=True),
+                in_progress=Count('id', filter=Q(status=Request.Status.IN_PROGRESS), distinct=True),
+                completed=Count('id', filter=Q(status=Request.Status.COMPLETED), distinct=True),
+                active=Count(
+                    'id',
+                    filter=Q(
+                        status__in=(
+                            Request.Status.DIRECTOR_APPROVED,
+                            Request.Status.INSPECTION,
+                            Request.Status.IN_PROGRESS,
+                            Request.Status.ON_HOLD,
+                        )
+                    ),
+                    distinct=True,
+                ),
+            )
+            context['personnel_assigned_total'] = personnel_stats['total'] or 0
+            context['personnel_in_progress_count'] = personnel_stats['in_progress'] or 0
+            context['personnel_completed_count'] = personnel_stats['completed'] or 0
+            # "Need action" should only count requests where Personnel can still act.
+            # Exclude DONE_WORKING because that is already awaiting Unit Head review.
+            context['personnel_active_count'] = personnel_stats['active'] or 0
         else:
             context['personnel_assigned_requests'] = []
             context['personnel_assigned_total'] = 0
@@ -214,6 +329,10 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 )
                 context['recent_activity_show_all'] = False
         except Exception:
+            logger.exception(
+                'Failed loading recent activity for dashboard (user_id=%s)',
+                getattr(user, 'id', None),
+            )
             context['recent_activity'] = []
             context['recent_activity_show_all'] = False
 
@@ -411,7 +530,7 @@ class StaffRequestManagementView(StaffPlaceholderView):
 
 
 class StaffRequestHistoryView(StaffRequiredMixin, ListView):
-    """Unit Head: their unit's history. Director/GSO: all units with optional unit filter."""
+    """Unit Head: own unit history. Personnel: own handled requests. Director/GSO: all units."""
     model = Request
     template_name = 'staff/request_history.html'
     context_object_name = 'request_list'
@@ -423,9 +542,11 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
             return redirect('gso_accounts:login')
         if getattr(user, 'is_unit_head', False) and user.unit_id:
             return super().dispatch(request, *args, **kwargs)
+        if getattr(user, 'is_personnel', False):
+            return super().dispatch(request, *args, **kwargs)
         if getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False):
             return super().dispatch(request, *args, **kwargs)
-        messages.info(request, 'Request History is for Unit Heads, GSO Office, and Director.')
+        messages.info(request, 'Request History is for Unit Heads, Personnel, GSO Office, and Director.')
         return redirect('gso_accounts:staff_dashboard')
 
     def get_queryset(self):
@@ -436,11 +557,11 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
                 unit_id=user.unit_id,
                 status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
             )
-        elif getattr(user, 'is_personnel', False) and user.unit_id:
+        elif getattr(user, 'is_personnel', False):
             qs = Request.objects.filter(
-                unit_id=user.unit_id,
+                assignments__personnel=user,
                 status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
-            )
+            ).distinct()
         elif getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False):
             qs = Request.objects.filter(
                 status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
@@ -477,6 +598,10 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
             context['page_description'] = 'Completed and cancelled requests across all units. Filter by unit below.'
             context['units'] = Unit.objects.filter(is_active=True).order_by('name')
             context['unit_filter'] = self.request.GET.get('unit', '')
+        elif getattr(user, 'is_personnel', False):
+            context['page_description'] = 'Completed and cancelled requests that were assigned to you.'
+            context['units'] = []
+            context['unit_filter'] = ''
         else:
             context['page_description'] = 'Completed and cancelled requests for your unit.'
             context['units'] = []
@@ -487,6 +612,108 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
             (Request.Status.COMPLETED, 'Completed'),
             (Request.Status.CANCELLED, 'Cancelled'),
         ]
+        return context
+
+
+class PublicInfoPageView(TemplateView):
+    """Public static informational pages for footer links."""
+    template_name = 'public/info_page.html'
+
+    PAGE_CONTENT = {
+        'privacy': {
+            'title': 'Privacy Policy',
+            'description': 'How GSO Request Management collects and uses data.',
+            'updated': 'April 2026',
+            'sections': [
+                {
+                    'heading': 'Information We Collect',
+                    'body': (
+                        'We collect account profile details, request submission data, '
+                        'attachments, and service processing logs needed to deliver GSO services.'
+                    ),
+                },
+                {
+                    'heading': 'How We Use Information',
+                    'body': (
+                        'Data is used to process service requests, coordinate units and personnel, '
+                        'generate reports, and improve response performance.'
+                    ),
+                },
+                {
+                    'heading': 'Data Access and Retention',
+                    'body': (
+                        'Access is role-based and limited to authorized personnel. Request and '
+                        'audit data are retained according to institutional policy and legal requirements.'
+                    ),
+                },
+            ],
+        },
+        'terms': {
+            'title': 'Terms of Service',
+            'description': 'Usage rules for all users of the GSO Request Management system.',
+            'updated': 'April 2026',
+            'sections': [
+                {
+                    'heading': 'Authorized Use',
+                    'body': (
+                        'The system is for official service requests and related operations only. '
+                        'Users must provide accurate and complete information.'
+                    ),
+                },
+                {
+                    'heading': 'Account Responsibility',
+                    'body': (
+                        'Users are responsible for securing their credentials and for all activity '
+                        'performed using their accounts.'
+                    ),
+                },
+                {
+                    'heading': 'Operational Limits',
+                    'body': (
+                        'The GSO team may suspend misuse, perform maintenance, and update features '
+                        'to protect service quality and security.'
+                    ),
+                },
+            ],
+        },
+        'support': {
+            'title': 'Contact Support',
+            'description': 'Where to report issues or ask for assistance.',
+            'updated': 'April 2026',
+            'sections': [
+                {
+                    'heading': 'Help Channels',
+                    'body': (
+                        'For account, request, or report issues, contact the GSO Office through your '
+                        'official office channel or assigned coordinator.'
+                    ),
+                },
+                {
+                    'heading': 'Include These Details',
+                    'body': (
+                        'Share your request ID, a short issue description, expected result, and screenshots '
+                        'if available so support can respond faster.'
+                    ),
+                },
+                {
+                    'heading': 'Service Hours',
+                    'body': (
+                        'Support follows regular office hours unless emergency handling is required '
+                        'by authorized units.'
+                    ),
+                },
+            ],
+        },
+    }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        page_key = self.kwargs.get('page')
+        payload = self.PAGE_CONTENT.get(page_key, self.PAGE_CONTENT['privacy'])
+        context['info_title'] = payload['title']
+        context['info_description'] = payload['description']
+        context['info_updated'] = payload['updated']
+        context['info_sections'] = payload['sections']
         return context
 
 
@@ -611,7 +838,14 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
 
     def get_queryset(self):
         # Director accounts are considered system-level and are not managed here.
-        qs = User.objects.exclude(role=User.Role.DIRECTOR).select_related('unit').order_by('first_name', 'last_name', 'username')
+        qs = (
+            User.objects.exclude(role=User.Role.DIRECTOR)
+            .exclude(username__in=['migrated_requestor', 'migrated_legacy'])
+            .exclude(username__startswith='migrated_req_')
+            .exclude(username__startswith='migrated_per_')
+            .select_related('unit')
+            .order_by('first_name', 'last_name', 'username')
+        )
         role = self.request.GET.get('role', '').strip()
         if role:
             qs = qs.filter(role=role)
@@ -858,6 +1092,7 @@ class DirectorUserCreateView(StaffRequiredMixin, CreateView):
             self.object = form.save()
         else:
             response = super().form_valid(form)
+        preflight_issues = _invite_email_preflight_issues()
         invite_sent = self._send_set_password_invite(self.object)
         log_audit(
             'user_create',
@@ -871,15 +1106,27 @@ class DirectorUserCreateView(StaffRequiredMixin, CreateView):
                 return JsonResponse({
                     'ok': True,
                     'message': f'User "{self.object.username}" created. Invitation email sent to {self.object.email}.',
+                    'warnings': preflight_issues,
                 })
             return JsonResponse({
                 'ok': True,
                 'message': f'User "{self.object.username}" created, but invite email could not be sent. Check email settings.',
+                'warnings': preflight_issues,
             })
         if invite_sent:
             messages.success(self.request, f'User "{self.object.username}" has been created. A set-password email was sent to {self.object.email}.')
+            if preflight_issues:
+                messages.warning(
+                    self.request,
+                    'Email invite preflight warnings: ' + '; '.join(preflight_issues),
+                )
         else:
             messages.warning(self.request, f'User "{self.object.username}" was created, but invite email could not be sent. Check email settings and resend by creating again or using password reset.')
+            if preflight_issues:
+                messages.warning(
+                    self.request,
+                    'Email invite preflight warnings: ' + '; '.join(preflight_issues),
+                )
         return response
 
     def form_invalid(self, form):
@@ -918,6 +1165,11 @@ class DirectorUserCreateView(StaffRequiredMixin, CreateView):
             )
             return True
         except Exception:
+            logger.exception(
+                'Failed sending set-password invite email (user_id=%s, email=%s)',
+                getattr(user, 'id', None),
+                getattr(user, 'email', None),
+            )
             return False
 
 
@@ -961,7 +1213,7 @@ class DirectorUserEditView(StaffRequiredMixin, UpdateView):
                 messages.error(request, 'Director accounts cannot be edited from Account Management.')
                 return redirect('gso_accounts:staff_account_management')
         except Exception:
-            pass
+            logger.exception('Failed loading user object in DirectorUserEditView.dispatch')
         return super().dispatch(request, *args, **kwargs)
 
     def get_template_names(self):
@@ -1091,13 +1343,16 @@ class RequestorDashboardView(TemplateView):
 
 class NotificationGoView(LoginRequiredMixin, View):
     """Mark one notification as read and redirect to its link (so the red badge updates when user clicks)."""
+    http_method_names = ['post']
 
-    def get(self, request, pk):
+    def post(self, request, pk):
         from apps.gso_notifications.models import Notification
         n = get_object_or_404(Notification, pk=pk, user=request.user)
         n.read = True
         n.save(update_fields=['read'])
-        return redirect(n.link or reverse('gso_accounts:requestor_dashboard'))
+        _invalidate_notification_unread_cache(request.user.id)
+        fallback_name = 'gso_accounts:requestor_dashboard' if getattr(request.user, 'is_requestor', False) else 'gso_accounts:staff_dashboard'
+        return redirect(_safe_redirect_target(request, n.link, fallback_name))
 
 
 class MarkAllNotificationsReadView(LoginRequiredMixin, View):
@@ -1105,16 +1360,14 @@ class MarkAllNotificationsReadView(LoginRequiredMixin, View):
 
     def post(self, request):
         from apps.gso_notifications.models import Notification
-        Notification.objects.filter(user=request.user).update(read=True)
-        return redirect(request.META.get('HTTP_REFERER') or self._notifications_url(request))
+        Notification.objects.filter(user=request.user, read=False).update(read=True)
+        _invalidate_notification_unread_cache(request.user.id)
+        return redirect(_safe_referer_or_fallback(request, self._notifications_url_name(request)))
 
-    def get(self, request):
-        return self.post(request)
-
-    def _notifications_url(self, request):
+    def _notifications_url_name(self, request):
         if getattr(request.user, 'is_requestor', False):
-            return reverse('gso_accounts:requestor_notifications')
-        return reverse('gso_accounts:staff_notifications')
+            return 'gso_accounts:requestor_notifications'
+        return 'gso_accounts:staff_notifications'
 
 
 class StaffNotificationsView(StaffRequiredMixin, TemplateView):
@@ -1166,7 +1419,7 @@ class RequestorProfileEditView(UpdateView):
     success_url = reverse_lazy('gso_accounts:requestor_dashboard')
 
     def get_success_url(self):
-        return self.request.META.get('HTTP_REFERER') or reverse('gso_accounts:requestor_dashboard')
+        return _safe_referer_or_fallback(self.request, 'gso_accounts:requestor_dashboard')
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -1186,7 +1439,7 @@ class StaffProfileEditView(UpdateView):
     template_name = 'staff/profile_edit.html'
 
     def get_success_url(self):
-        return self.request.META.get('HTTP_REFERER') or reverse('gso_accounts:staff_dashboard')
+        return _safe_referer_or_fallback(self.request, 'gso_accounts:staff_dashboard')
 
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -1210,14 +1463,29 @@ def _redirect_with_query(url, params):
     return urlunparse(parsed._replace(query=urlencode(query)))
 
 
+def _safe_redirect_target(request, candidate_url, fallback_name):
+    candidate = (candidate_url or '').strip()
+    if candidate and url_has_allowed_host_and_scheme(
+        url=candidate,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return candidate
+    return reverse(fallback_name)
+
+
+def _safe_referer_or_fallback(request, fallback_name):
+    return _safe_redirect_target(request, request.META.get('HTTP_REFERER'), fallback_name)
+
+
 class GsoPasswordChangeView(LoginRequiredMixin, View):
     """Logged-in change password flow for profile modal."""
     http_method_names = ['post']
 
     def post(self, request):
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-        fallback = reverse('gso_accounts:requestor_dashboard') if getattr(request.user, 'is_requestor', False) else reverse('gso_accounts:staff_dashboard')
-        referer = request.META.get('HTTP_REFERER') or fallback
+        fallback_name = 'gso_accounts:requestor_dashboard' if getattr(request.user, 'is_requestor', False) else 'gso_accounts:staff_dashboard'
+        referer = _safe_referer_or_fallback(request, fallback_name)
         form = PasswordChangeForm(user=request.user, data=request.POST)
         if form.is_valid():
             user = form.save()
@@ -1453,6 +1721,7 @@ class AccountInviteSetPasswordView(FormView):
             uid = urlsafe_base64_decode(uidb64).decode()
             return User.objects.get(pk=uid, is_active=True)
         except Exception:
+            logger.exception('Failed resolving invite user from uidb64')
             return None
 
     def get_form_kwargs(self):

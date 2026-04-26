@@ -63,6 +63,9 @@
                     <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition-colors {% if req.show_urgent_indicator %}border-l-4 border-l-red-500{% endif %}">
                         <td class="px-6 py-4 text-sm font-medium text-slate-900 dark:text-slate-100">
                             {{ req.display_id }}
+                            {% if req.is_legacy_migrated %}
+                            <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Migrated</span>
+                            {% endif %}
                             {% if req.show_urgent_indicator %}
                             <span class="ml-2 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Emergency</span>
                             {% endif %}
@@ -76,7 +79,11 @@
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold {{ req.status_badge_class }}">{{ req.status_display }}</span>
                         </td>
                         <td class="px-6 py-4 text-right">
-                            <a href="{% url 'gso_accounts:staff_request_detail' req.pk %}" data-staff-pjax="1" class="js-staff-request-view text-primary hover:underline font-semibold text-sm">View</a>
+                            <a
+                                href="{% url 'gso_accounts:staff_request_detail' req.pk %}"
+                                data-request-modal="1"
+                                class="js-staff-request-view text-primary hover:underline font-semibold text-sm"
+                            >View</a>
                         </td>
                     </tr>
                     {% empty %}
@@ -94,14 +101,28 @@
             </p>
             <div class="flex gap-2">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                <a href="?page={{ page_obj.next_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
                 {% endif %}
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+<div id="staff-request-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="staff-request-modal-title">
+    <div id="staff-request-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 id="staff-request-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Request details</h3>
+            <button type="button" id="staff-request-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined text-xl close-icon">close</span>
+            </button>
+        </div>
+        <div id="staff-request-modal-body" class="p-6 overflow-y-auto">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>
+        </div>
     </div>
 </div>
 <script>
@@ -112,6 +133,30 @@ function initRequestManagementFilters() {
 
     const fieldIds = ['unit', 'status', 'q'];
     let searchDebounce = null;
+    let loadingOverlay = document.getElementById('request-management-loading-overlay');
+
+    function setRequestManagementLoading(isLoading) {
+        if (!wrapper) return;
+        if (!loadingOverlay) {
+            loadingOverlay = document.createElement('div');
+            loadingOverlay.id = 'request-management-loading-overlay';
+            loadingOverlay.className = 'hidden absolute inset-0 z-30 flex items-center justify-center bg-white/75 dark:bg-slate-900/75';
+            loadingOverlay.innerHTML = '' +
+                '<div class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 shadow-sm">' +
+                    '<span class="material-symbols-outlined ui-loading-spin text-primary">progress_activity</span>' +
+                    '<span class="text-sm font-medium text-slate-700 dark:text-slate-200">Loading requests...</span>' +
+                '</div>';
+            wrapper.classList.add('relative');
+            wrapper.appendChild(loadingOverlay);
+        }
+        if (isLoading) {
+            wrapper.classList.add('opacity-50');
+            loadingOverlay.classList.remove('hidden');
+        } else {
+            wrapper.classList.remove('opacity-50');
+            loadingOverlay.classList.add('hidden');
+        }
+    }
 
     const handleChange = function () {
         const formData = new FormData(form);
@@ -120,7 +165,7 @@ function initRequestManagementFilters() {
         const params = new URLSearchParams(formData);
         const query = params.toString();
         const url = window.location.pathname + (query ? '?' + query : '');
-        wrapper.classList.add('opacity-50');
+        setRequestManagementLoading(true);
         fetch(url, {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin'
@@ -132,17 +177,17 @@ function initRequestManagementFilters() {
                 const newWrapper = doc.getElementById('request-management-wrapper');
                 if (newWrapper) {
                     wrapper.innerHTML = newWrapper.innerHTML;
-                    wrapper.classList.remove('opacity-50');
+                    setRequestManagementLoading(false);
                     initRequestManagementFilters();
                     if (typeof window.attachStaffPjaxHandlers === 'function') {
                         window.attachStaffPjaxHandlers();
                     }
                 } else {
-                    wrapper.classList.remove('opacity-50');
+                    setRequestManagementLoading(false);
                 }
             })
             .catch(function () {
-                wrapper.classList.remove('opacity-50');
+                setRequestManagementLoading(false);
             })
             .finally(function () {});
     };
@@ -170,6 +215,40 @@ function initRequestManagementFilters() {
         } else {
             el.onchange = handleChange;
         }
+    });
+
+    wrapper.querySelectorAll('a[data-request-list-page="1"]').forEach(function (link) {
+        link.onclick = function (event) {
+            event.preventDefault();
+            const href = link.getAttribute('href');
+            if (!href) return;
+            const targetUrl = href.startsWith('?') ? (window.location.pathname + href) : href;
+            setRequestManagementLoading(true);
+            fetch(targetUrl, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            })
+                .then(function (response) { return response.text(); })
+                .then(function (html) {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const newWrapper = doc.getElementById('request-management-wrapper');
+                    if (newWrapper) {
+                        wrapper.innerHTML = newWrapper.innerHTML;
+                        setRequestManagementLoading(false);
+                        initRequestManagementFilters();
+                        if (typeof window.attachStaffPjaxHandlers === 'function') {
+                            window.attachStaffPjaxHandlers();
+                        }
+                        window.history.replaceState({}, '', targetUrl);
+                    } else {
+                        setRequestManagementLoading(false);
+                    }
+                })
+                .catch(function () {
+                    setRequestManagementLoading(false);
+                });
+        };
     });
 }
 
@@ -233,6 +312,105 @@ document.addEventListener('DOMContentLoaded', function () {
                 setStaffMainLoading(false);
             });
     }
+    var requestModal = document.getElementById('staff-request-modal');
+    var requestModalBackdrop = document.getElementById('staff-request-modal-backdrop');
+    var requestModalClose = document.getElementById('staff-request-modal-close');
+    var requestModalBody = document.getElementById('staff-request-modal-body');
+
+    function addPartialParam(url) {
+        if (!url) return '';
+        var out = url;
+        if (out.indexOf('partial=1') === -1) {
+            out += (out.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+        }
+        if (out.indexOf('modal=1') === -1) {
+            out += '&modal=1';
+        }
+        return out;
+    }
+
+    function openRequestModal() {
+        if (requestModal) requestModal.classList.remove('hidden');
+    }
+
+    function closeRequestModal() {
+        if (requestModal) requestModal.classList.add('hidden');
+    }
+
+    function refreshRequestList() {
+        var form = document.getElementById('request-management-filter-form');
+        var wrapper = document.getElementById('request-management-wrapper');
+        if (!form || !wrapper) return;
+        var formData = new FormData(form);
+        formData.delete('page');
+        var params = new URLSearchParams(formData);
+        var url = window.location.pathname + (params.toString() ? '?' + params.toString() : '');
+        fetch(url, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var newWrapper = doc.getElementById('request-management-wrapper');
+                if (newWrapper) {
+                    wrapper.innerHTML = newWrapper.innerHTML;
+                    initRequestManagementFilters();
+                    attachStaffPjaxHandlers();
+                }
+            })
+            .catch(function () {});
+    }
+
+    function renderModalBodyFromHtml(html) {
+        if (!requestModalBody) return;
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var fragment = doc.getElementById('staff-main-content-fragment');
+        requestModalBody.innerHTML = fragment ? fragment.innerHTML : html;
+        runInlineScripts(requestModalBody);
+    }
+
+    function loadRequestModal(url) {
+        if (!requestModalBody || !url) return;
+        openRequestModal();
+        requestModalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>';
+        fetch(addPartialParam(url), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                renderModalBodyFromHtml(html);
+            })
+            .catch(function () {
+                requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load request details. Please try again.</p>';
+            });
+    }
+
+    if (requestModalBody) {
+        requestModalBody.addEventListener('submit', function (event) {
+            var form = event.target.closest('form');
+            if (!form) return;
+            event.preventDefault();
+            var action = form.getAttribute('action');
+            if (!action) return;
+            fetch(addPartialParam(action), {
+                method: (form.getAttribute('method') || 'POST').toUpperCase(),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+                credentials: 'same-origin'
+            })
+                .then(function (r) { return r.text(); })
+                .then(function (html) {
+                    renderModalBodyFromHtml(html);
+                    refreshRequestList();
+                })
+                .catch(function () {
+                    requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not submit action. Please try again.</p>';
+                });
+        });
+    }
+
     function attachStaffPjaxHandlers() {
         if (!staffMain) return;
         staffMain.querySelectorAll('a[data-staff-pjax="1"]').forEach(function(link) {
@@ -245,6 +423,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     url += (href.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
                 }
                 loadStaffMain(url, true);
+            });
+        });
+        staffMain.querySelectorAll('a[data-request-modal="1"]').forEach(function (link) {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                var href = link.getAttribute('href');
+                if (!href) return;
+                loadRequestModal(href);
             });
         });
     }
@@ -261,6 +447,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     initRequestManagementFilters();
     attachStaffPjaxHandlers();
+    if (requestModalClose) requestModalClose.addEventListener('click', closeRequestModal);
+    if (requestModalBackdrop) requestModalBackdrop.addEventListener('click', closeRequestModal);
     setInterval(function () {
         var form = document.getElementById('request-management-filter-form');
         var wrapper = document.getElementById('request-management-wrapper');

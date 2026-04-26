@@ -1,10 +1,12 @@
 import json
+import logging
 import os
 import re
 from urllib import error, request
 
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+logger = logging.getLogger(__name__)
 
 
 def is_ai_configured():
@@ -155,9 +157,11 @@ def _chat_completion(messages, *, temperature=None, max_tokens=300):
             body = resp.read().decode("utf-8")
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="ignore")
-        raise RuntimeError(f"OpenRouter HTTP {exc.code}: {detail}") from exc
+        logger.error("OpenRouter HTTP error (status=%s): %s", exc.code, detail)
+        raise RuntimeError("AI provider request failed.") from exc
     except error.URLError as exc:
-        raise RuntimeError(f"OpenRouter connection error: {exc}") from exc
+        logger.error("OpenRouter connection error: %s", exc)
+        raise RuntimeError("AI provider is unreachable right now.") from exc
 
     data = json.loads(body)
     return (

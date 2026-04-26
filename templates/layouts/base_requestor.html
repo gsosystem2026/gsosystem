@@ -5,33 +5,10 @@
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>{% block title %}GSO Request Management{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="{% static 'css/tailwind.css' %}" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#1152d4",
-                        "background-light": "#f8f6f6",
-                        "background-dark": "#221610",
-                    },
-                    fontFamily: {
-                        "display": ["Public Sans", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
-    </script>
     <style>
         body { font-family: 'Public Sans', sans-serif; }
         .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
@@ -135,11 +112,14 @@
                     </div>
                     <div id="notif-list" class="overflow-y-auto flex-1 min-h-0 bg-white dark:bg-slate-900">
                         {% for n in requestor_notifications %}
-                        <a href="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
-                            <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
-                            <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
-                        </a>
+                        <form method="post" action="{% url 'gso_accounts:notification_go' n.pk %}" data-read="{% if n.read %}1{% else %}0{% endif %}" class="js-notif-item block border-b border-slate-100 dark:border-slate-800 {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                            {% csrf_token %}
+                            <button type="submit" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <p class="text-sm font-semibold text-slate-900 dark:text-slate-100">{{ n.title }}</p>
+                                <p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">{{ n.message|default:'' }}</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                            </button>
+                        </form>
                         {% empty %}
                         <p class="js-notif-empty-initial px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center">No notifications yet.</p>
                         {% endfor %}
@@ -193,9 +173,9 @@
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
         <p class="text-slate-500 dark:text-slate-400 text-sm">© {% now "Y" %} General Services Office. All rights reserved.</p>
         <div class="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
-            <a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
-            <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
-            <a class="hover:text-primary transition-colors" href="#">Contact Support</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'privacy' %}">Privacy Policy</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'terms' %}">Terms of Service</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'support' %}">Contact Support</a>
         </div>
     </div>
 </footer>
@@ -688,6 +668,10 @@
     var notifBtn = document.getElementById('notif-dropdown-btn');
     var notifMenu = document.getElementById('notif-dropdown');
     var notifWrap = document.getElementById('notif-dropdown-wrap');
+    var hasLoadedNotifList = false;
+    var notifListLoading = false;
+    var notifListLoadedAt = 0;
+    var NOTIF_LIST_REFRESH_MS = 60000;
     function closeNotifDropdown() {
         if (notifMenu) { notifMenu.classList.add('hidden'); if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false'); }
     }
@@ -695,7 +679,14 @@
         notifBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             var isOpen = !notifMenu.classList.contains('hidden');
-            if (isOpen) closeNotifDropdown(); else { closeP(); notifMenu.classList.remove('hidden'); notifBtn.setAttribute('aria-expanded', 'true'); }
+            if (isOpen) {
+                closeNotifDropdown();
+            } else {
+                closeP();
+                notifMenu.classList.remove('hidden');
+                notifBtn.setAttribute('aria-expanded', 'true');
+                maybeRefreshRequestorNotificationList(true);
+            }
         });
         document.addEventListener('click', closeNotifDropdown);
         if (notifWrap) notifWrap.addEventListener('click', function(e) { e.stopPropagation(); });
@@ -735,7 +726,7 @@
     if (notifTabAll) notifTabAll.addEventListener('click', function () { applyRequestorNotifTab('all'); });
     if (notifTabUnread) notifTabUnread.addEventListener('click', function () { applyRequestorNotifTab('unread'); });
 
-    function updateRequestorNotifications() {
+    function refreshRequestorUnreadCount() {
         fetch('/api/v1/notifications/unread_count/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
@@ -747,6 +738,28 @@
                 if (notifMarkAllEl) notifMarkAllEl.classList.toggle('hidden', c === 0);
             })
             .catch(function() {});
+    }
+
+    function maybeRefreshRequestorNotificationList(force) {
+        var now = Date.now();
+        if (notifListLoading) return;
+        if (!force && hasLoadedNotifList && (now - notifListLoadedAt) < NOTIF_LIST_REFRESH_MS) return;
+        notifListLoading = true;
+        function getCookie(name) {
+            var cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                var cookies = document.cookie.split(';');
+                for (var i = 0; i < cookies.length; i++) {
+                    var cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        var csrfToken = getCookie('csrftoken') || '';
         fetch('/api/v1/notifications/', { credentials: 'same-origin' })
             .then(function(r) { return r.ok ? r.json() : null; })
             .then(function(data) {
@@ -766,21 +779,27 @@
                     notifEmpty = document.getElementById('notif-empty');
                 } else {
                     notifListEl.innerHTML = list.map(function(n) {
-                        var cls = 'js-notif-item block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800';
+                        var cls = 'js-notif-item block border-b border-slate-100 dark:border-slate-800';
                         if (!n.read) cls += ' bg-primary/5 dark:bg-primary/10';
                         var msg = (n.message || '').replace(/</g, '&lt;');
-                        return '<a href="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></a>';
+                        return '<form method="post" action="' + goBase + n.id + '/go/" data-read="' + (n.read ? '1' : '0') + '" class="' + cls + '"><input type="hidden" name="csrfmiddlewaretoken" value="' + csrfToken + '"><button type="submit" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800/50"><p class="text-sm font-semibold text-slate-900 dark:text-slate-100">' + (n.title || '').replace(/</g, '&lt;') + '</p><p class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 line-clamp-2">' + msg + '</p><p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5">' + fmtDate(n.created_at) + '</p></button></form>';
                     }).join('');
                     notifListEl.insertAdjacentHTML('beforeend', '<p id="notif-empty" class="px-4 py-6 text-sm text-slate-500 dark:text-slate-400 text-center hidden">No notifications found.</p>');
                     notifEmpty = document.getElementById('notif-empty');
                 }
                 applyRequestorNotifTab(notifListEl.getAttribute('data-active-tab') || 'all');
             })
-            .catch(function() {});
+            .catch(function() {})
+            .finally(function() {
+                hasLoadedNotifList = true;
+                notifListLoading = false;
+                notifListLoadedAt = Date.now();
+            });
     }
     if (notifBadge && notifListEl) {
         applyRequestorNotifTab('all');
-        setInterval(updateRequestorNotifications, 15000);
+        refreshRequestorUnreadCount();
+        setInterval(refreshRequestorUnreadCount, 45000);
     }
 
 })();

@@ -231,7 +231,7 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
     model = Request
     template_name = 'staff/request_list.html'
     context_object_name = 'request_list'
-    paginate_by = 20
+    paginate_by = 10
 
     def get_queryset(self):
         qs = _staff_request_queryset(self.request)
@@ -258,7 +258,7 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
                 | Q(requestor__username__icontains=q)
                 | Q(pk__icontains=q)
             )
-        return qs.order_by('-is_emergency', '-created_at')
+        return qs.select_related('requestor', 'unit').order_by('-is_emergency', '-created_at')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -320,6 +320,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         context['is_requestor_layout'] = getattr(user, 'is_requestor', False)
+        context['in_modal'] = self.request.GET.get('modal') == '1'
         req = self.object
         # Phase 4.1: assignments and assign form for Unit Head
         context['assignments'] = []
@@ -370,6 +371,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     Request.Status.IN_PROGRESS,
                     Request.Status.ON_HOLD,
                 )
+            )
+            context['is_personnel_waiting_approval'] = (
+                getattr(user, 'is_personnel', False)
+                and is_assigned
+                and req.status == Request.Status.ASSIGNED
             )
             # Phase 5.3: Unit Head can complete when Done working
             context['can_complete'] = (

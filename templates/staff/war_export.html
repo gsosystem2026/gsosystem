@@ -37,7 +37,7 @@
                     </button>
                 </div>
                 <div class="flex items-end">
-                    <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}?year={{ default_filter_year }}&month={{ default_filter_month }}" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         Clear
                     </a>
                 </div>
@@ -83,7 +83,13 @@
                             {% elif header_key == 'description' %}
                                 <td class="px-4 py-3 max-w-md">{{ war.accomplishments|default:"—"|truncatewords:25 }}</td>
                             {% elif header_key == 'requesting_office' %}
-                                <td class="px-4 py-3 whitespace-nowrap">{% if war.request.requestor %}{{ war.request.requestor.get_full_name|default:war.request.requestor.username }}{% else %}—{% endif %}</td>
+                                <td class="px-4 py-3 whitespace-nowrap">
+                                    {% if war.request.requestor and war.request.requestor.office_department %}
+                                        {{ war.request.requestor.office_department }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
                             {% elif header_key == 'personnel' %}
                                 <td class="px-4 py-3 whitespace-nowrap">{{ war.personnel.get_full_name|default:war.personnel.username }}</td>
                             {% else %}

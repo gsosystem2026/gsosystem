@@ -1,0 +1,13 @@
+{
+  "name": "gso-final-system-2026",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i ./static/src/tailwind.css -o ./static/css/tailwind.css --minify",
+    "watch:css": "tailwindcss -c tailwind.config.js -i ./static/src/tailwind.css -o ./static/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@tailwindcss/forms": "^0.5.10",
+    "tailwindcss": "^3.4.17"
+  }
+}

@@ -324,8 +324,6 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
                 quantity = form.cleaned_data['quantity']
                 notes = form.cleaned_data.get('notes', '')
                 arrival_date = form.cleaned_data.get('arrival_date')
-                supplier_name = (form.cleaned_data.get('supplier_name') or '').strip()
-                delivery_reference = (form.cleaned_data.get('delivery_reference') or '').strip()
                 if trans_type == 'OUT' and quantity > self.item.quantity:
                     form.add_error(
                         'quantity',
@@ -349,8 +347,6 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
                         performed_by=self.request.user,
                         notes=notes,
                         arrival_date=arrival_date if trans_type == 'IN' else None,
-                        supplier_name=supplier_name if trans_type == 'IN' else '',
-                        delivery_reference=delivery_reference if trans_type == 'IN' else '',
                     )
                     messages.success(self.request, f'Quantity updated. New stock: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}.')
                     return JsonResponse({'success': True})
@@ -364,8 +360,6 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
         quantity = form.cleaned_data['quantity']
         notes = form.cleaned_data.get('notes', '')
         arrival_date = form.cleaned_data.get('arrival_date')
-        supplier_name = (form.cleaned_data.get('supplier_name') or '').strip()
-        delivery_reference = (form.cleaned_data.get('delivery_reference') or '').strip()
         if trans_type == 'OUT' and quantity > self.item.quantity:
             form.add_error(
                 'quantity',
@@ -389,8 +383,6 @@ class InventoryAdjustView(StaffRequiredMixin, InventoryAccessMixin, FormView):
             performed_by=self.request.user,
             notes=notes,
             arrival_date=arrival_date if trans_type == 'IN' else None,
-            supplier_name=supplier_name if trans_type == 'IN' else '',
-            delivery_reference=delivery_reference if trans_type == 'IN' else '',
         )
         messages.success(self.request, f'Quantity updated. New stock: {format_quantity_with_uom(self.item.quantity, self.item.unit_of_measure)}.')
         return redirect('gso_accounts:staff_inventory_detail', pk=self.item.pk)

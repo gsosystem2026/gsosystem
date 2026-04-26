@@ -16,7 +16,7 @@
         {% endif %}
         {% if form.unit %}
         <div>
-            <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department *</label>
+            <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Service Unit *</label>
             {{ form.unit }}
             {% if form.unit.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.unit.errors.0 }}</p>{% endif %}
         </div>
@@ -30,16 +30,10 @@
             <label for="id_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
             {{ form.description }}
         </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-                <label for="id_category" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Category</label>
-                {{ form.category }}
-            </div>
-            <div>
-                <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
-                {{ form.quantity }}
-                {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
-            </div>
+        <div>
+            <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
+            {{ form.quantity }}
+            {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -56,14 +50,6 @@
             {{ form.arrival_date }}
             {% if form.arrival_date.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.arrival_date.errors.0 }}</p>{% endif %}
         </div>
-        <div>
-            <label for="id_location" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location / remarks</label>
-            {{ form.location }}
-        </div>
-        <div>
-            <label for="id_serial_or_asset_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Serial / Asset number</label>
-            {{ form.serial_or_asset_number }}
-        </div>
         <div class="flex gap-3 pt-2">
             <button type="submit" class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">Save</button>
             <a href="{% url 'gso_accounts:staff_inventory' %}" class="px-5 py-2.5 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Cancel</a>
@@ -71,7 +57,7 @@
     </form>
 </div>
 <style>
-    #id_unit, #id_name, #id_description, #id_category, #id_quantity, #id_unit_of_measure, #id_reorder_level, #id_arrival_date, #id_location, #id_serial_or_asset_number {
+    #id_unit, #id_name, #id_description, #id_quantity, #id_unit_of_measure, #id_reorder_level, #id_arrival_date {
         @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary;
     }
     #id_description { min-height: 80px; }

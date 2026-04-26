@@ -75,6 +75,34 @@ Status legend: **DONE** = completed.
 - [x] **Offline-to-online sync scope decision finalized** — **DONE**  
   (Full offline sync marked as future enhancement for post-defense scope.)
 
+## 7) Dry-Run Consistency Fixes (High Severity)
+
+- [x] **WAR permission alignment (only GSO Office/Director can create/edit)** — **DONE**  
+  (Enforced in WAR views with regression coverage.)
+- [x] **Work Reports KPI cards use real deltas (not placeholders)** — **DONE**  
+  (Period-over-period dynamic trend values implemented.)
+- [x] **Personnel Request History shows only assigned requests** — **DONE**  
+  (History queryset restricted to personnel-handled completed/cancelled requests.)
+- [x] **Footer dead links replaced with real pages (Privacy/Terms/Support)** — **DONE**  
+  (Public info pages added and linked across requestor/staff/auth screens.)
+
+## 8) Legacy Data Migration Finalization (Core Process)
+
+- [x] **WAR migration import finalized (Dry-run + Apply + UI flow)** — **DONE**  
+  (Legacy WAR import command integrated in Work Reports migration modal.)
+- [x] **WAR mapping and fallback behavior finalized** — **DONE**  
+  (Maps Requesting Office / Assigned Personnel when possible; controlled fallback behavior.)
+- [x] **WAR target-unit mismatch guard implemented** — **DONE**  
+  (Workbook unit detection blocks wrong unit import.)
+- [x] **IPMT migration import finalized (template-based, Dry-run + Apply + UI flow)** — **DONE**  
+  (Legacy IPMT template import command integrated in same migration modal.)
+- [x] **IPMT target-unit mismatch guard implemented** — **DONE**  
+  (Workbook unit detection blocks wrong unit import.)
+- [x] **Migration UX feedback finalized** — **DONE**  
+  (In-modal processing/result popup, success/error completion state, auto-close.)
+- [x] **Migration technical accounts hidden from Account Management UI** — **DONE**  
+  (Prevents operational clutter while preserving traceability records.)
+
 ---
 
 ## Immediate Next Actions (Panel-Readiness)

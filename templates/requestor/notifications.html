@@ -19,21 +19,24 @@
 <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
     <div class="divide-y divide-slate-200 dark:divide-slate-800">
         {% for n in notifications %}
-        <a href="{% url 'gso_accounts:notification_go' n.pk %}" class="block px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
-            <div class="flex gap-4">
-                <div class="flex-shrink-0 size-10 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                    <span class="material-symbols-outlined text-primary text-xl">notifications</span>
+        <form method="post" action="{% url 'gso_accounts:notification_go' n.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="w-full text-left block px-6 py-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors {% if not n.read %}bg-primary/5 dark:bg-primary/10{% endif %}">
+                <div class="flex gap-4">
+                    <div class="flex-shrink-0 size-10 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-primary text-xl">notifications</span>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 {% if not n.read %}font-semibold{% endif %}">{{ n.title }}</p>
+                        <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{{ n.message }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-500 mt-2">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
+                    </div>
+                    {% if not n.read %}
+                    <span class="flex-shrink-0 size-2 rounded-full bg-primary mt-2"></span>
+                    {% endif %}
                 </div>
-                <div class="min-w-0 flex-1">
-                    <p class="text-sm font-semibold text-slate-900 dark:text-slate-100 {% if not n.read %}font-semibold{% endif %}">{{ n.title }}</p>
-                    <p class="text-sm text-slate-600 dark:text-slate-400 mt-0.5">{{ n.message }}</p>
-                    <p class="text-xs text-slate-500 dark:text-slate-500 mt-2">{{ n.created_at|date:"M j, Y, g:i A" }}</p>
-                </div>
-                {% if not n.read %}
-                <span class="flex-shrink-0 size-2 rounded-full bg-primary mt-2"></span>
-                {% endif %}
-            </div>
-        </a>
+            </button>
+        </form>
         {% empty %}
         <div class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
             <span class="material-symbols-outlined text-4xl mb-2">notifications_none</span>

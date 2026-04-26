@@ -1,9 +1,16 @@
 """Phase 6.1: WAR create. Phase 6.3/6.4: Work Reports landing, IPMT and WAR Excel export."""
+import io
 import json
+import logging
+import os
+import tempfile
 from datetime import date as _date, timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib import messages
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404, render
@@ -16,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from apps.gso_accounts.views import StaffRequiredMixin
 from apps.gso_requests.models import Request, RequestFeedback
+from apps.gso_units.models import Unit
 
 from .excel_export import (
     build_ipmt_excel,
@@ -28,6 +36,35 @@ from .forms import WARForm, IPMTReportForm, WARExportForm, FeedbackExportForm, S
 from .war_config import get_war_table_config
 from .models import SuccessIndicator, WorkAccomplishmentReport, IPMTDraft
 from .ai_service import generate_ipmt_accomplishment, is_ai_configured
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_json_server_error(message='Something went wrong. Please try again later.'):
+    return JsonResponse({'ok': False, 'error': message}, status=502)
+
+
+def _delta_display(current, previous, *, suffix=''):
+    """
+    Return display metadata for KPI trend badge.
+    """
+    if current is None or previous is None:
+        return {'value': '—', 'direction': 'flat', 'is_positive': True}
+    delta = round(current - previous, 1)
+    if delta > 0:
+        value = f"+{delta:g}{suffix}"
+        direction = 'up'
+    elif delta < 0:
+        value = f"{delta:g}{suffix}"
+        direction = 'down'
+    else:
+        value = f"0{suffix}"
+        direction = 'flat'
+    return {
+        'value': value,
+        'direction': direction,
+        'is_positive': delta >= 0,
+    }
 
 
 class WARCreateView(StaffRequiredMixin, CreateView):
@@ -44,14 +81,8 @@ class WARCreateView(StaffRequiredMixin, CreateView):
         user = request.user
         if getattr(user, 'is_requestor', False):
             return redirect('gso_accounts:staff_dashboard')
-        # Unit Head (same unit), assigned Personnel, GSO, Director can add WAR
-        if getattr(user, 'is_unit_head', False) and user.unit_id == req.unit_id:
-            pass
-        elif getattr(user, 'is_personnel', False) and req.assignments.filter(personnel=user).exists():
-            pass
-        elif getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False):
-            pass
-        else:
+        # Only GSO Office and Director can add WAR.
+        if not (getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False)):
             messages.error(request, 'You cannot add a WAR for this request.')
             return redirect('gso_accounts:staff_request_detail', pk=req.pk)
         return super().dispatch(request, *args, **kwargs)
@@ -293,6 +324,12 @@ class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
         war_qs = WorkAccomplishmentReport.objects.filter(
             period_end__gte=date_from,
             period_end__lte=date_to,
+        ).exclude(
+            personnel__username__iexact=getattr(
+                settings,
+                'GSO_LEGACY_MIGRATION_PERSONNEL_USERNAME',
+                'migrated_legacy',
+            )
         ).select_related('personnel', 'personnel__unit')
         personnel_rows = (
             war_qs.values(
@@ -335,6 +372,38 @@ class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
                 height = 0
             p['height_pct'] = f"{height}%"
 
+        period_days = (date_to - date_from).days + 1
+        prev_to = date_from - timedelta(days=1)
+        prev_from = prev_to - timedelta(days=period_days - 1)
+
+        prev_completed_qs = Request.objects.filter(
+            status=Request.Status.COMPLETED,
+            updated_at__date__gte=prev_from,
+            updated_at__date__lte=prev_to,
+        )
+        prev_total_completed = prev_completed_qs.count()
+        prev_duration = (
+            prev_completed_qs.annotate(duration=duration_expr)
+            .aggregate(avg_duration=Avg('duration'))
+            .get('avg_duration')
+        )
+        prev_avg_days = round(prev_duration.total_seconds() / 86400, 1) if prev_duration else None
+        prev_finished_qs = Request.objects.filter(
+            status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+            updated_at__date__gte=prev_from,
+            updated_at__date__lte=prev_to,
+        )
+        prev_finished_total = prev_finished_qs.count()
+        prev_success_rate = round((prev_total_completed / prev_finished_total) * 100, 1) if prev_finished_total else None
+        prev_feedback_qs = RequestFeedback.objects.filter(
+            request__status=Request.Status.COMPLETED,
+            created_at__date__gte=prev_from,
+            created_at__date__lte=prev_to,
+            rating__isnull=False,
+        )
+        prev_avg_rating = prev_feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
+        prev_avg_rating_rounded = round(prev_avg_rating, 1) if prev_avg_rating else None
+
         context.update(
             {
                 'page_title': 'Work Reports',
@@ -346,15 +415,144 @@ class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
                 'kpi_avg_completion_days': avg_days,
                 'kpi_success_rate': success_rate,
                 'kpi_avg_rating': avg_rating_rounded,
+                'kpi_total_completed_delta': _delta_display(total_completed, prev_total_completed),
+                # Lower completion days is better.
+                'kpi_avg_completion_days_delta': _delta_display(
+                    avg_days,
+                    prev_avg_days,
+                    suffix='d',
+                ),
+                'kpi_success_rate_delta': _delta_display(success_rate, prev_success_rate, suffix='%'),
+                'kpi_avg_rating_delta': _delta_display(avg_rating_rounded, prev_avg_rating_rounded),
                 'unit_bars': unit_bars,
                 'unit_distribution': unit_distribution,
                 'unit_count': unit_count,
                 'top_personnel': top_personnel,
                 'active_range': range_key,
                 'trend_points': trend_points,
+                'migration_units': Unit.objects.filter(is_active=True).order_by('name'),
             }
         )
         return context
+
+
+class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
+    """Upload and import legacy WAR workbook from Work Reports page."""
+    template_name = 'staff/work_reports.html'
+
+    def _is_ajax(self, request):
+        return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+    def _respond(self, request, *, ok, message, redirect_name='gso_accounts:staff_work_reports', level='info', status=200):
+        if self._is_ajax(request):
+            return JsonResponse({'ok': ok, 'message': message, 'level': level}, status=status)
+        if level == 'success':
+            messages.success(request, message)
+        elif level == 'error':
+            messages.error(request, message)
+        elif level == 'warning':
+            messages.warning(request, message)
+        else:
+            messages.info(request, message)
+        return redirect(redirect_name)
+
+    def post(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('gso_accounts:login')
+        if getattr(request.user, 'is_requestor', False) or not _can_access_work_reports(request.user):
+            return self._respond(
+                request,
+                ok=False,
+                message='Only GSO Office and Director can run migration.',
+                redirect_name='gso_accounts:staff_dashboard',
+                level='error',
+                status=403,
+            )
+
+        upload = request.FILES.get('excel_file')
+        unit_id = (request.POST.get('unit_id') or '').strip()
+        report_type = (request.POST.get('report_type') or 'war').strip().lower()
+        mode = (request.POST.get('mode') or 'dry_run').strip().lower()
+        if not upload:
+            return self._respond(request, ok=False, message='Please upload an Excel file first.', level='error', status=400)
+        if not unit_id:
+            return self._respond(request, ok=False, message='Please select a target unit.', level='error', status=400)
+        if report_type not in {'war', 'ipmt'}:
+            return self._respond(request, ok=False, message='Invalid report type selected.', level='error', status=400)
+        unit = Unit.objects.filter(pk=unit_id, is_active=True).first()
+        if not unit:
+            return self._respond(request, ok=False, message='Selected unit is invalid or inactive.', level='error', status=400)
+
+        is_dry_run = mode != 'apply'
+        temp_path = None
+        out = io.StringIO()
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.xlsx') as tmp:
+                for chunk in upload.chunks():
+                    tmp.write(chunk)
+                temp_path = tmp.name
+
+            command_name = 'gso_import_legacy_war' if report_type == 'war' else 'gso_import_legacy_ipmt'
+            cmd_args = [command_name, temp_path, '--unit-code', unit.code]
+            if is_dry_run:
+                cmd_args.append('--dry-run')
+            call_command(*cmd_args, stdout=out)
+            summary = self._extract_summary(out.getvalue())
+            mode_label = 'Dry-run' if is_dry_run else 'Apply'
+            report_label = 'WAR' if report_type == 'war' else 'IPMT'
+            return self._respond(
+                request,
+                ok=True,
+                message=f"{mode_label} {report_label} migration finished. {summary}",
+                level='success',
+                status=200,
+            )
+        except CommandError as exc:
+            logger.warning('Legacy migration command failed: %s', exc)
+            return self._respond(
+                request,
+                ok=False,
+                message=f"Migration failed: {exc}",
+                level='error',
+                status=400,
+            )
+        except Exception:
+            logger.exception('Unexpected migration upload failure')
+            return self._respond(
+                request,
+                ok=False,
+                message='Migration failed due to an unexpected error.',
+                level='error',
+                status=500,
+            )
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except OSError:
+                    logger.warning('Unable to remove temporary migration file: %s', temp_path)
+        return self._respond(request, ok=False, message='Migration did not complete.', level='error', status=500)
+
+    def _extract_summary(self, output_text):
+        wanted = (
+            'Requests created',
+            'Requests skipped',
+            'WAR created',
+            'WAR skipped',
+            'Drafts created',
+            'Drafts updated',
+            'Rows parsed',
+            'Rows skipped',
+            'Errors',
+        )
+        parts = []
+        for raw_line in output_text.splitlines():
+            line = raw_line.strip()
+            for key in wanted:
+                if line.startswith(key + ':'):
+                    parts.append(line)
+                    break
+        return ' | '.join(parts) if parts else 'See command summary in logs.'
 
 
 class IPMTReportView(StaffRequiredMixin, FormView):
@@ -416,9 +614,13 @@ class IPMTReportView(StaffRequiredMixin, FormView):
                     response['Content-Disposition'] = f'attachment; filename="{filename}"'
                     return response
                 if action == 'preview':
-                    # Draft-first behavior: show saved work by default when available.
+                    # Draft-first behavior with incremental merge:
+                    # keep existing edited draft rows, append only new WAR-derived items.
                     if draft and isinstance(draft.rows_json, list) and draft.rows_json:
-                        self.preview_rows = draft.rows_json
+                        self.preview_rows = self._merge_draft_with_preview(
+                            draft_rows=draft.rows_json,
+                            preview_rows=preview_rows,
+                        )
                     IPMTDraft.objects.update_or_create(
                         personnel=personnel,
                         year=year,
@@ -452,6 +654,76 @@ class IPMTReportView(StaffRequiredMixin, FormView):
                     self.preview_rows = preview_rows
                     messages.success(request, 'Preview refreshed from WAR source data.')
         return super().get(request, *args, **kwargs)
+
+    def _merge_draft_with_preview(self, draft_rows, preview_rows):
+        """
+        Preserve draft edits and append only new WAR-derived content.
+        - Existing draft indicators remain in place.
+        - New preview indicators are appended.
+        - New accomplishments under existing indicators are appended if not present.
+        """
+        if not isinstance(draft_rows, list):
+            draft_rows = []
+        if not isinstance(preview_rows, list):
+            preview_rows = []
+
+        def _norm_text(value):
+            return (str(value or '').strip()).lower()
+
+        merged = []
+        indicator_index = {}
+
+        for row in draft_rows:
+            if not isinstance(row, dict):
+                continue
+            indicator = (row.get('indicator') or '').strip()
+            if not indicator:
+                continue
+            accomplishments = row.get('accomplishments') or []
+            if not isinstance(accomplishments, list):
+                accomplishments = [str(accomplishments)]
+            clean_acc = [str(a).strip() for a in accomplishments if str(a).strip()]
+            payload = {
+                'indicator': indicator,
+                'accomplishments': clean_acc or [''],
+                'comment': (row.get('comment') or '').strip(),
+            }
+            merged.append(payload)
+            indicator_index[_norm_text(indicator)] = payload
+
+        for row in preview_rows:
+            if not isinstance(row, dict):
+                continue
+            indicator = (row.get('indicator') or '').strip()
+            if not indicator:
+                continue
+            accomplishments = row.get('accomplishments') or []
+            if not isinstance(accomplishments, list):
+                accomplishments = [str(accomplishments)]
+            clean_acc = [str(a).strip() for a in accomplishments if str(a).strip()]
+            comment = (row.get('comment') or '').strip()
+            key = _norm_text(indicator)
+            existing = indicator_index.get(key)
+            if not existing:
+                payload = {
+                    'indicator': indicator,
+                    'accomplishments': clean_acc or [''],
+                    'comment': comment,
+                }
+                merged.append(payload)
+                indicator_index[key] = payload
+                continue
+
+            existing_set = {_norm_text(item) for item in existing.get('accomplishments') or []}
+            for item in clean_acc:
+                n_item = _norm_text(item)
+                if n_item and n_item not in existing_set:
+                    existing['accomplishments'].append(item)
+                    existing_set.add(n_item)
+            if not existing.get('comment') and comment:
+                existing['comment'] = comment
+
+        return merged
 
     def _build_preview_rows(self, personnel, year, month):
         start = _date(year, month, 1)
@@ -652,8 +924,17 @@ def ipmt_generate_accomplishment_view(request):
             month=month,
             war_accomplishments=war_accomplishments,
         )
-    except Exception as exc:
-        return JsonResponse({'ok': False, 'error': f'Generation failed: {exc}'}, status=502)
+    except Exception:
+        logger.exception(
+            'IPMT accomplishment generation failed (personnel_id=%s, year=%s, month=%s, indicator=%s)',
+            personnel_id,
+            year,
+            month,
+            indicator_label,
+        )
+        return _safe_json_server_error(
+            'Unable to generate accomplishment at the moment. Please try again later.'
+        )
 
     return JsonResponse({'ok': True, 'accomplishment': generated.strip()})
 
@@ -703,15 +984,27 @@ def ipmt_autosave_draft_view(request):
             }
         )
 
-    IPMTDraft.objects.update_or_create(
-        personnel=personnel,
-        year=year,
-        month=month,
-        defaults={
-            'rows_json': clean_rows,
-            'updated_by': user,
-        }
-    )
+    try:
+        IPMTDraft.objects.update_or_create(
+            personnel=personnel,
+            year=year,
+            month=month,
+            defaults={
+                'rows_json': clean_rows,
+                'updated_by': user,
+            }
+        )
+    except Exception:
+        logger.exception(
+            'IPMT autosave failed (personnel_id=%s, year=%s, month=%s, user_id=%s)',
+            personnel_id,
+            year,
+            month,
+            getattr(user, 'id', None),
+        )
+        return _safe_json_server_error(
+            'Unable to save draft at the moment. Please try again later.'
+        )
     return JsonResponse({'ok': True})
 
 
@@ -870,6 +1163,9 @@ class WARExportView(StaffRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'WAR (Work Accomplishment Report)'
         context['page_description'] = 'View and export Work Accomplishment Reports. Filter by unit and month/year; personnel is optional. Table and Excel structure vary by unit.'
+        today = timezone.localdate()
+        context['default_filter_year'] = today.year
+        context['default_filter_month'] = today.month
         form = context.get('form') or self.get_form()
         unit = None
         if form.is_bound and form.is_valid():
@@ -888,7 +1184,6 @@ class WARExportView(StaffRequiredMixin, FormView):
                 date_to=date_to,
             )
         else:
-            today = timezone.localdate()
             year = today.year
             month = today.month
             date_from = _date(year, month, 1)

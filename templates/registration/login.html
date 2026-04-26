@@ -7,30 +7,7 @@
     <title>GSO Login | Request Management System</title>
     <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#1152d4",
-                        "background-light": "#f6f6f8",
-                        "background-dark": "#101622",
-                    },
-                    fontFamily: {
-                        "display": ["Public Sans", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
-    </script>
+    <link href="{% static 'css/tailwind.css' %}" rel="stylesheet"/>
     <style>
         body { font-family: 'Public Sans', sans-serif; }
         .bg-subtle-gradient {
@@ -159,12 +136,6 @@
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Motorpool</span>
             </div>
-            <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all col-span-2 md:col-span-1">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                    <span class="material-symbols-outlined text-[20px]">security</span>
-                </div>
-                <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Security Unit</span>
-            </div>
         </div>
     </div>
 </main>
@@ -174,9 +145,9 @@
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
         <p>© {% now "Y" %} General Services Office. All rights reserved.</p>
         <div class="flex gap-6">
-            <a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
-            <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
-            <a class="hover:text-primary transition-colors" href="#">Contact Support</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'privacy' %}">Privacy Policy</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'terms' %}">Terms of Service</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'support' %}">Contact Support</a>
         </div>
     </div>
 </footer>

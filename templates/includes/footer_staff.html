@@ -3,9 +3,9 @@
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
         <p class="text-slate-500 dark:text-slate-400 text-sm">© {% now "Y" %} General Services Office. All rights reserved.</p>
         <div class="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
-            <a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
-            <a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
-            <a class="hover:text-primary transition-colors" href="#">Contact Support</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'privacy' %}">Privacy Policy</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'terms' %}">Terms of Service</a>
+            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'support' %}">Contact Support</a>
         </div>
     </div>
 </footer>

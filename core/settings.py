@@ -15,14 +15,26 @@ except ImportError:
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ('true', '1', 'yes', 'on')
+
+
+def _env_list(name: str, default_csv: str = '') -> list[str]:
+    raw = os.environ.get(name, default_csv)
+    return [item.strip() for item in raw.split(',') if item.strip()]
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get(
     'DJANGO_SECRET_KEY',
     'django-insecure-change-me-in-production-use-env'
 )
 
-# Local dev: default True. Production: set DEBUG=False in the environment.
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
+# Safe-by-default: require explicit DEBUG=True for local development.
+DEBUG = _env_bool('DEBUG', False)
 
 if not DEBUG:
     _env_sk = os.environ.get('DJANGO_SECRET_KEY', '')
@@ -33,8 +45,9 @@ if not DEBUG:
             '(not the default insecure key).'
         )
 
-_raw_hosts = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.0.2.2')
-ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()]
+# Local defaults are only applied in DEBUG mode.
+_default_allowed_hosts = 'localhost,127.0.0.1,10.0.2.2' if DEBUG else ''
+ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', _default_allowed_hosts)
 
 # Application definition
 INSTALLED_APPS = [
@@ -67,6 +80,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.gzip.GZipMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -202,22 +216,28 @@ EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
-EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'False').lower() in ('true', '1', 'yes')
+EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', True)
+EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', False)
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'no-reply@gso.local')
 GSO_SITE_URL = os.environ.get('GSO_SITE_URL', '')
-GSO_EMAIL_NOTIFICATIONS_ENABLED = os.environ.get('GSO_EMAIL_NOTIFICATIONS_ENABLED', 'True').lower() in ('true', '1', 'yes')
+GSO_EMAIL_NOTIFICATIONS_ENABLED = _env_bool('GSO_EMAIL_NOTIFICATIONS_ENABLED', True)
 GSO_PASSWORD_RESET_OTP_EXP_MINUTES = int(os.environ.get('GSO_PASSWORD_RESET_OTP_EXP_MINUTES', '10'))
 GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS = int(os.environ.get('GSO_PASSWORD_RESET_OTP_MAX_ATTEMPTS', '5'))
 GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
     os.environ.get('GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS', '60')
 )
+# Max upload size for request attachments (MB).
+GSO_MAX_REQUEST_ATTACHMENT_MB = int(os.environ.get('GSO_MAX_REQUEST_ATTACHMENT_MB', '5'))
 # Invitation / password-reset token lifetime (used by Django token generator).
 # Default 24 hours for account invitation links.
 PASSWORD_RESET_TIMEOUT = int(os.environ.get('GSO_INVITE_LINK_TIMEOUT_SECONDS', '86400'))
 
 # Phase 8.3: App version for "new version available" prompt (bump on deploy)
 GSO_APP_VERSION = os.environ.get('GSO_APP_VERSION', '1.0')
+GSO_LEGACY_MIGRATION_PERSONNEL_USERNAME = os.environ.get(
+    'GSO_LEGACY_MIGRATION_PERSONNEL_USERNAME',
+    'migrated_legacy',
+).strip()
 
 # Phase 9.1: Backup directory for gso_backup command (default: project_root/backups)
 GSO_BACKUP_DIR = os.environ.get('GSO_BACKUP_DIR')
@@ -228,28 +248,29 @@ try:
 except ValueError:
     GSO_BACKUP_KEEP = 7
 
-# CORS: dev defaults + optional production origins (comma-separated)
-_cors_extra = os.environ.get('CORS_ALLOWED_ORIGINS', '').strip()
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-]
-if _cors_extra:
-    CORS_ALLOWED_ORIGINS.extend([o.strip() for o in _cors_extra.split(',') if o.strip()])
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# CORS: safe by default in production, local convenience only in DEBUG.
+_default_cors_origins = 'http://localhost:3000,http://127.0.0.1:3000' if DEBUG else ''
+CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS', _default_cors_origins)
+CORS_ALLOW_ALL_ORIGINS = _env_bool('CORS_ALLOW_ALL_ORIGINS', False if not DEBUG else False)
 
 # CSRF: comma-separated HTTPS origins in production, e.g. https://gso.school.edu
-_csrf_origins = os.environ.get('CSRF_TRUSTED_ORIGINS', '').strip()
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_origins.split(',') if o.strip()]
+CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', '')
 
 if not DEBUG:
-    SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = 'DENY'
-    if os.environ.get('USE_TLS_BEHIND_PROXY', '').lower() in ('true', '1', 'yes'):
+    SECURE_REFERRER_POLICY = 'same-origin'
+    # HTTPS and cookie security defaults for production.
+    SECURE_SSL_REDIRECT = _env_bool('SECURE_SSL_REDIRECT', True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = _env_bool('CSRF_COOKIE_HTTPONLY', False)
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = _env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', True)
+    SECURE_HSTS_PRELOAD = _env_bool('SECURE_HSTS_PRELOAD', True)
+    if _env_bool('USE_TLS_BEHIND_PROXY', False):
         SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-        SESSION_COOKIE_SECURE = True
-        CSRF_COOKIE_SECURE = True
 
 # REST API — for external system integration
 REST_FRAMEWORK = {
@@ -260,6 +281,18 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.environ.get('DRF_THROTTLE_ANON', '60/minute'),
+        'user': os.environ.get('DRF_THROTTLE_USER', '300/minute'),
+        'auth_token': os.environ.get('DRF_THROTTLE_AUTH_TOKEN', '10/minute'),
+        'auth_refresh': os.environ.get('DRF_THROTTLE_AUTH_REFRESH', '30/minute'),
+        'notification_write': os.environ.get('DRF_THROTTLE_NOTIFICATION_WRITE', '60/minute'),
+    },
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
     ],

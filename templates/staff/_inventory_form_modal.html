@@ -5,7 +5,7 @@
     {% endif %}
     {% if form.unit %}
     <div>
-        <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Department *</label>
+        <label for="id_unit" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Service Unit *</label>
         {{ form.unit }}
         {% if form.unit.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.unit.errors.0 }}</p>{% endif %}
     </div>
@@ -19,16 +19,10 @@
         <label for="id_description" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
         {{ form.description }}
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-            <label for="id_category" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Category</label>
-            {{ form.category }}
-        </div>
-        <div>
-            <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
-            {{ form.quantity }}
-            {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
-        </div>
+    <div>
+        <label for="id_quantity" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Quantity *</label>
+        {{ form.quantity }}
+        {% if form.quantity.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.quantity.errors.0 }}</p>{% endif %}
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
@@ -44,13 +38,5 @@
         <label for="id_arrival_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date arrived</label>
         {{ form.arrival_date }}
         {% if form.arrival_date.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.arrival_date.errors.0 }}</p>{% endif %}
-    </div>
-    <div>
-        <label for="id_location" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location / remarks</label>
-        {{ form.location }}
-    </div>
-    <div>
-        <label for="id_serial_or_asset_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Serial / Asset number</label>
-        {{ form.serial_or_asset_number }}
     </div>
 </form>

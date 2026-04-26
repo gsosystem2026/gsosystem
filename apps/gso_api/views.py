@@ -6,7 +6,10 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from django.core.cache import cache
 from django.utils import timezone
 
 from apps.gso_accounts.models import User
@@ -26,6 +29,14 @@ from .serializers import (
 )
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
+
+
+def _notification_unread_cache_key(user_id):
+    return f"notif_unread_count:{user_id}"
+
+
+def _invalidate_notification_unread_cache(user_id):
+    cache.delete(_notification_unread_cache_key(user_id))
 
 
 def _requires_inspection(request_obj):
@@ -272,18 +283,30 @@ class InventoryItemViewSet(viewsets.ReadOnlyModelViewSet):
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     """List notifications for current user. GET /api/v1/notifications/"""
     serializer_class = NotificationSerializer
+    throttle_scope = 'user'
+
+    def get_throttles(self):
+        if getattr(self, 'action', '') in ('mark_read', 'mark_all_read', 'register_device'):
+            self.throttle_scope = 'notification_write'
+        else:
+            self.throttle_scope = 'user'
+        return super().get_throttles()
 
     def get_queryset(self):
         if not self.request.user.is_authenticated:
             return Notification.objects.none()
-        return Notification.objects.filter(user=self.request.user).order_by('-created_at')[:100]
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
 
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
         """GET /api/v1/notifications/unread_count/ - count of unread notifications."""
         if not request.user.is_authenticated:
             return Response({'count': 0})
-        count = Notification.objects.filter(user=request.user, read=False).count()
+        cache_key = _notification_unread_cache_key(request.user.id)
+        count = cache.get(cache_key)
+        if count is None:
+            count = Notification.objects.filter(user=request.user, read=False).count()
+            cache.set(cache_key, count, 30)
         return Response({'count': count})
 
     @action(detail=True, methods=['post'])
@@ -294,12 +317,14 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
             return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
         notif.read = True
         notif.save(update_fields=['read'])
+        _invalidate_notification_unread_cache(request.user.id)
         return Response(NotificationSerializer(notif).data)
 
     @action(detail=False, methods=['post'])
     def mark_all_read(self, request):
         """POST /api/v1/notifications/mark_all_read/ - mark all as read."""
         Notification.objects.filter(user=request.user, read=False).update(read=True)
+        _invalidate_notification_unread_cache(request.user.id)
         return Response({'count': 0})
 
     @action(detail=False, methods=['post'])
@@ -369,6 +394,16 @@ class VersionView(APIView):
             'min_version': min_version,
             'message': 'Update available' if min_version != '1.0.0' else None,
         })
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_token'
+
+
+class ThrottledTokenRefreshView(TokenRefreshView):
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'auth_refresh'
 
 
 class APIRootView(APIView):

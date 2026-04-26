@@ -79,6 +79,14 @@ def _requestor_email_for_request(request_obj):
     return (getattr(request_obj, 'custom_email', '') or '').strip()
 
 
+def _request_context_line(request_obj):
+    """Short request reference for notifications."""
+    display_id = (getattr(request_obj, 'display_id', '') or '').strip()
+    if display_id:
+        return f"Request {display_id}"
+    return 'Service request'
+
+
 def notify_request_submitted(request_obj):
     """
     Create notifications when a request is submitted.
@@ -94,7 +102,7 @@ def notify_request_submitted(request_obj):
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} submitted"
-    message = f"{request_obj.title} — {request_obj.unit.name}"
+    context_line = _request_context_line(request_obj)
 
     # Notify requestor
     _notify_user_id(
@@ -109,12 +117,12 @@ def notify_request_submitted(request_obj):
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
         if u.id != request_obj.requestor_id:
-            _notify(u, title, f"New request for your unit: {request_obj.unit.name}", staff_link)
+            _notify(u, title, f"New request for your unit: {context_line}", staff_link)
 
     # Notify GSO Office and Director
     staff = UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR'))
     for u in staff:
-        _notify(u, title, message, staff_link)
+        _notify(u, title, context_line, staff_link)
 
 
 def notify_director_approved(request_obj):
@@ -129,7 +137,8 @@ def notify_director_approved(request_obj):
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} approved"
-    message = f"Work can start: {request_obj.title}"
+    context_line = _request_context_line(request_obj)
+    message = f"Approved. Work can start: {context_line}"
 
     # Notify requestor: their request has been approved
     _notify_user_id(
@@ -147,7 +156,7 @@ def notify_director_approved(request_obj):
     # Notify Unit Head(s) for this unit
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
-        _notify(u, title, f"Request approved; personnel can start work: {request_obj.title}", staff_link)
+        _notify(u, title, f"Request approved; personnel can start work: {context_line}", staff_link)
 
 
 def notify_personnel_assigned(request_obj):
@@ -161,7 +170,11 @@ def notify_personnel_assigned(request_obj):
 
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} assigned"
-    message = f"You have been assigned to: {request_obj.title}"
+    context_line = _request_context_line(request_obj)
+    message = (
+        f"You were assigned to: {context_line}. "
+        "This request is waiting for Director approval before you can start work."
+    )
 
     # Notify each assigned personnel
     for a in request_obj.assignments.select_related('personnel').all():
@@ -170,7 +183,7 @@ def notify_personnel_assigned(request_obj):
     # Notify GSO Office and Director (optional per plan)
     staff = UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR'))
     for u in staff:
-        _notify(u, title, f"Personnel assigned to {request_obj.title} — {request_obj.unit.name}", staff_link)
+        _notify(u, title, f"Personnel assigned: {context_line}", staff_link)
 
     # Notify requestor: personnel has been assigned
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
@@ -214,7 +227,8 @@ def notify_done_working(request_obj):
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} — Done working"
-    message = f"Personnel marked work complete for review: {request_obj.title}"
+    context_line = _request_context_line(request_obj)
+    message = f"Personnel marked work complete for review: {context_line}"
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
         _notify(u, title, message, staff_link)
@@ -268,7 +282,10 @@ def notify_returned_for_rework(request_obj):
     """When Unit Head returns work for rework, notify assigned Personnel."""
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} returned for rework"
-    message = f"Unit Head returned this request for rework. Please review and complete the work again: {request_obj.title}"
+    message = (
+        f"Unit Head returned this request for rework. "
+        f"Please review and complete the work again: {_request_context_line(request_obj)}"
+    )
     for a in request_obj.assignments.select_related('personnel').all():
         _notify(a.personnel, title, message, staff_link)
 
@@ -282,7 +299,10 @@ def notify_request_completed(request_obj):
     requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} completed"
-    message = f"Your request has been completed: {request_obj.title}. Please submit your feedback (Client Satisfaction form) for this request."
+    message = (
+        f"Your request has been completed: {_request_context_line(request_obj)}. "
+        "Please submit your feedback (Client Satisfaction form) for this request."
+    )
     _notify_user_id(
         request_obj.requestor_id,
         title,
@@ -291,7 +311,7 @@ def notify_request_completed(request_obj):
         email_override=_requestor_email_for_request(request_obj),
     )
     for u in UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR')):
-        _notify(u, title, f"Request completed: {request_obj.title} — {request_obj.unit.name}", staff_link)
+        _notify(u, title, f"Request completed: {_request_context_line(request_obj)}", staff_link)
 
 
 def notify_oic_assigned(oic_user, director):
@@ -324,7 +344,7 @@ def notify_requestor_edited_request(request_obj):
     UserModel = apps.get_model(app_label, model_name)
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} updated by requestor"
-    message = f"{request_obj.title} — requestor made changes. Please review if needed."
+    message = f"{_request_context_line(request_obj)} — requestor made changes. Please review if needed."
     for u in UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id):
         _notify(u, title, message, staff_link)
     for u in UserModel.objects.filter(role__in=('GSO_OFFICE', 'DIRECTOR')):
@@ -339,7 +359,7 @@ def notify_requestor_cancelled_request(request_obj):
     UserModel = apps.get_model(app_label, model_name)
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Request {request_obj.display_id} cancelled by requestor"
-    message = f"{request_obj.title} — requestor cancelled this request."
+    message = f"{_request_context_line(request_obj)} — requestor cancelled this request."
     unit_heads = UserModel.objects.filter(role='UNIT_HEAD', unit_id=request_obj.unit_id)
     for u in unit_heads:
         _notify(u, title, message, staff_link)
@@ -361,7 +381,7 @@ def notify_gso_reminder(request_obj, target):
 
     staff_link = reverse('gso_accounts:staff_request_detail', args=[request_obj.pk])
     title = f"Reminder: {request_obj.display_id} needs your attention"
-    message = f"{request_obj.title} — {request_obj.unit.name}"
+    message = _request_context_line(request_obj)
 
     if target == 'director':
         # Director and OIC: request pending approval (status ASSIGNED)

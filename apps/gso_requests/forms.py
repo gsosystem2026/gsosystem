@@ -3,7 +3,19 @@ Phase 2.2: Request form — fields only (layout/design in templates).
 Phase 4.1: Assign personnel form for Unit Head.
 """
 from django import forms
+from django.conf import settings
+from django.core.exceptions import ValidationError
+from PIL import Image, UnidentifiedImageError
 from .models import Request, RequestAssignment, RequestMessage, RequestFeedback
+
+ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
+ALLOWED_ATTACHMENT_CONTENT_TYPES = {
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+}
+ALLOWED_ATTACHMENT_IMAGE_FORMATS = {'JPEG', 'PNG', 'GIF', 'WEBP'}
 
 
 class RequestorCancelForm(forms.Form):
@@ -74,6 +86,56 @@ class RequestForm(forms.ModelForm):
         # Keep internal title auto-generated while hiding it from requestor UI.
         cleaned['title'] = f"{purpose[:140]} @ {location}"[:255]
         return cleaned
+
+    def clean_attachment(self):
+        attachment = self.cleaned_data.get('attachment')
+        if not attachment:
+            return attachment
+
+        max_mb = int(getattr(settings, 'GSO_MAX_REQUEST_ATTACHMENT_MB', 5))
+        max_size = max_mb * 1024 * 1024
+        if attachment.size > max_size:
+            raise ValidationError(
+                f'Attachment is too large. Maximum allowed size is {max_mb} MB.'
+            )
+
+        filename = (attachment.name or '').lower()
+        ext = ''
+        if '.' in filename:
+            ext = f".{filename.rsplit('.', 1)[-1]}"
+        if ext not in ALLOWED_ATTACHMENT_EXTENSIONS:
+            allowed = ', '.join(sorted(ALLOWED_ATTACHMENT_EXTENSIONS))
+            raise ValidationError(
+                f'Unsupported file type. Allowed image formats: {allowed}.'
+            )
+
+        content_type = (getattr(attachment, 'content_type', None) or '').lower()
+        if content_type and content_type not in ALLOWED_ATTACHMENT_CONTENT_TYPES:
+            raise ValidationError(
+                'Unsupported file content type. Please upload a valid image file.'
+            )
+
+        # Strong server-side validation: inspect file signature/content, not just extension.
+        try:
+            with Image.open(attachment) as img:
+                image_format = (img.format or '').upper()
+                img.verify()
+            if image_format not in ALLOWED_ATTACHMENT_IMAGE_FORMATS:
+                raise ValidationError(
+                    'Unsupported image format. Please upload JPG, PNG, GIF, or WEBP.'
+                )
+        except (UnidentifiedImageError, OSError, ValueError):
+            raise ValidationError(
+                'Invalid image file. Please upload a valid JPG, PNG, GIF, or WEBP image.'
+            )
+        finally:
+            # Ensure downstream save/storage reads from file start.
+            try:
+                attachment.seek(0)
+            except Exception:
+                pass
+
+        return attachment
 
     def save(self, commit=True):
         instance = super().save(commit=False)

@@ -78,6 +78,31 @@ class Request(models.Model):
         return "—"
 
     @property
+    def is_legacy_migrated(self):
+        return "[MIGRATED-LEGACY-WAR|" in (self.description or "")
+
+    @property
+    def description_for_display(self):
+        text = self.description or ""
+        if not self.is_legacy_migrated:
+            return text
+        cleaned_lines = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("[MIGRATED-LEGACY-WAR|"):
+                continue
+            if stripped.startswith("Legacy Control #:"):
+                continue
+            if stripped.startswith("Legacy Office:"):
+                continue
+            if stripped.startswith("Legacy Status:"):
+                continue
+            cleaned_lines.append(line)
+        while cleaned_lines and not cleaned_lines[0].strip():
+            cleaned_lines.pop(0)
+        return "\n".join(cleaned_lines)
+
+    @property
     def unit_name(self):
         return self.unit.name if self.unit_id else "—"
 

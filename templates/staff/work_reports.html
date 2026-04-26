@@ -2,6 +2,22 @@
 {% block title %}Work Reports — GSO{% endblock %}
 {% block staff_content %}
 <div class="space-y-8">
+    {% if messages %}
+    <div class="space-y-2">
+        {% for message in messages %}
+            {% if forloop.last %}
+            <div class="rounded-lg border px-4 py-3 text-sm
+                {% if message.tags == 'success' %}border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300
+                {% elif message.tags == 'error' %}border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300
+                {% elif message.tags == 'warning' %}border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300
+                {% else %}border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
     <!-- Page header / filters -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -25,11 +41,11 @@
                     Apply
                 </button>
             </form>
-            <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}"
+            <button type="button" id="open-migrate-report-modal"
                class="bg-primary text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-primary/90 transition-all">
-                <span class="material-symbols-outlined text-sm">download</span>
-                Export IPMT / WAR
-            </a>
+                <span class="material-symbols-outlined text-sm">upload_file</span>
+                Migrate Report (WAR / IPMT)
+            </button>
         </div>
     </div>
 
@@ -38,9 +54,9 @@
         <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <span class="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg material-symbols-outlined">task_alt</span>
-                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    <span class="material-symbols-outlined !text-xs">trending_up</span>
-                    <span class="ml-1">12%</span>
+                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_total_completed_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
+                    <span class="material-symbols-outlined !text-xs">{% if kpi_total_completed_delta.direction == 'up' %}trending_up{% elif kpi_total_completed_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
+                    <span class="ml-1">{{ kpi_total_completed_delta.value }}</span>
                 </span>
             </div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Tasks Completed</p>
@@ -49,9 +65,9 @@
         <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <span class="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg material-symbols-outlined">timer</span>
-                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    <span class="material-symbols-outlined !text-xs">trending_down</span>
-                    <span class="ml-1">0.5d</span>
+                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_avg_completion_days_delta.direction == 'down' or kpi_avg_completion_days_delta.direction == 'flat' %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
+                    <span class="material-symbols-outlined !text-xs">{% if kpi_avg_completion_days_delta.direction == 'up' %}trending_up{% elif kpi_avg_completion_days_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
+                    <span class="ml-1">{{ kpi_avg_completion_days_delta.value }}</span>
                 </span>
             </div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Average Completion Time</p>
@@ -62,9 +78,9 @@
         <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <span class="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-lg material-symbols-outlined">verified</span>
-                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    <span class="material-symbols-outlined !text-xs">trending_up</span>
-                    <span class="ml-1">2.1%</span>
+                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_success_rate_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
+                    <span class="material-symbols-outlined !text-xs">{% if kpi_success_rate_delta.direction == 'up' %}trending_up{% elif kpi_success_rate_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
+                    <span class="ml-1">{{ kpi_success_rate_delta.value }}</span>
                 </span>
             </div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Success Rate</p>
@@ -75,9 +91,9 @@
         <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <span class="p-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-lg material-symbols-outlined">star</span>
-                <span class="text-xs font-bold text-emerald-500 flex items-center bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-full">
-                    <span class="material-symbols-outlined !text-xs">trending_up</span>
-                    <span class="ml-1">0.2</span>
+                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_avg_rating_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
+                    <span class="material-symbols-outlined !text-xs">{% if kpi_avg_rating_delta.direction == 'up' %}trending_up{% elif kpi_avg_rating_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
+                    <span class="ml-1">{{ kpi_avg_rating_delta.value }}</span>
                 </span>
             </div>
             <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Personnel Rating</p>
@@ -205,4 +221,248 @@
         </div>
     </div>
 </div>
+<div id="migrate-report-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="migrate-report-modal-title">
+    <div id="migrate-report-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative w-full max-w-xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="migrate-report-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Migrate Legacy Report</h3>
+            <button type="button" id="migrate-report-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <form id="migrate-report-form" method="post" action="{% url 'gso_accounts:staff_work_reports_migrate_report' %}" enctype="multipart/form-data" data-no-loading="1" class="p-6 space-y-4">
+            {% csrf_token %}
+            <div>
+                <label for="migrate-report-type" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Report Type</label>
+                <select id="migrate-report-type" name="report_type" required class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                    <option value="war">WAR (enabled)</option>
+                    <option value="ipmt">IPMT (enabled)</option>
+                </select>
+            </div>
+            <div>
+                <label for="migrate-unit-id" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Target Unit</label>
+                <select id="migrate-unit-id" name="unit_id" required class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                    <option value="">Select unit</option>
+                    {% for u in migration_units %}
+                    <option value="{{ u.pk }}">{{ u.name }} ({{ u.code }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="migrate-excel-file" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Legacy report Excel file (.xlsx)</label>
+                <input id="migrate-excel-file" type="file" name="excel_file" accept=".xlsx" required class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Run Dry-run first to validate, then Apply when results are clean.</p>
+            <p id="migrate-report-inline-feedback" class="hidden text-xs"></p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="migrate-report-cancel" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                <button type="submit" name="mode" value="dry_run" class="px-4 py-2 border border-primary text-primary rounded-lg text-sm font-semibold hover:bg-primary/10">Dry-run</button>
+                <button type="submit" name="mode" value="apply" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg">Apply</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="migrate-process-overlay" class="hidden fixed inset-0 z-[130] flex items-center justify-center p-4" aria-modal="true" role="alertdialog" aria-live="assertive">
+    <div class="absolute inset-0 bg-black/50"></div>
+    <div class="relative w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-6 text-center">
+        <div id="migrate-process-spinner" class="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <span class="material-symbols-outlined ui-loading-spin">progress_activity</span>
+        </div>
+        <div id="migrate-process-success" class="hidden mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+            <span class="material-symbols-outlined">check_circle</span>
+        </div>
+        <div id="migrate-process-error" class="hidden mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+            <span class="material-symbols-outlined">error</span>
+        </div>
+        <h4 id="migrate-process-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Processing migration...</h4>
+        <p id="migrate-process-message" class="mt-2 text-sm text-slate-600 dark:text-slate-300">Please wait while the report is being processed.</p>
+        <p id="migrate-process-countdown" class="hidden mt-2 text-xs text-slate-500 dark:text-slate-400"></p>
+        <div class="mt-4">
+            <button type="button" id="migrate-process-close-btn" class="hidden px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Close now</button>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('migrate-report-modal');
+    const openBtn = document.getElementById('open-migrate-report-modal');
+    const closeBtn = document.getElementById('migrate-report-modal-close');
+    const cancelBtn = document.getElementById('migrate-report-cancel');
+    const backdrop = document.getElementById('migrate-report-modal-backdrop');
+    const form = document.getElementById('migrate-report-form');
+    const inlineFeedback = document.getElementById('migrate-report-inline-feedback');
+    const processOverlay = document.getElementById('migrate-process-overlay');
+    const processSpinner = document.getElementById('migrate-process-spinner');
+    const processSuccess = document.getElementById('migrate-process-success');
+    const processError = document.getElementById('migrate-process-error');
+    const processTitle = document.getElementById('migrate-process-title');
+    const processMessage = document.getElementById('migrate-process-message');
+    const processCountdown = document.getElementById('migrate-process-countdown');
+    const processCloseBtn = document.getElementById('migrate-process-close-btn');
+    let autoCloseTimer = null;
+    let countdownTimer = null;
+    if (!modal || !openBtn) return;
+
+    function openModal() {
+        modal.classList.remove('hidden');
+        if (inlineFeedback) {
+            inlineFeedback.classList.add('hidden');
+            inlineFeedback.textContent = '';
+        }
+    }
+    function closeModal() {
+        modal.classList.add('hidden');
+        if (inlineFeedback) {
+            inlineFeedback.classList.add('hidden');
+            inlineFeedback.textContent = '';
+        }
+    }
+    function resetButtonState(btn) {
+        if (!btn) return;
+        if (btn.dataset.originalHtml) {
+            btn.innerHTML = btn.dataset.originalHtml;
+        }
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+        btn.classList.remove('opacity-70', 'cursor-not-allowed');
+        btn.dataset.loadingApplied = '0';
+    }
+    function setButtonBusy(btn) {
+        if (!btn) return;
+        if (!btn.dataset.originalHtml) {
+            btn.dataset.originalHtml = btn.innerHTML;
+        }
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+        btn.classList.add('opacity-70', 'cursor-not-allowed');
+        btn.innerHTML = '<span class="inline-flex items-center gap-2"><span class="material-symbols-outlined ui-loading-spin text-base">progress_activity</span><span>Please wait...</span></span>';
+    }
+    function setFeedback(el, level, text) {
+        if (!el) return;
+        el.classList.remove('hidden', 'text-emerald-600', 'text-red-600', 'text-amber-600', 'text-slate-600');
+        if (level === 'success') {
+            el.classList.add('text-emerald-600');
+        } else if (level === 'error') {
+            el.classList.add('text-red-600');
+        } else if (level === 'warning') {
+            el.classList.add('text-amber-600');
+        } else {
+            el.classList.add('text-slate-600');
+        }
+        el.textContent = text || '';
+    }
+    function stopTimers() {
+        if (autoCloseTimer) window.clearTimeout(autoCloseTimer);
+        if (countdownTimer) window.clearInterval(countdownTimer);
+        autoCloseTimer = null;
+        countdownTimer = null;
+    }
+    function hideProcessOverlay() {
+        if (!processOverlay) return;
+        stopTimers();
+        processOverlay.classList.add('hidden');
+        if (inlineFeedback) {
+            inlineFeedback.classList.add('hidden');
+            inlineFeedback.textContent = '';
+        }
+    }
+    function showProcessingOverlay(modeLabel) {
+        if (!processOverlay) return;
+        stopTimers();
+        processOverlay.classList.remove('hidden');
+        processSpinner.classList.remove('hidden');
+        processSuccess.classList.add('hidden');
+        processError.classList.add('hidden');
+        processCloseBtn.classList.add('hidden');
+        processCountdown.classList.add('hidden');
+        processTitle.textContent = modeLabel + ' in progress...';
+        processMessage.textContent = 'Please wait while the report is being processed.';
+    }
+    function showResultOverlay(level, text) {
+        if (!processOverlay) return;
+        stopTimers();
+        processOverlay.classList.remove('hidden');
+        processSpinner.classList.add('hidden');
+        processSuccess.classList.add('hidden');
+        processError.classList.add('hidden');
+        if (level === 'success') processSuccess.classList.remove('hidden');
+        if (level === 'error' || level === 'warning') processError.classList.remove('hidden');
+        processTitle.textContent = level === 'success' ? 'Migration completed' : 'Migration result';
+        processMessage.textContent = text || 'Migration finished.';
+        processCloseBtn.classList.remove('hidden');
+        let seconds = 10;
+        processCountdown.classList.remove('hidden');
+        processCountdown.textContent = 'Closing automatically in ' + seconds + 's';
+        countdownTimer = window.setInterval(function () {
+            seconds -= 1;
+            if (seconds <= 0) {
+                window.clearInterval(countdownTimer);
+                countdownTimer = null;
+                processCountdown.textContent = 'Closing...';
+                return;
+            }
+            processCountdown.textContent = 'Closing automatically in ' + seconds + 's';
+        }, 1000);
+        autoCloseTimer = window.setTimeout(function () {
+            hideProcessOverlay();
+            closeModal();
+        }, 10000);
+    }
+
+    openBtn.onclick = openModal;
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+    if (processCloseBtn) processCloseBtn.onclick = function () {
+        hideProcessOverlay();
+        closeModal();
+    };
+
+    if (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            const submitter = event.submitter;
+            const formData = new FormData(form);
+            const submitButtons = form.querySelectorAll('button[type="submit"]');
+            if (submitter && submitter.name === 'mode' && submitter.value) {
+                formData.set('mode', submitter.value);
+            }
+            if (inlineFeedback) inlineFeedback.classList.add('hidden');
+            const modeLabel = (formData.get('mode') === 'apply') ? 'Apply migration' : 'Dry-run migration';
+            showProcessingOverlay(modeLabel);
+            submitButtons.forEach(function (btn) {
+                if (submitter === btn) {
+                    setButtonBusy(btn);
+                } else {
+                    btn.disabled = true;
+                }
+            });
+            fetch(form.getAttribute('action'), {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            })
+            .then(async function (response) {
+                let payload = {};
+                try { payload = await response.json(); } catch (e) { payload = {}; }
+                const level = payload.level || (response.ok ? 'success' : 'error');
+                const msg = payload.message || (response.ok ? 'Migration completed.' : 'Migration failed.');
+                setFeedback(inlineFeedback, level, msg);
+                showResultOverlay(level, msg);
+                if (response.ok) {
+                    form.reset();
+                }
+                submitButtons.forEach(function (btn) { resetButtonState(btn); });
+            })
+            .catch(function () {
+                const msg = 'Could not process migration right now. Please try again.';
+                setFeedback(inlineFeedback, 'error', msg);
+                showResultOverlay('error', msg);
+                submitButtons.forEach(function (btn) { resetButtonState(btn); });
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

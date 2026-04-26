@@ -5,7 +5,10 @@ Phase 6.2: Success indicators — master data; WAR entries can be tagged with in
 from django.conf import settings
 from django.db import models
 from decimal import Decimal
+import logging
 from django.utils import timezone
+
+logger = logging.getLogger(__name__)
 
 
 class SuccessIndicator(models.Model):
@@ -131,6 +134,18 @@ class WorkAccomplishmentReport(models.Model):
             self.total_cost = material + labor
         super().save(*args, **kwargs)
 
+    @property
+    def accomplishments_for_display(self):
+        text = self.accomplishments or ""
+        if text.startswith("[MIGRATED-LEGACY|"):
+            lines = text.splitlines()
+            if lines:
+                lines = lines[1:]
+            while lines and not lines[0].strip():
+                lines.pop(0)
+            return "\n".join(lines)
+        return text
+
 
 class IPMTDraft(models.Model):
     """Saved editable IPMT draft per personnel and period."""
@@ -215,7 +230,11 @@ def ensure_war_for_request(request_obj, created_by=None):
                 accomplishments = ai_draft.get("accomplishments") or accomplishments
             except Exception:
                 # Fail open: request completion/WAR creation should continue even if AI fails.
-                pass
+                logger.exception(
+                    'WAR AI draft generation failed (request_id=%s, personnel_id=%s)',
+                    getattr(request_obj, 'id', None),
+                    getattr(personnel, 'id', None),
+                )
         WorkAccomplishmentReport.objects.create(
             request=request_obj,
             personnel=personnel,
