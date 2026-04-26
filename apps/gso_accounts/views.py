@@ -15,6 +15,7 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView, FormView
 from django.db.models import Q, Count
 from django.core.cache import cache
+from django.db.models.deletion import ProtectedError
 from django.core.paginator import Paginator
 from django.http import HttpResponse
 from django.utils import timezone
@@ -1053,6 +1054,49 @@ class UserStatusActionView(LoginRequiredMixin, View):
         })
 
 
+class UserDeletePermanentView(LoginRequiredMixin, View):
+    """Director-only permanent delete for non-director user accounts."""
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        if not getattr(request.user, 'is_director', False):
+            return JsonResponse({'ok': False, 'error': 'Only the Director can permanently delete users.'}, status=403)
+
+        target = get_object_or_404(User, pk=pk)
+        if target.role == User.Role.DIRECTOR:
+            return JsonResponse({'ok': False, 'error': 'Director accounts cannot be deleted here.'}, status=400)
+        if target.pk == request.user.pk:
+            return JsonResponse({'ok': False, 'error': 'You cannot delete your own account.'}, status=400)
+
+        confirm_text = (request.POST.get('confirm_text') or '').strip().upper()
+        if confirm_text != 'DELETE':
+            return JsonResponse({'ok': False, 'error': 'Type DELETE to confirm permanent removal.'}, status=400)
+
+        target_label = target.get_full_name() or target.username
+        target_username = target.username
+        target_id = target.pk
+        try:
+            target.delete()
+        except ProtectedError:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': 'This user has protected related records and cannot be permanently deleted. Use Deactivate instead.',
+                },
+                status=400,
+            )
+
+        from apps.gso_accounts.models import log_audit
+        log_audit(
+            'user_delete_permanent',
+            request.user,
+            f'Permanently deleted user {target_label} ({target_username}) (id={target_id}).',
+            target_model='gso_accounts.User',
+            target_id=str(target_id),
+        )
+        return JsonResponse({'ok': True, 'message': f'User {target_label} was permanently deleted.'})
+
+
 class DirectorUserCreateView(StaffRequiredMixin, CreateView):
     """Director only: Add a new user."""
     model = User
@@ -1741,3 +1785,6 @@ class AccountInviteSetPasswordView(FormView):
         form.save()
         messages.success(self.request, 'Your password has been set. You can now log in.')
         return super().form_valid(form)
+
+    def get_success_url(self):
+        return f'{reverse("gso_accounts:login")}?invite_pw_set=1'

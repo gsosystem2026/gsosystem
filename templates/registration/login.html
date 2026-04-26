@@ -111,26 +111,26 @@
     <!-- Unit List Section -->
     <div class="mt-12 w-full max-w-4xl px-4">
         <h3 class="text-center text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-8">Departmental Units</h3>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+        <div class="flex flex-wrap justify-center gap-4">
+            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">build</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Repair &amp; Maintenance</span>
             </div>
-            <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">water_drop</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Utility Services</span>
             </div>
-            <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">bolt</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Electrical Unit</span>
             </div>
-            <div class="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
                 <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">directions_car</span>
                 </div>
@@ -139,6 +139,20 @@
         </div>
     </div>
 </main>
+
+<div id="invite-password-success-popup" class="hidden fixed inset-0 z-[120]">
+    <div class="absolute inset-0 bg-slate-900/45 backdrop-blur-[1px]"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="w-full max-w-sm rounded-2xl border border-emerald-200 dark:border-emerald-700 bg-white dark:bg-slate-900 shadow-2xl p-6 text-center">
+            <div class="mx-auto mb-3 h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
+            </div>
+            <h4 class="text-lg font-bold text-slate-900 dark:text-slate-100">Password set successfully</h4>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">You can now log in using your new password.</p>
+            <button type="button" id="invite-password-success-ok" class="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg text-sm font-semibold transition-colors">OK</button>
+        </div>
+    </div>
+</div>
 
 <!-- Footer (aligned with app footer) -->
 <footer class="w-full py-6 px-6 text-center text-slate-400 dark:text-slate-500 text-xs">
@@ -170,6 +184,30 @@
             if (!loginForm.remember_me.checked) loginForm.remember_me.removeAttribute('name');
         });
     }
+})();
+</script>
+<script>
+(function() {
+    var popup = document.getElementById('invite-password-success-popup');
+    var okBtn = document.getElementById('invite-password-success-ok');
+    if (!popup) return;
+    var params = new URLSearchParams(window.location.search || '');
+    if (params.get('invite_pw_set') !== '1') return;
+
+    function clearQueryFlag() {
+        var next = new URL(window.location.href);
+        next.searchParams.delete('invite_pw_set');
+        window.history.replaceState({}, '', next.toString());
+    }
+
+    function closePopup() {
+        popup.classList.add('hidden');
+        clearQueryFlag();
+    }
+
+    popup.classList.remove('hidden');
+    if (okBtn) okBtn.addEventListener('click', closePopup);
+    setTimeout(closePopup, 2500);
 })();
 </script>
 </body>
