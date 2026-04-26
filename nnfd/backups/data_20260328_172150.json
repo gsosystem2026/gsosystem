@@ -1,0 +1,92 @@
+{
+  "exported_at": "2026-03-28T17:21:50.951247",
+  "version": "1.0",
+  "users": [
+    {
+      "id": 6,
+      "username": "gsooffice",
+      "first_name": "Morgan",
+      "last_name": "GSO Office",
+      "role": "GSO_OFFICE",
+      "unit_id": null,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:58:35.978234+00:00"
+    },
+    {
+      "id": 1,
+      "username": "gsoadmin",
+      "first_name": "",
+      "last_name": "",
+      "role": "REQUESTOR",
+      "unit_id": null,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:48:57.687534+00:00"
+    },
+    {
+      "id": 3,
+      "username": "requestor",
+      "first_name": "Johny",
+      "last_name": "Johns",
+      "role": "REQUESTOR",
+      "unit_id": null,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:56:27.464627+00:00"
+    },
+    {
+      "id": 5,
+      "username": "personnel",
+      "first_name": "Sam",
+      "last_name": "Personnel",
+      "role": "PERSONNEL",
+      "unit_id": 1,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:58:35.453153+00:00"
+    },
+    {
+      "id": 4,
+      "username": "unithead",
+      "first_name": "Jordan",
+      "last_name": "Unit Head",
+      "role": "UNIT_HEAD",
+      "unit_id": 1,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:58:34.921426+00:00"
+    },
+    {
+      "id": 2,
+      "username": "director",
+      "first_name": "",
+      "last_name": "",
+      "role": "DIRECTOR",
+      "unit_id": null,
+      "is_active": true,
+      "date_joined": "2026-03-28 08:53:42.821114+00:00"
+    }
+  ],
+  "requests": [
+    {
+      "id": 1,
+      "requestor_id": 3,
+      "unit_id": 1,
+      "title": "afaasf",
+      "status": "COMPLETED",
+      "is_emergency": false,
+      "created_at": "2026-03-28 09:03:56.886807+00:00",
+      "updated_at": "2026-03-28 09:06:51.597522+00:00"
+    }
+  ],
+  "request_feedback": [],
+  "war": [
+    {
+      "id": 1,
+      "request_id": 1,
+      "personnel_id": 5,
+      "period_start": "2026-03-28",
+      "period_end": "2026-03-28",
+      "summary": "To be filled",
+      "accomplishments": "To be filled",
+      "created_at": "2026-03-28 09:06:51.787618+00:00"
+    }
+  ],
+  "inventory": []
+}
