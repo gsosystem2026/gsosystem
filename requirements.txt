@@ -15,3 +15,4 @@ cryptography
 Pillow
 gunicorn
 whitenoise
+requests

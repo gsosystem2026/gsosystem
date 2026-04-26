@@ -24,7 +24,7 @@ media/
 staticfiles/
 .env
 .env.local
-#nnfd/
+nnfd/
 
 # IDE / OS
 .idea/
