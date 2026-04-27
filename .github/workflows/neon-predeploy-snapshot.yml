@@ -1,0 +1,74 @@
+name: Neon Predeploy Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot_name:
+        description: "Optional snapshot name (default auto-generated)"
+        required: false
+        type: string
+      parent_branch_id:
+        description: "Neon parent branch ID (optional; defaults to NEON_PARENT_BRANCH_ID secret)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  create_snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve inputs
+        id: vars
+        env:
+          INPUT_NAME: ${{ inputs.snapshot_name }}
+          INPUT_PARENT: ${{ inputs.parent_branch_id }}
+          SECRET_PARENT: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+        run: |
+          if [ -n "$INPUT_NAME" ]; then
+            SNAPSHOT_NAME="$INPUT_NAME"
+          else
+            SNAPSHOT_NAME="predeploy-$(date -u +%Y%m%d-%H%M%S)"
+          fi
+          if [ -n "$INPUT_PARENT" ]; then
+            PARENT_BRANCH_ID="$INPUT_PARENT"
+          else
+            PARENT_BRANCH_ID="$SECRET_PARENT"
+          fi
+          echo "snapshot_name=$SNAPSHOT_NAME" >> "$GITHUB_OUTPUT"
+          echo "parent_branch_id=$PARENT_BRANCH_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Create Neon branch snapshot
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          SNAPSHOT_NAME: ${{ steps.vars.outputs.snapshot_name }}
+          PARENT_BRANCH_ID: ${{ steps.vars.outputs.parent_branch_id }}
+        run: |
+          if [ -z "$NEON_API_KEY" ] || [ -z "$NEON_PROJECT_ID" ]; then
+            echo "Missing NEON_API_KEY or NEON_PROJECT_ID secret."
+            exit 1
+          fi
+          if [ -z "$PARENT_BRANCH_ID" ]; then
+            echo "Missing parent branch ID. Set input parent_branch_id or NEON_PARENT_BRANCH_ID secret."
+            exit 1
+          fi
+
+          RESPONSE_FILE="$(mktemp)"
+          HTTP_CODE=$(curl -sS -o "$RESPONSE_FILE" -w "%{http_code}" \
+            -X POST "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"branch\":{\"name\":\"${SNAPSHOT_NAME}\",\"parent_id\":\"${PARENT_BRANCH_ID}\"}}")
+
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "Neon API request failed with status ${HTTP_CODE}."
+            cat "$RESPONSE_FILE"
+            exit 1
+          fi
+
+          echo "Snapshot branch created successfully."
+          cat "$RESPONSE_FILE"

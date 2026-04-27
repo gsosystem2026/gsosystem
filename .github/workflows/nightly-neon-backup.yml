@@ -1,0 +1,48 @@
+name: Nightly Neon Backup
+
+on:
+  schedule:
+    # 18:00 UTC = 02:00 Asia/Manila
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pg_dump_backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create timestamp
+        id: stamp
+        run: echo "value=$(date -u +%Y%m%d_%H%M%S)" >> "$GITHUB_OUTPUT"
+
+      - name: Dump production database
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+          TS: ${{ steps.stamp.outputs.value }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Missing PROD_DATABASE_URL secret."
+            exit 1
+          fi
+          mkdir -p backups
+          pg_dump -Fc -f "backups/pg_${TS}.dump" "$DATABASE_URL"
+          sha256sum "backups/pg_${TS}.dump" > "backups/pg_${TS}.sha256"
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-pg-backup-${{ steps.stamp.outputs.value }}
+          path: backups/
+          retention-days: 30
