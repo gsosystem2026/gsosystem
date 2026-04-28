@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from .storage import get_request_attachment_storage
 
 
 class Request(models.Model):
@@ -40,6 +41,7 @@ class Request(models.Model):
     custom_contact_number = models.CharField(max_length=32, blank=True)
     attachment = models.FileField(
         upload_to='gso_requests/%Y/%m/',
+        storage=get_request_attachment_storage(),
         blank=True,
         null=True,
     )

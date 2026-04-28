@@ -234,6 +234,13 @@ GSO_PASSWORD_RESET_OTP_RESEND_COOLDOWN_SECONDS = int(
 )
 # Max upload size for request attachments (MB).
 GSO_MAX_REQUEST_ATTACHMENT_MB = int(os.environ.get('GSO_MAX_REQUEST_ATTACHMENT_MB', '5'))
+# Request attachment storage backend:
+# - local (default): use MEDIA_ROOT filesystem
+# - gdrive: upload request attachments to Google Drive
+GSO_REQUEST_ATTACHMENT_STORAGE = os.environ.get('GSO_REQUEST_ATTACHMENT_STORAGE', 'local').strip().lower()
+GSO_GDRIVE_FOLDER_ID = os.environ.get('GSO_GDRIVE_FOLDER_ID', '').strip()
+GSO_GDRIVE_SERVICE_ACCOUNT_FILE = os.environ.get('GSO_GDRIVE_SERVICE_ACCOUNT_FILE', '').strip()
+GSO_GDRIVE_SERVICE_ACCOUNT_JSON = os.environ.get('GSO_GDRIVE_SERVICE_ACCOUNT_JSON', '').strip()
 # Invitation / password-reset token lifetime (used by Django token generator).
 # Default 24 hours for account invitation links.
 PASSWORD_RESET_TIMEOUT = int(os.environ.get('GSO_INVITE_LINK_TIMEOUT_SECONDS', '86400'))

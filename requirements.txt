@@ -16,3 +16,5 @@ Pillow
 gunicorn
 whitenoise
 requests
+google-api-python-client
+google-auth

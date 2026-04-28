@@ -1,9 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
-import os
 
-from django.conf import settings
 from django.http import Http404, HttpResponse, FileResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404
 from django.template.response import TemplateResponse
@@ -506,22 +504,21 @@ class RequestAttachmentView(LoginRequiredMixin, View):
             raise Http404()
         if not req.attachment:
             raise Http404()
-        path = req.attachment.path
-        if not os.path.isfile(path):
-            # Legacy: files uploaded before MEDIA_ROOT may be under project root
-            legacy = os.path.join(settings.BASE_DIR, req.attachment.name)
-            if os.path.isfile(legacy):
-                path = legacy
-            else:
-                raise Http404()
-        content_type, _ = mimetypes.guess_type(path) or ('application/octet-stream', None)
+
+        try:
+            req.attachment.open('rb')
+        except Exception as exc:
+            raise Http404() from exc
+
         disposition = 'attachment' if request.GET.get('download') else 'inline'
+        filename = req.attachment.name.rsplit('::', 1)[-1].rsplit('/', 1)[-1]
+        content_type = mimetypes.guess_type(filename)[0] or 'application/octet-stream'
         response = FileResponse(
-            open(path, 'rb'),
+            req.attachment.file,
             content_type=content_type,
             as_attachment=(disposition == 'attachment'),
         )
-        response['Content-Disposition'] = f'{disposition}; filename="{os.path.basename(path)}"'
+        response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
         return response
 
 
