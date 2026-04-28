@@ -73,28 +73,3 @@
         </div>
     </form>
 </div>
-<script>
-(function() {
-    var materialInput = document.getElementById('id_material_cost');
-    var laborInput = document.getElementById('id_labor_cost');
-    var totalInput = document.getElementById('id_total_cost_display');
-    if (!materialInput || !laborInput || !totalInput) return;
-    function parseAmount(value) {
-        var n = parseFloat(value);
-        return Number.isFinite(n) ? n : null;
-    }
-    function syncTotal() {
-        var m = parseAmount(materialInput.value);
-        var l = parseAmount(laborInput.value);
-        if (m === null && l === null) {
-            totalInput.value = '';
-            return;
-        }
-        var total = (m || 0) + (l || 0);
-        totalInput.value = total.toFixed(2);
-    }
-    materialInput.addEventListener('input', syncTotal);
-    laborInput.addEventListener('input', syncTotal);
-    syncTotal();
-})();
-</script>

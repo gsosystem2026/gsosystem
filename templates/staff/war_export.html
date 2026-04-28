@@ -189,6 +189,34 @@ function initWarEditModal() {
     const backdrop = document.getElementById('war-edit-modal-backdrop');
     if (!modal || !body) return;
 
+    function bindWarCostAutoTotal(root) {
+        const scope = root || document;
+        const materialInput = scope.querySelector('#id_material_cost');
+        const laborInput = scope.querySelector('#id_labor_cost');
+        const totalInput = scope.querySelector('#id_total_cost_display');
+        if (!materialInput || !laborInput || !totalInput || totalInput.dataset.autoTotalBound === '1') return;
+
+        function parseAmount(value) {
+            const n = parseFloat(value);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function syncTotal() {
+            const material = parseAmount(materialInput.value);
+            const labor = parseAmount(laborInput.value);
+            if (material === null && labor === null) {
+                totalInput.value = '';
+                return;
+            }
+            totalInput.value = ((material || 0) + (labor || 0)).toFixed(2);
+        }
+
+        materialInput.addEventListener('input', syncTotal);
+        laborInput.addEventListener('input', syncTotal);
+        totalInput.dataset.autoTotalBound = '1';
+        syncTotal();
+    }
+
     function closeModal() {
         modal.classList.add('hidden');
     }
@@ -205,7 +233,10 @@ function initWarEditModal() {
             credentials: 'same-origin'
         })
         .then(function(r) { return r.text(); })
-        .then(function(html) { body.innerHTML = html; })
+        .then(function(html) {
+            body.innerHTML = html;
+            bindWarCostAutoTotal(body);
+        })
         .catch(function() {
             body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not load WAR editor.</p>';
         });
@@ -239,7 +270,10 @@ function initWarEditModal() {
             }
             return response.text();
         }).then(function(html) {
-            if (html) body.innerHTML = html;
+            if (html) {
+                body.innerHTML = html;
+                bindWarCostAutoTotal(body);
+            }
         }).catch(function() {
             body.innerHTML = '<p class="text-red-600 dark:text-red-400 text-sm">Could not save WAR. Please try again.</p>';
         });
