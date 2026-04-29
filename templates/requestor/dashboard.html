@@ -173,16 +173,16 @@
 {% endblock %}
 
 <!-- Select Service Unit modal (multi-select, blurred backdrop) -->
-<div id="requestor-unit-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="requestor-unit-modal-title">
+<div id="requestor-unit-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4" aria-modal="true" role="dialog" aria-labelledby="requestor-unit-modal-title">
     <div id="requestor-unit-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
-    <div class="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-        <div class="flex items-center justify-between px-6 py-5 border-b border-slate-200 dark:border-slate-800">
+    <div class="relative w-full h-[100svh] sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-white dark:bg-slate-900 sm:rounded-xl shadow-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200 dark:border-slate-800">
             <h3 id="requestor-unit-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Select Service Unit</h3>
             <button type="button" id="requestor-unit-modal-close" class="close-btn" aria-label="Close">
                 <span class="material-symbols-outlined text-xl close-icon">close</span>
             </button>
         </div>
-        <div class="p-6 space-y-3">
+        <div class="p-4 sm:p-6 space-y-3 overflow-y-auto flex-1">
             <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Choose one or more departments for your request. You can select multiple units.</p>
             <div class="grid grid-cols-1 gap-3">
                 {% for item in units %}
@@ -202,25 +202,28 @@
                 {% endfor %}
             </div>
         </div>
-        <div class="px-6 py-5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex justify-end items-center gap-3">
-            <button type="button" id="requestor-unit-modal-cancel" class="px-6 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors">Cancel</button>
-            <button type="button" id="requestor-unit-modal-next" class="px-8 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-[0.98]">Next</button>
+        <div class="px-4 sm:px-6 py-4 sm:py-5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-800 flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-3">
+            <p id="requestor-unit-modal-feedback" class="hidden mr-auto text-xs text-red-600 dark:text-red-400">
+                Motorpool requests must be submitted separately because they use a different request form.
+            </p>
+            <button type="button" id="requestor-unit-modal-cancel" class="px-6 py-2 text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors w-full sm:w-auto">Cancel</button>
+            <button type="button" id="requestor-unit-modal-next" class="px-8 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-[0.98] w-full sm:w-auto">Next</button>
         </div>
     </div>
 </div>
 
 <!-- Request detail popup (loads content via fetch) -->
 <div id="request-detail-modal" class="hidden fixed inset-0 z-[105] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="request-detail-modal-title">
-    <div class="flex min-h-full items-center justify-center p-4">
+    <div class="flex min-h-full items-stretch sm:items-center justify-center p-0 sm:p-4">
         <div id="request-detail-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
-        <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col border border-slate-200 dark:border-slate-800">
-            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
+        <div class="relative bg-white dark:bg-slate-900 sm:rounded-xl shadow-xl max-w-2xl w-full h-[100svh] sm:h-auto sm:max-h-[90vh] flex flex-col border-0 sm:border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                 <h2 id="request-detail-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Request details</h2>
                 <button type="button" id="request-detail-modal-close" class="close-btn" aria-label="Close">
                     <span class="material-symbols-outlined text-xl close-icon">close</span>
                 </button>
             </div>
-            <div id="request-detail-modal-body" class="overflow-y-auto flex-1 p-6 min-h-0">
+            <div id="request-detail-modal-body" class="overflow-y-auto flex-1 p-4 sm:p-6 min-h-0">
                 <p class="text-slate-500 dark:text-slate-400 text-sm">Loading…</p>
             </div>
         </div>
@@ -228,9 +231,9 @@
 </div>
 
 <!-- Request form popup (single or multiple units) -->
-<div id="request-form-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="request-form-modal-title">
+<div id="request-form-modal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-0 sm:p-4" aria-modal="true" role="dialog" aria-labelledby="request-form-modal-title">
     <div id="request-form-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
-    <div class="relative w-full max-w-5xl max-h-[92vh] rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+    <div class="relative w-full h-[100svh] sm:h-auto sm:max-w-5xl sm:max-h-[92vh] sm:rounded-xl shadow-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div id="request-form-success-popup" class="hidden absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/30">
             <div class="h-28 w-28 rounded-full border-4 border-green-200 dark:border-green-700 bg-white dark:bg-slate-900 shadow-2xl flex items-center justify-center">
                 <svg class="success-check-svg" viewBox="0 0 100 100" aria-hidden="true">
@@ -238,25 +241,25 @@
                 </svg>
             </div>
         </div>
-        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" data-no-loading="1" class="flex flex-col max-h-[92vh]">
+        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" data-no-loading="1" class="flex flex-col h-[100svh] sm:h-auto sm:max-h-[92vh]">
             {% csrf_token %}
             <input type="hidden" name="units" id="request-form-units" value="">
             <!-- Header -->
-            <header class="flex items-center justify-between px-6 md:px-8 py-5 bg-primary text-white flex-shrink-0">
-                <div class="flex flex-col gap-1">
+            <header class="flex items-center justify-between px-4 sm:px-6 md:px-8 py-4 sm:py-5 bg-primary text-white flex-shrink-0">
+                <div class="flex flex-col gap-1 min-w-0 pr-2">
                     <div class="flex items-center gap-3">
                         <div class="bg-white/20 p-2 rounded-lg">
                             <span class="material-symbols-outlined text-white text-2xl">handyman</span>
                         </div>
-                        <h1 id="request-form-modal-title" class="text-2xl font-bold tracking-tight text-white leading-tight">New Request</h1>
+                        <h1 id="request-form-modal-title" class="text-xl sm:text-2xl font-bold tracking-tight text-white leading-tight">New Request</h1>
                     </div>
-                    <p class="text-white/80 text-sm font-medium">Submitting for: <span id="request-form-unit-names" class="text-white font-semibold"></span></p>
+                    <p class="text-white/80 text-xs sm:text-sm font-medium">Submitting for: <span id="request-form-unit-names" class="text-white font-semibold"></span></p>
                 </div>
                 <button type="button" id="request-form-modal-close" class="close-btn close-btn--on-primary flex h-10 w-10" aria-label="Close">
                     <span class="material-symbols-outlined close-icon">close</span>
                 </button>
             </header>
-            <div class="p-6 md:p-8 space-y-6 flex-1 overflow-y-auto bg-slate-100/70 dark:bg-slate-900">
+            <div class="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 flex-1 overflow-y-auto bg-slate-100/70 dark:bg-slate-900">
                 <!-- Request Type -->
                 <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
                     <div class="flex items-center gap-2 mb-4">
@@ -321,16 +324,16 @@
                             <div class="relative flex items-center">
                                 {{ request_form.attachment }}
                             </div>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Max file size: 5MB. Supported formats: JPG, PNG, PDF</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Max file size: 5MB. Supported formats: JPG, JPEG, PNG, GIF, WEBP</p>
                         </div>
                     </div>
                 </section>
             </div>
             <!-- Form Footer / Actions -->
-            <footer class="pt-5 pb-5 px-6 md:px-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-3 flex-shrink-0">
-                <p id="request-form-submit-feedback" class="hidden mr-auto text-xs text-red-600 dark:text-red-400">Submission failed. Please check required fields and try again.</p>
-                <button type="button" id="request-form-modal-cancel-btn" class="px-6 py-3 rounded-lg font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">Cancel</button>
-                <button type="submit" id="request-form-submit-btn" data-loading-text="Submitting request..." class="px-8 py-3 rounded-lg bg-primary text-white font-bold hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary/25">
+            <footer class="pt-4 sm:pt-5 pb-4 sm:pb-5 px-4 sm:px-6 md:px-8 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col-reverse sm:flex-row justify-end gap-3 flex-shrink-0">
+                <p id="request-form-submit-feedback" class="hidden sm:mr-auto text-xs text-red-600 dark:text-red-400 w-full sm:w-auto">Submission failed. Please check required fields and try again.</p>
+                <button type="button" id="request-form-modal-cancel-btn" class="px-6 py-3 rounded-lg font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors w-full sm:w-auto">Cancel</button>
+                <button type="submit" id="request-form-submit-btn" data-loading-text="Submitting request..." class="px-8 py-3 rounded-lg bg-primary text-white font-bold hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary/25 w-full sm:w-auto">
                     <span class="inline-flex items-center gap-2">
                         <span class="material-symbols-outlined text-lg">send</span>
                         <span>Submit Request</span>
@@ -412,6 +415,7 @@
     var closeBtn = document.getElementById('requestor-unit-modal-close');
     var cancelBtn = document.getElementById('requestor-unit-modal-cancel');
     var nextBtn = document.getElementById('requestor-unit-modal-next');
+    var unitModalFeedback = document.getElementById('requestor-unit-modal-feedback');
     var unitsInput = document.getElementById('request-form-units');
     var unitNamesEl = document.getElementById('request-form-unit-names');
     var formModalClose = document.getElementById('request-form-modal-close');
@@ -448,17 +452,24 @@
 
     function openUnitModal() {
         if (unitModal) unitModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
     }
     function closeUnitModal() {
         if (unitModal) unitModal.classList.add('hidden');
+        if (unitModalFeedback) unitModalFeedback.classList.add('hidden');
+        if (!formModal || formModal.classList.contains('hidden')) {
+            document.body.classList.remove('overflow-hidden');
+        }
     }
     function openFormModal(unitsParam, namesText) {
         if (unitsInput) unitsInput.value = unitsParam || '';
         if (unitNamesEl) unitNamesEl.textContent = namesText || '';
         if (formModal) formModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
     }
     function closeFormModal() {
         if (formModal) formModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
     }
 
     if (openBtn) openBtn.addEventListener('click', openUnitModal);
@@ -481,6 +492,12 @@
         nextBtn.addEventListener('click', function() {
             var checked = document.querySelectorAll('#requestor-unit-modal input[name="service_unit"]:checked');
             var codes = Array.from(checked).map(function(el) { return el.value; });
+            var hasMotorpool = codes.some(function(code) { return (code || '').toLowerCase() === 'motorpool'; });
+            if (hasMotorpool && codes.length > 1) {
+                if (unitModalFeedback) unitModalFeedback.classList.remove('hidden');
+                return;
+            }
+            if (unitModalFeedback) unitModalFeedback.classList.add('hidden');
             var names = Array.from(checked).map(function(el) {
                 var label = el.closest('label');
                 var span = label ? label.querySelector('.block.text-sm.font-bold') : null;
@@ -550,9 +567,11 @@
     var detailModalBackdrop = document.getElementById('request-detail-modal-backdrop');
     function closeDetailModal() {
         if (detailModal) detailModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
     }
     function openDetailModal() {
         if (detailModal) detailModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
     }
     function setDetailModalTitle(mode) {
         if (!detailModalTitle) return;

@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
+from django.db import transaction
 
 from django.http import Http404, HttpResponse, FileResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404
@@ -19,6 +20,7 @@ from .models import Request, RequestAssignment, RequestMessage, RequestFeedback
 from apps.gso_reports.models import ensure_war_for_request
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
+SINGLE_SUBMISSION_UNIT_CODES = {'motorpool'}
 
 
 def _requires_inspection(request_obj):
@@ -75,6 +77,13 @@ class RequestCreateView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         units_param = self.request.POST.get('units') or self.request.GET.get('units', '')
         codes = [c.strip() for c in units_param.split(',') if c.strip()]
+        selected_codes = {c.lower() for c in codes}
+        if any(code in selected_codes for code in SINGLE_SUBMISSION_UNIT_CODES) and len(selected_codes) > 1:
+            form.add_error(
+                None,
+                'Motorpool requests must be submitted separately because they use a different request form.'
+            )
+            return self.form_invalid(form)
         units = list(Unit.objects.filter(code__in=codes, is_active=True))
         if not units:
             form.add_error(None, 'No valid unit selected. Please go back and select at least one unit.')
@@ -87,11 +96,12 @@ class RequestCreateView(LoginRequiredMixin, FormView):
 
         from apps.gso_notifications.utils import notify_request_submitted
 
-        for i, unit in enumerate(units):
-            data['unit'] = unit
-            data['attachment'] = attachment if i == 0 else None
-            req = Request.objects.create(**data)
-            notify_request_submitted(req)
+        with transaction.atomic():
+            for i, unit in enumerate(units):
+                data['unit'] = unit
+                data['attachment'] = attachment if i == 0 else None
+                req = Request.objects.create(**data)
+                notify_request_submitted(req)
 
         return redirect(reverse('gso_accounts:requestor_dashboard') + '?submitted=1')
 

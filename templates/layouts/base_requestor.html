@@ -671,7 +671,7 @@
     var hasLoadedNotifList = false;
     var notifListLoading = false;
     var notifListLoadedAt = 0;
-    var NOTIF_LIST_REFRESH_MS = 60000;
+    var NOTIF_LIST_REFRESH_MS = 15000;
     function closeNotifDropdown() {
         if (notifMenu) { notifMenu.classList.add('hidden'); if (notifBtn) notifBtn.setAttribute('aria-expanded', 'false'); }
     }
@@ -799,7 +799,7 @@
     if (notifBadge && notifListEl) {
         applyRequestorNotifTab('all');
         refreshRequestorUnreadCount();
-        setInterval(refreshRequestorUnreadCount, 45000);
+        setInterval(refreshRequestorUnreadCount, 10000);
     }
 
 })();

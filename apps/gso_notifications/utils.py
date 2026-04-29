@@ -2,6 +2,7 @@
 import logging
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -9,6 +10,10 @@ from django.urls import reverse
 from .models import Notification
 
 logger = logging.getLogger(__name__)
+
+
+def _notification_unread_cache_key(user_id):
+    return f"notif_unread_count:{user_id}"
 
 
 def _email_notifications_enabled():
@@ -58,12 +63,14 @@ def _safe_send_email(user, title, message, link='', to_email=''):
 
 def _notify(user, title, message, link=''):
     notif = Notification.objects.create(user=user, title=title, message=message, link=link)
+    cache.delete(_notification_unread_cache_key(user.id))
     _safe_send_email(user, title, message, link)
     return notif
 
 
 def _notify_user_id(user_id, title, message, link='', email_override=''):
     notif = Notification.objects.create(user_id=user_id, title=title, message=message, link=link)
+    cache.delete(_notification_unread_cache_key(user_id))
     if _email_notifications_enabled():
         from django.apps import apps
         app_label, model_name = settings.AUTH_USER_MODEL.rsplit('.', 1)

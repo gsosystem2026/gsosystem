@@ -306,7 +306,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         count = cache.get(cache_key)
         if count is None:
             count = Notification.objects.filter(user=request.user, read=False).count()
-            cache.set(cache_key, count, 30)
+            # Keep short TTL; creation/read events also invalidate this cache key.
+            cache.set(cache_key, count, 10)
         return Response({'count': count})
 
     @action(detail=True, methods=['post'])
