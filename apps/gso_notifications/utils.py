@@ -3,6 +3,8 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 from django.template.loader import render_to_string
 from django.urls import reverse
 
@@ -20,11 +22,34 @@ def _email_notifications_enabled():
     return bool(getattr(settings, 'GSO_EMAIL_NOTIFICATIONS_ENABLED', True))
 
 
+def _pick_notification_email(user, to_email=''):
+    """
+    Prefer explicit email override when valid; otherwise fall back to user.email.
+    """
+    candidates = [to_email, getattr(user, 'email', '')]
+    for candidate in candidates:
+        email = (candidate or '').strip()
+        if not email:
+            continue
+        try:
+            validate_email(email)
+            return email
+        except ValidationError:
+            continue
+    return ''
+
+
 def _safe_send_email(user, title, message, link='', to_email=''):
     if not _email_notifications_enabled():
+        logger.info('Notification email disabled by GSO_EMAIL_NOTIFICATIONS_ENABLED.')
         return
-    email = (to_email or getattr(user, 'email', '') or '').strip()
+    email = _pick_notification_email(user, to_email=to_email)
     if not email:
+        logger.warning(
+            'Skipping notification email: no valid recipient for user_id=%s override=%s',
+            getattr(user, 'id', None),
+            (to_email or '').strip(),
+        )
         return
     app_url = (getattr(settings, 'GSO_SITE_URL', '') or '').rstrip('/')
     resolved_link = link or ''
@@ -57,8 +82,17 @@ def _safe_send_email(user, title, message, link='', to_email=''):
             html_message=html_body,
             fail_silently=False,
         )
+        logger.info(
+            'Notification email sent to user_id=%s recipient=%s',
+            getattr(user, 'id', None),
+            email,
+        )
     except Exception:
-        logger.exception('Failed sending notification email to user_id=%s', getattr(user, 'id', None))
+        logger.exception(
+            'Failed sending notification email to user_id=%s recipient=%s',
+            getattr(user, 'id', None),
+            email,
+        )
 
 
 def _notify(user, title, message, link=''):
