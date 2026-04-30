@@ -6,8 +6,10 @@ const OFFLINE_URL = "/offline/";
 
 const SHELL_URLS = [
   OFFLINE_URL,
+  "/accounts/staff/dashboard/",
   "/accounts/staff/task-management/",
   "/accounts/staff/task-history/",
+  "/accounts/staff/inventory/",
   "{% static 'css/tailwind.css' %}",
   "{% static 'js/personnel_offline_sync.js' %}",
   "{% static 'img/logo/gso_logo.png' %}"
@@ -40,8 +42,10 @@ function isStaticAsset(requestUrl) {
 }
 
 function isPersonnelPage(requestUrl) {
-  return requestUrl.pathname.startsWith("/accounts/staff/task-management/")
+  return requestUrl.pathname.startsWith("/accounts/staff/dashboard/")
+    || requestUrl.pathname.startsWith("/accounts/staff/task-management/")
     || requestUrl.pathname.startsWith("/accounts/staff/task-history/")
+    || requestUrl.pathname.startsWith("/accounts/staff/inventory/")
     || /\/accounts\/staff\/request-management\/\d+\/$/.test(requestUrl.pathname);
 }
 
@@ -70,8 +74,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const cloned = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, cloned));
+          if (response && response.status === 200 && response.type === "basic") {
+            const cloned = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, cloned));
+          }
           return response;
         })
         .catch(() =>
