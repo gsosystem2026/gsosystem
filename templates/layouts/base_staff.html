@@ -102,7 +102,7 @@ Header matches requestor layout; no footer (content fills viewport).
 {% block body_class %}bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display min-h-screen{% endblock %}
 
 {% block content %}
-<div class="flex flex-col h-screen" id="staff-wrapper">
+<div class="flex flex-col h-screen" id="staff-wrapper" data-is-personnel="{% if request.user.is_personnel %}1{% else %}0{% endif %}">
     {% include "includes/header_staff.html" %}
     <div class="flex flex-1 overflow-hidden">
         <div class="staff-sidebar-overlay hidden fixed inset-0 bg-black/50 z-20 md:hidden" id="staff-sidebar-overlay" aria-hidden="true"></div>

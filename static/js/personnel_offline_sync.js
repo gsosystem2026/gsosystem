@@ -167,6 +167,50 @@
         });
     }
 
+    function isOfflineAllowedPersonnelHref(href) {
+        try {
+            var pathname = new URL(href, window.location.origin).pathname;
+            return pathname.startsWith('/accounts/staff/task-management/')
+                || pathname.startsWith('/accounts/staff/task-history/')
+                || /\/accounts\/staff\/request-management\/\d+\/$/.test(pathname);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function updateOfflineTaskModeUi() {
+        var wrapper = document.getElementById('staff-wrapper');
+        if (!wrapper || wrapper.getAttribute('data-is-personnel') !== '1') return;
+        var sidebar = document.getElementById('staff-sidebar');
+        if (!sidebar) return;
+        var links = sidebar.querySelectorAll('a[href]');
+        links.forEach(function (link) {
+            var allow = isOfflineAllowedPersonnelHref(link.href);
+            if (!navigator.onLine && !allow) {
+                link.classList.add('opacity-60');
+                link.setAttribute('data-offline-blocked', '1');
+                link.setAttribute('title', 'Offline mode: Task pages only');
+            } else {
+                link.classList.remove('opacity-60');
+                link.removeAttribute('data-offline-blocked');
+            }
+        });
+    }
+
+    function initOfflineTaskMode() {
+        var wrapper = document.getElementById('staff-wrapper');
+        if (!wrapper || wrapper.getAttribute('data-is-personnel') !== '1') return;
+        document.addEventListener('click', function (event) {
+            var link = event.target.closest('#staff-sidebar a[href]');
+            if (!link) return;
+            if (navigator.onLine) return;
+            if (isOfflineAllowedPersonnelHref(link.href)) return;
+            event.preventDefault();
+            toast('Offline Task Mode: only Task Management is available offline.', 'info');
+        }, true);
+        updateOfflineTaskModeUi();
+    }
+
     function dedupePendingStatus(item, allItems) {
         if (item.type !== 'status_update') return Promise.resolve();
         var duplicates = (allItems || []).filter(function (q) {
@@ -315,13 +359,17 @@
 
     function init() {
         ensureStatusBadge();
+        initOfflineTaskMode();
         window.addEventListener('online', function () {
             ensureStatusBadge();
+            updateOfflineTaskModeUi();
             syncQueue();
             toast('Back online. Syncing queued actions...', 'info');
         });
         window.addEventListener('offline', function () {
             ensureStatusBadge();
+            updateOfflineTaskModeUi();
+            toast('Offline Task Mode enabled for personnel.', 'info');
         });
         setInterval(function () {
             syncQueue();
