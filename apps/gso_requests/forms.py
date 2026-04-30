@@ -292,3 +292,42 @@ class MotorpoolTripVehicleAndFuelForm(forms.ModelForm):
             'vehicle_trans': forms.TextInput(attrs={'placeholder': 'e.g., Trans. (if applicable)'}),
             'other_consumables_notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'e.g., Used wheel/s, gas can, oil/lubricant…'}),
         }
+
+    def __init__(self, *args, request_obj=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._assigned_driver_values = set()
+        if request_obj is None:
+            return
+
+        assignments = request_obj.assignments.select_related('personnel').order_by('assigned_at')
+        choices = [('', '--- Select assigned personnel (optional) ---')]
+        for assignment in assignments:
+            person = assignment.personnel
+            driver_label = (person.get_full_name() or person.username or '').strip()
+            if not driver_label:
+                continue
+            if driver_label in self._assigned_driver_values:
+                continue
+            self._assigned_driver_values.add(driver_label)
+            choices.append((driver_label, driver_label))
+
+        if not self._assigned_driver_values:
+            return
+
+        current = (self.initial.get('driver_name') or '').strip()
+        if current and current not in self._assigned_driver_values:
+            choices.append((current, f'{current} (legacy)'))
+
+        self.fields['driver_name'] = forms.ChoiceField(
+            required=False,
+            choices=choices,
+            label=self.fields['driver_name'].label,
+        )
+
+    def clean_driver_name(self):
+        driver_name = (self.cleaned_data.get('driver_name') or '').strip()
+        if not driver_name:
+            return ''
+        if self._assigned_driver_values and driver_name not in self._assigned_driver_values:
+            raise ValidationError('Driver must be one of the assigned personnel for this request.')
+        return driver_name

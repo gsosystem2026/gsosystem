@@ -530,7 +530,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     and req.status in allowed_actual_statuses
                 )
                 if context['can_edit_motorpool_vehicle'] or context['can_edit_motorpool_actuals']:
-                    context['motorpool_trip_form'] = MotorpoolTripVehicleAndFuelForm(instance=mp, prefix='motorpool')
+                    context['motorpool_trip_form'] = MotorpoolTripVehicleAndFuelForm(
+                        instance=mp,
+                        prefix='motorpool',
+                        request_obj=req,
+                    )
             else:
                 context['motorpool_data'] = None
 
@@ -669,9 +673,17 @@ class MotorpoolTripUpdateView(LoginRequiredMixin, View):
             messages.error(request, 'You do not have permission to edit motorpool details for this request/state.')
             return redirect('gso_accounts:staff_request_detail', pk=req.pk)
 
-        form = MotorpoolTripVehicleAndFuelForm(request.POST, instance=mp, prefix='motorpool')
+        form = MotorpoolTripVehicleAndFuelForm(
+            request.POST,
+            instance=mp,
+            prefix='motorpool',
+            request_obj=req,
+        )
         if not form.is_valid():
-            messages.error(request, 'Please check the motorpool fields and try again.')
+            if 'driver_name' in form.errors:
+                messages.error(request, form.errors['driver_name'][0])
+            else:
+                messages.error(request, 'Please check the motorpool fields and try again.')
             return redirect('gso_accounts:staff_request_detail', pk=req.pk)
 
         obj = form.save(commit=False)
