@@ -55,7 +55,6 @@ def _invite_email_preflight_issues():
     """
     issues = []
     backend = (getattr(settings, 'EMAIL_BACKEND', '') or '').strip()
-    provider = (getattr(settings, 'EMAIL_PROVIDER', 'smtp') or 'smtp').strip().lower()
     site_url = (getattr(settings, 'GSO_SITE_URL', '') or '').strip()
     default_from = (getattr(settings, 'DEFAULT_FROM_EMAIL', '') or '').strip()
 
@@ -65,23 +64,17 @@ def _invite_email_preflight_issues():
         'django.core.mail.backends.filebased.EmailBackend',
         'django.core.mail.backends.dummy.EmailBackend',
     }
-    if provider == 'smtp':
-        if backend in non_production_backends:
-            issues.append(
-                'EMAIL_BACKEND uses a development backend. Use SMTP backend in production.'
-            )
-        if backend == 'django.core.mail.backends.smtp.EmailBackend':
-            if not (getattr(settings, 'EMAIL_HOST', '') or '').strip():
-                issues.append('EMAIL_HOST is missing for SMTP.')
-            if not (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip():
-                issues.append('EMAIL_HOST_USER is missing for SMTP.')
-            if not (getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip():
-                issues.append('EMAIL_HOST_PASSWORD is missing for SMTP.')
-    elif provider == 'resend':
-        if not (getattr(settings, 'RESEND_API_KEY', '') or '').strip():
-            issues.append('RESEND_API_KEY is missing for Resend provider.')
-    else:
-        issues.append('EMAIL_PROVIDER is invalid. Use "smtp" or "resend".')
+    if backend in non_production_backends:
+        issues.append(
+            'EMAIL_BACKEND uses a development backend. Use SMTP backend in production.'
+        )
+    if backend == 'django.core.mail.backends.smtp.EmailBackend':
+        if not (getattr(settings, 'EMAIL_HOST', '') or '').strip():
+            issues.append('EMAIL_HOST is missing for SMTP.')
+        if not (getattr(settings, 'EMAIL_HOST_USER', '') or '').strip():
+            issues.append('EMAIL_HOST_USER is missing for SMTP.')
+        if not (getattr(settings, 'EMAIL_HOST_PASSWORD', '') or '').strip():
+            issues.append('EMAIL_HOST_PASSWORD is missing for SMTP.')
     if not default_from:
         issues.append('DEFAULT_FROM_EMAIL is empty.')
     if not site_url:
@@ -1671,23 +1664,13 @@ def _issue_password_reset_otp(request, user, *, force=False):
             'minutes': otp_minutes,
         },
     )
-    try:
-        send_gso_email(
-            subject='GSO System - Your password reset OTP',
-            message=body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-    except Exception:
-        # Do not raise a user-facing 500 when SMTP is down/unreachable.
-        logger.exception(
-            "Password reset OTP email send failed for user_id=%s email=%s",
-            user.pk,
-            user.email,
-        )
-        otp.delete()
-        return None, 0
+    send_gso_email(
+        subject='GSO System - Your password reset OTP',
+        message=body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[user.email],
+        fail_silently=False,
+    )
     request.session['password_reset_pending_user_id'] = user.pk
     request.session['password_reset_pending_otp_id'] = otp.pk
     request.session['password_reset_verified'] = False
