@@ -876,6 +876,9 @@
     var addUserIpmtWrap = document.getElementById('addUserIpmtWrap');
     var addUserSuccessPopup = document.getElementById('addUserSuccessPopup');
     var addUserSuccessText = document.getElementById('addUserSuccessText');
+    var addUserSubmitting = false;
+    var addUserRequestToken = 0;
+    var addUserVerifyUrl = "{% url 'gso_accounts:staff_account_user_add_verify' %}";
 
     function setAddUserStep(step) {
         if (!addUserStepRole || !addUserStepForm) return;
@@ -913,6 +916,40 @@
         setAddUserStep('role');
         clearAddUserErrors();
     }
+    function verifyUserWasActuallyCreated(formData, requestToken) {
+        if (!addUserVerifyUrl || requestToken !== addUserRequestToken) return Promise.resolve(false);
+        var username = (formData.get('username') || '').toString().trim();
+        var email = (formData.get('email') || '').toString().trim();
+        var role = (formData.get('role') || '').toString().trim();
+        var office = (formData.get('office_department') || '').toString().trim();
+        if (!username && !email && !(role === 'REQUESTOR' && office)) return Promise.resolve(false);
+        var params = new URLSearchParams();
+        if (username) params.set('username', username);
+        if (email) params.set('email', email);
+        if (role) params.set('role', role);
+        if (office) params.set('office_department', office);
+        return fetch(addUserVerifyUrl + '?' + params.toString(), {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            }
+        })
+        .then(function (r) { return r.json().catch(function () { return null; }); })
+        .then(function (data) {
+            if (requestToken !== addUserRequestToken) return false;
+            if (data && data.ok && data.exists) {
+                closeAddUserModal();
+                if (addUserSuccessText) addUserSuccessText.textContent = data.message || ('User "' + (data.username || username) + '" created.');
+                openModal(addUserSuccessPopup);
+                setTimeout(function () { window.location.reload(); }, 1300);
+                return true;
+            }
+            return false;
+        })
+        .catch(function () { return false; });
+    }
 
     if (addUserOpenBtn) {
         addUserOpenBtn.addEventListener('click', function () {
@@ -946,13 +983,18 @@
     if (addUserForm) {
         addUserForm.addEventListener('submit', function (e) {
             e.preventDefault();
+            if (addUserSubmitting) return;
+            addUserSubmitting = true;
+            addUserRequestToken += 1;
+            var requestToken = addUserRequestToken;
+            var submitPayload = new FormData(addUserForm);
             clearAddUserErrors();
             if (window.GSOUI && typeof window.GSOUI.setButtonLoading === 'function') {
                 window.GSOUI.setButtonLoading(addUserSubmitBtn, 'Creating user...');
             }
             fetch(addUserForm.action, {
                 method: 'POST',
-                body: new FormData(addUserForm),
+                body: submitPayload,
                 credentials: 'same-origin',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
@@ -963,6 +1005,8 @@
                 return r.json().then(function (data) { return { ok: r.ok, data: data }; });
             })
             .then(function (result) {
+                // Ignore stale/out-of-order responses from earlier submits.
+                if (requestToken !== addUserRequestToken) return;
                 if (result.ok && result.data && result.data.ok) {
                     closeAddUserModal();
                     if (addUserSuccessText) addUserSuccessText.textContent = result.data.message || 'User created.';
@@ -970,29 +1014,38 @@
                     setTimeout(function () { window.location.reload(); }, 1300);
                     return;
                 }
-                if (addUserNonFieldError) {
-                    var nf = (result.data && result.data.non_field_errors && result.data.non_field_errors[0]) || '';
-                    if (nf) {
-                        addUserNonFieldError.textContent = nf;
-                        addUserNonFieldError.classList.remove('hidden');
+                return verifyUserWasActuallyCreated(submitPayload, requestToken).then(function (wasCreated) {
+                    if (wasCreated || requestToken !== addUserRequestToken) return;
+                    if (addUserNonFieldError) {
+                        var nf = (result.data && result.data.non_field_errors && result.data.non_field_errors[0]) || '';
+                        if (nf) {
+                            addUserNonFieldError.textContent = nf;
+                            addUserNonFieldError.classList.remove('hidden');
+                        }
                     }
-                }
-                var errors = (result.data && result.data.errors) || {};
-                Object.keys(errors).forEach(function (field) {
-                    var slot = document.getElementById('addUserErr_' + field);
-                    if (slot) {
-                        slot.textContent = errors[field][0];
-                        slot.classList.remove('hidden');
-                    }
+                    var errors = (result.data && result.data.errors) || {};
+                    Object.keys(errors).forEach(function (field) {
+                        var slot = document.getElementById('addUserErr_' + field);
+                        if (slot) {
+                            slot.textContent = errors[field][0];
+                            slot.classList.remove('hidden');
+                        }
+                    });
                 });
             })
             .catch(function () {
-                if (addUserNonFieldError) {
-                    addUserNonFieldError.textContent = 'We could not confirm the response right away. Please wait a moment or check the users list.';
-                    addUserNonFieldError.classList.remove('hidden');
-                }
+                if (requestToken !== addUserRequestToken) return;
+                return verifyUserWasActuallyCreated(submitPayload, requestToken).then(function (wasCreated) {
+                    if (wasCreated || requestToken !== addUserRequestToken) return;
+                    if (addUserNonFieldError) {
+                        addUserNonFieldError.textContent = 'We could not confirm the response right away. Please wait a moment or check the users list.';
+                        addUserNonFieldError.classList.remove('hidden');
+                    }
+                });
             })
             .finally(function () {
+                if (requestToken !== addUserRequestToken) return;
+                addUserSubmitting = false;
                 if (addUserSubmitBtn && addUserSubmitBtn.dataset.originalHtml) {
                     addUserSubmitBtn.disabled = false;
                     addUserSubmitBtn.removeAttribute('aria-busy');

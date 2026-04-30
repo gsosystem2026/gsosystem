@@ -7,6 +7,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from PIL import Image, UnidentifiedImageError
 from .models import Request, RequestAssignment, RequestMessage, RequestFeedback
+from .models import MotorpoolTripData
 
 ALLOWED_ATTACHMENT_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 ALLOWED_ATTACHMENT_CONTENT_TYPES = {
@@ -34,6 +35,34 @@ class RequestorCancelForm(forms.Form):
 
 class RequestForm(forms.ModelForm):
     """Form to create a request. Unit is set from selection; requestor set in view."""
+
+    # ----- Motorpool (planned) fields -----
+    # Stored in MotorpoolTripData (not directly on Request).
+    motorpool_places_to_be_visited = forms.CharField(
+        required=False,
+        label='Place(s) to be visited',
+        widget=forms.Textarea(attrs={'placeholder': 'Newline or comma-separated places...', 'rows': 2}),
+    )
+    motorpool_itinerary_of_travel = forms.CharField(
+        required=False,
+        label='Itinerary of Travel',
+        widget=forms.Textarea(attrs={'placeholder': 'Newline-separated lines...', 'rows': 3}),
+    )
+    motorpool_trip_datetime = forms.DateTimeField(
+        required=False,
+        label='Date and Time of Trip',
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+    )
+    motorpool_number_of_days = forms.IntegerField(
+        required=False,
+        label='No. of Days',
+        min_value=1,
+    )
+    motorpool_number_of_passengers = forms.IntegerField(
+        required=False,
+        label='No. of Passengers',
+        min_value=0,
+    )
 
     class Meta:
         model = Request
@@ -232,3 +261,34 @@ class RequestFeedbackForm(forms.ModelForm):
         self.fields['cc1'].required = True
         for i in range(1, 10):
             self.fields[f'sqd{i}'].required = True
+
+
+class MotorpoolTripVehicleAndFuelForm(forms.ModelForm):
+    """
+    Staff-facing form for motorpool ticket fields that affect printing:
+    - Driver/vehicle identifiers
+    - Fuel and other consumables (hybrid: can be left blank)
+    """
+
+    class Meta:
+        model = MotorpoolTripData
+        fields = [
+            'driver_name',
+            'vehicle_plate',
+            'vehicle_stamp_or_contract_no',
+            'vehicle_trans',
+            'fuel_beginning_liters',
+            'fuel_received_issued_liters',
+            'fuel_added_purchased_liters',
+            'fuel_total_available_liters',
+            'fuel_used_liters',
+            'fuel_ending_liters',
+            'other_consumables_notes',
+        ]
+        widgets = {
+            'driver_name': forms.TextInput(attrs={'placeholder': 'e.g., William Padua'}),
+            'vehicle_plate': forms.TextInput(attrs={'placeholder': 'e.g., SAT-6829'}),
+            'vehicle_stamp_or_contract_no': forms.TextInput(attrs={'placeholder': 'e.g., SAT/CONTRACT #'}),
+            'vehicle_trans': forms.TextInput(attrs={'placeholder': 'e.g., Trans. (if applicable)'}),
+            'other_consumables_notes': forms.Textarea(attrs={'rows': 2, 'placeholder': 'e.g., Used wheel/s, gas can, oil/lubricant…'}),
+        }

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Motorpool Request (Print)</title>
+  <style>
+    @media print { .no-print { display: none !important; } }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111827; }
+    .title { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .subtle { color: #374151; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .box { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; }
+    .row { display: flex; gap: 12px; }
+    .field { flex: 1; min-height: 18px; }
+    .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .02em; }
+    .value { font-size: 13px; white-space: pre-wrap; }
+    .sig { height: 60px; border-bottom: 1px solid #111827; margin-top: 18px; }
+    .sig-label { font-size: 11px; color: #6b7280; text-align: center; margin-top: 6px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    td, th { border: 1px solid #e5e7eb; padding: 6px; vertical-align: top; }
+    th { background: #f9fafb; text-align: left; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="text-align:center; margin-bottom: 12px;">
+    <button onclick="window.print()" style="padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer;">
+      Print
+    </button>
+  </div>
+
+  <div class="title">REQUEST FOR USE OF UNIVERSITY VEHICLE (MOTORPOOL)</div>
+  <div class="subtle" style="text-align:center; margin-bottom: 16px;">
+    Date of filing: {{ req.created_at|date:"M d, Y" }}
+  </div>
+
+  <div class="grid">
+    <div class="box">
+      <div class="row">
+        <div class="field">
+          <div class="label">Driver</div>
+          <div class="value">{{ mp.driver_name|default:"" }}</div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <div class="field">
+          <div class="label">Vehicle Plate / Stamp</div>
+          <div class="value">{{ mp.vehicle_plate|default:"" }}{% if mp.vehicle_stamp_or_contract_no %} ({{ mp.vehicle_stamp_or_contract_no }}){% endif %}</div>
+        </div>
+        <div class="field">
+          <div class="label">Trans. (if applicable)</div>
+          <div class="value">{{ mp.vehicle_trans|default:"" }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <div class="label">Requesting Office</div>
+        <div class="value">{{ mp.requesting_office|default:"" }}</div>
+      </div>
+      <div style="margin-top:12px;">
+        <div class="label">Purpose / Request</div>
+        <div class="value">{{ purpose|default:"" }}</div>
+      </div>
+    </div>
+
+    <div class="box">
+      <div class="label">Contact Person</div>
+      <div class="value">{{ mp.contact_person|default:"" }}</div>
+      <div class="label" style="margin-top:10px;">Contact Number</div>
+      <div class="value">{{ mp.contact_number|default:"" }}</div>
+
+      <div style="margin-top:14px;" class="grid">
+        <div class="field">
+          <div class="label">Date & Time of Trip</div>
+          <div class="value">{{ mp.trip_datetime|date:"M d, Y g:i A"|default:"" }}</div>
+        </div>
+        <div class="field">
+          <div class="label">No. of Days</div>
+          <div class="value">{{ mp.number_of_days|default:"" }}</div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="label">No. of Passengers</div>
+        <div class="value">{{ mp.number_of_passengers|default:"" }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:12px;">
+    <div class="grid">
+      <div>
+        <div class="label">Place(s) to be visited</div>
+        <div class="value">{{ mp.places_to_be_visited|default:"" }}</div>
+      </div>
+      <div>
+        <div class="label">Itinerary of Travel</div>
+        <div class="value">{{ mp.itinerary_of_travel|default:"" }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:18px;">
+    <div class="box">
+      <div class="label">Noted by (Immediate Supervisor)</div>
+      <div class="sig"></div>
+      <div class="sig-label">Name and Signature</div>
+    </div>
+    <div class="box">
+      <div class="label">Recommended for Approval</div>
+      <div class="sig"></div>
+      <div class="sig-label">Name and Signature</div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:12px;">
+    <div class="label">Approved (Director/OIC)</div>
+    <div class="sig"></div>
+    <div class="sig-label">Name and Signature</div>
+  </div>
+</body>
+</html>
+

@@ -298,3 +298,76 @@ class RequestFeedback(models.Model):
         if self.cc1 or self.sqd1:
             return f"{self.request.display_id} — {self.user} (CSM)"
         return f"{self.request.display_id} — {self.user} ({self.rating or '—'}/5)"
+
+
+class MotorpoolTripData(models.Model):
+    """
+    Motorpool-specific request/ticket fields.
+
+    This is a Phase-1 MVP-style model intended to support the paper forms:
+    - Motorpool Request (page A)
+    - Driver's Trip Ticket (page B)
+
+    Hybrid behavior:
+    - Planned fields can be filled by the requestor.
+    - Actual fields can be filled after approval (driver/personnel and/or Unit Head).
+    - Printable ticket rendering should leave blanks when actual fields are missing.
+    """
+
+    request = models.OneToOneField(
+        Request,
+        on_delete=models.CASCADE,
+        related_name='motorpool_trip',
+    )
+
+    # ----- Page A: Motorpool Request (planned) -----
+    requesting_office = models.CharField(max_length=255, blank=True, default='')
+    places_to_be_visited = models.TextField(blank=True, default='')
+    itinerary_of_travel = models.TextField(
+        blank=True,
+        default='',
+        help_text='Newline-separated lines to drive ticket row count.',
+    )
+
+    trip_datetime = models.DateTimeField(null=True, blank=True)
+    number_of_days = models.PositiveSmallIntegerField(null=True, blank=True)
+    number_of_passengers = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    # Requestor contact on paper ticket (can reuse Request custom_full_name/custom_contact_number,
+    # but stored here for convenience/clarity on ticket rendering).
+    contact_person = models.CharField(max_length=255, blank=True, default='')
+    contact_number = models.CharField(max_length=32, blank=True, default='')
+
+    # ----- Page B: Driver + Vehicle (Unit Head maintained) -----
+    driver_name = models.CharField(max_length=255, blank=True, default='')
+    vehicle_plate = models.CharField(max_length=64, blank=True, default='')
+    vehicle_stamp_or_contract_no = models.CharField(max_length=64, blank=True, default='')
+    vehicle_trans = models.CharField(max_length=64, blank=True, default='')
+
+    # ----- Actuals (driver/personnel and/or Unit Head) -----
+    # Legs table in the trip ticket. List of dicts; each dict can contain:
+    # - depart_datetime, depart_place
+    # - arrive_datetime, arrive_place
+    # - distance
+    actual_legs_json = models.JSONField(default=list, blank=True)
+
+    # Fuel & consumables (ticket consumption, not inventory deduction for motorpool).
+    fuel_beginning_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuel_received_issued_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuel_added_purchased_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuel_total_available_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuel_used_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    fuel_ending_liters = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    other_consumables_json = models.JSONField(default=list, blank=True)
+    other_consumables_notes = models.TextField(blank=True, default='')
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'motorpool trip data'
+        verbose_name_plural = 'motorpool trip data'
+
+    def __str__(self):
+        return f"MotorpoolTripData for {self.request.display_id}"

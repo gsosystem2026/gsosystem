@@ -10,10 +10,10 @@ Exit code:
   1 when checks fail or test email send fails.
 """
 from django.conf import settings
-from django.core.mail import send_mail
 from django.core.management.base import BaseCommand
 
 from apps.gso_accounts.views import _invite_email_preflight_issues
+from core.emailing import send_gso_email
 
 
 class Command(BaseCommand):
@@ -47,7 +47,7 @@ class Command(BaseCommand):
             self.stdout.write('Tip: pass --to you@example.com to verify real send.')
             return
 
-        send_mail(
+        send_gso_email(
             subject='GSO Email Check - Invite Delivery Test',
             message='This is a test email from gso_email_check.',
             from_email=settings.DEFAULT_FROM_EMAIL,

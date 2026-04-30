@@ -11,4 +11,9 @@ urlpatterns = [
     path('<int:pk>/cancel/', views.RequestCancelView.as_view(), name='requestor_request_cancel'),
     path('<int:pk>/feedback/', views.SubmitFeedbackView.as_view(), name='requestor_request_feedback'),
     path('export/csv/', views.RequestorRequestExportCsvView.as_view(), name='requestor_request_export_csv'),
+
+    # Motorpool printing + saving (Unit Head / assigned personnel)
+    path('<int:pk>/motorpool/update/', views.MotorpoolTripUpdateView.as_view(), name='motorpool_trip_update'),
+    path('<int:pk>/motorpool/print-request/', views.MotorpoolPrintRequestView.as_view(), name='motorpool_print_request'),
+    path('<int:pk>/motorpool/print-trip-ticket/', views.MotorpoolPrintTripTicketView.as_view(), name='motorpool_print_trip_ticket'),
 ]

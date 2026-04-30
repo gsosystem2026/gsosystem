@@ -54,6 +54,34 @@
             </div>
         </div>
 
+        {% if req.unit and req.unit.code|lower == 'motorpool' %}
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+            <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Motorpool Trip Plan</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="id_motorpool_trip_datetime" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date and Time of Trip</label>
+                    {{ form.motorpool_trip_datetime }}
+                </div>
+                <div>
+                    <label for="id_motorpool_number_of_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Days</label>
+                    {{ form.motorpool_number_of_days }}
+                </div>
+                <div>
+                    <label for="id_motorpool_number_of_passengers" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Passengers</label>
+                    {{ form.motorpool_number_of_passengers }}
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="id_motorpool_places_to_be_visited" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Place(s) to be visited</label>
+                    {{ form.motorpool_places_to_be_visited }}
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="id_motorpool_itinerary_of_travel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Itinerary of Travel</label>
+                    {{ form.motorpool_itinerary_of_travel }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
             <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Requestor information (optional)</h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -88,6 +116,10 @@
 </div>
 <style>
     #id_description, #id_location, #id_custom_full_name, #id_custom_email, #id_custom_contact_number {
+        @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary;
+    }
+    #id_motorpool_places_to_be_visited, #id_motorpool_itinerary_of_travel,
+    #id_motorpool_trip_datetime, #id_motorpool_number_of_days, #id_motorpool_number_of_passengers {
         @apply w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary;
     }
     #id_description { min-height: 120px; }

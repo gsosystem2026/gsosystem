@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Driver's Trip Ticket (Print)</title>
+  <style>
+    @media print { .no-print { display: none !important; } }
+    body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #111827; }
+    .title { text-align: center; font-weight: 700; font-size: 16px; margin-bottom: 8px; }
+    .subtle { color: #374151; font-size: 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .box { border: 1px solid #d1d5db; border-radius: 6px; padding: 12px; }
+    .label { font-size: 11px; color: #6b7280; margin-bottom: 2px; text-transform: uppercase; letter-spacing: .02em; }
+    .value { font-size: 13px; white-space: pre-wrap; }
+    .sig { height: 60px; border-bottom: 1px solid #111827; margin-top: 18px; }
+    .sig-label { font-size: 11px; color: #6b7280; text-align: center; margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    td, th { border: 1px solid #e5e7eb; padding: 6px; vertical-align: top; }
+    th { background: #f9fafb; text-align: left; font-weight: 700; }
+    .muted { color: #6b7280; }
+    .no-wrap { white-space: nowrap; }
+    .w-20 { width: 20%; }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="text-align:center; margin-bottom: 12px;">
+    <button onclick="window.print()" style="padding:8px 12px; border:1px solid #d1d5db; border-radius:6px; background:#fff; cursor:pointer;">
+      Print
+    </button>
+  </div>
+
+  <div class="title">DRIVER'S TRIP TICKET (MOTORPOOL)</div>
+  <div class="subtle" style="text-align:center; margin-bottom: 16px;">
+    Travel date: {{ mp.trip_datetime|date:"M d, Y"|default:"" }}
+  </div>
+
+  <div class="grid">
+    <div class="box">
+      <div class="label">Travel Date / Driver</div>
+      <div class="value">Driver: {{ mp.driver_name|default:"" }}</div>
+      <div class="value">Contract/Stamp #: {{ mp.vehicle_stamp_or_contract_no|default:"" }}</div>
+      <div class="value">Vehicle Plate: {{ mp.vehicle_plate|default:"" }}</div>
+      <div style="margin-top:10px;">
+        <div class="label">Authorized Requester / Passenger</div>
+        <div class="value">{{ mp.contact_person|default:"" }}</div>
+        <div class="value">Contact #: {{ mp.contact_number|default:"" }}</div>
+      </div>
+    </div>
+    <div class="box">
+      <div class="label">Purpose</div>
+      <div class="value">{{ req.description_for_display|default:"" }}</div>
+
+      <div style="margin-top:10px;">
+        <div class="label">Remarks</div>
+        <div class="value">{% if req.location %}{{ req.location }}{% endif %}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:12px;">
+    <div class="label" style="margin-bottom:8px;">Itinerary / Trip Legs</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="w-20">Time of Departure</th>
+          <th class="w-20">Place of Origin</th>
+          <th class="w-20">Time of Arrival</th>
+          <th class="w-20">Place of Destination</th>
+          <th>Distance</th>
+          <th>Requisitioning Office / Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in planned_itinerary_lines %}
+        <tr>
+          <td class="no-wrap"></td>
+          <td></td>
+          <td class="no-wrap"></td>
+          <td></td>
+          <td class="no-wrap"></td>
+          <td class="muted">{{ line }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid" style="margin-top:12px;">
+    <div class="box">
+      <div class="label">Fuel / Gasoline (Liters)</div>
+      <table>
+        <tbody>
+          <tr><th class="w-20">Beginning fuel in tank</th><td class="no-wrap">{{ mp.fuel_beginning_liters|default:"" }}</td></tr>
+          <tr><th>Issued / received</th><td class="no-wrap">{{ mp.fuel_received_issued_liters|default:"" }}</td></tr>
+          <tr><th>Added / purchased</th><td class="no-wrap">{{ mp.fuel_added_purchased_liters|default:"" }}</td></tr>
+          <tr><th>Total fuel available</th><td class="no-wrap">{{ mp.fuel_total_available_liters|default:"" }}</td></tr>
+          <tr><th>Fuel used</th><td class="no-wrap">{{ mp.fuel_used_liters|default:"" }}</td></tr>
+          <tr><th>Balance / ending fuel</th><td class="no-wrap">{{ mp.fuel_ending_liters|default:"" }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="box">
+      <div class="label">Other Consumables</div>
+      <div class="value">{{ mp.other_consumables_notes|default:"" }}</div>
+    </div>
+  </div>
+
+  <div class="box" style="margin-top:12px;">
+    <div class="grid">
+      <div>
+        <div class="label">Driver</div>
+        <div class="sig"></div>
+        <div class="sig-label">Name & Signature</div>
+      </div>
+      <div>
+        <div class="label">Date</div>
+        <div class="sig"></div>
+        <div class="sig-label">__________</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

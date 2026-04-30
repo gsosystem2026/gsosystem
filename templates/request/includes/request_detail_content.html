@@ -197,6 +197,98 @@
     </div>
     {% endif %}
 
+    {% if not is_requestor_layout and is_motorpool %}
+    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Motorpool Ticket</h2>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Enter vehicle + fuel/consumables to print the request and trip ticket. Leave blank fields for manual handwriting.</p>
+            </div>
+            {% if can_edit_motorpool_vehicle %}
+            <div class="flex items-center gap-2 flex-wrap">
+                <a href="{% url 'gso_requests:motorpool_print_request' req.pk %}" target="_blank" rel="noopener" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    Print Request
+                </a>
+                <a href="{% url 'gso_requests:motorpool_print_trip_ticket' req.pk %}" target="_blank" rel="noopener" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg shadow transition-colors">
+                    Print Trip Ticket
+                </a>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if motorpool_trip_form %}
+        {% if can_edit_motorpool_vehicle or can_edit_motorpool_actuals %}
+        <form method="post" action="{% url 'gso_requests:motorpool_trip_update' req.pk %}" class="px-6 py-4">
+            {% csrf_token %}
+            <div class="space-y-6">
+                {% if can_edit_motorpool_vehicle %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.driver_name.label }}</label>
+                        {{ motorpool_trip_form.driver_name }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.vehicle_plate.label }}</label>
+                        {{ motorpool_trip_form.vehicle_plate }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.vehicle_stamp_or_contract_no.label }}</label>
+                        {{ motorpool_trip_form.vehicle_stamp_or_contract_no }}
+                    </div>
+                    <div class="sm:col-span-2 lg:col-span-3">
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.vehicle_trans.label }}</label>
+                        {{ motorpool_trip_form.vehicle_trans }}
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if can_edit_motorpool_actuals %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_beginning_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_beginning_liters }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_received_issued_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_received_issued_liters }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_added_purchased_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_added_purchased_liters }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_total_available_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_total_available_liters }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_used_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_used_liters }}
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.fuel_ending_liters.label }}</label>
+                        {{ motorpool_trip_form.fuel_ending_liters }}
+                    </div>
+                    <div class="sm:col-span-2 lg:col-span-3">
+                        <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{{ motorpool_trip_form.other_consumables_notes.label }}</label>
+                        {{ motorpool_trip_form.other_consumables_notes }}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-3">
+                {% if can_edit_motorpool_vehicle or can_edit_motorpool_actuals %}
+                <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                    Save Motorpool Details
+                </button>
+                {% endif %}
+            </div>
+        </form>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% if not is_requestor_layout and can_assign and assign_form %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
@@ -237,7 +329,7 @@
     </div>
     {% endif %}
 
-    {% if not is_requestor_layout and materials_issued %}
+    {% if not is_requestor_layout and materials_issued and not hide_materials_sections %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Materials issued to this request</h2>
@@ -255,7 +347,7 @@
     </div>
     {% endif %}
 
-    {% if not is_requestor_layout and can_add_materials and issue_material_form %}
+    {% if not is_requestor_layout and can_add_materials and issue_material_form and not hide_materials_sections %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Add materials</h2>
@@ -374,7 +466,7 @@
     </style>
     {% endif %}
 
-    {% if not is_requestor_layout and material_requests %}
+    {% if not is_requestor_layout and material_requests and not hide_materials_sections %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Material requests</h2>
@@ -415,7 +507,7 @@
     </div>
     {% endif %}
 
-    {% if not is_requestor_layout and can_request_materials and request_material_form %}
+    {% if not is_requestor_layout and can_request_materials and request_material_form and not hide_materials_sections %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Request materials</h2>

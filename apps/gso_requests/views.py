@@ -15,8 +15,15 @@ import csv
 from apps.gso_accounts.views import StaffRequiredMixin
 from apps.gso_units.models import Unit
 
-from .forms import RequestForm, RequestorCancelForm, AssignPersonnelForm, RequestMessageForm, RequestFeedbackForm
-from .models import Request, RequestAssignment, RequestMessage, RequestFeedback
+from .forms import (
+    RequestForm,
+    RequestorCancelForm,
+    AssignPersonnelForm,
+    RequestMessageForm,
+    RequestFeedbackForm,
+    MotorpoolTripVehicleAndFuelForm,
+)
+from .models import Request, RequestAssignment, RequestMessage, RequestFeedback, MotorpoolTripData
 from apps.gso_reports.models import ensure_war_for_request
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
@@ -91,6 +98,17 @@ class RequestCreateView(LoginRequiredMixin, FormView):
 
         data = {k: v for k, v in form.cleaned_data.items() if k != 'unit'}
         attachment = data.pop('attachment', None)
+
+        # Motorpool fields are stored in MotorpoolTripData (not Request).
+        motorpool_field_keys = {
+            'motorpool_places_to_be_visited',
+            'motorpool_itinerary_of_travel',
+            'motorpool_trip_datetime',
+            'motorpool_number_of_days',
+            'motorpool_number_of_passengers',
+        }
+        motorpool_fields = {k: data.pop(k) for k in list(motorpool_field_keys) if k in data}
+
         data['requestor'] = self.request.user
         data['status'] = Request.Status.SUBMITTED
 
@@ -101,6 +119,22 @@ class RequestCreateView(LoginRequiredMixin, FormView):
                 data['unit'] = unit
                 data['attachment'] = attachment if i == 0 else None
                 req = Request.objects.create(**data)
+
+                if (unit.code or '').strip().lower() == 'motorpool':
+                    # Create motorpool trip data record even if some optional fields are empty,
+                    # so printing/ticket UI can be enabled consistently.
+                    from .models import MotorpoolTripData
+                    MotorpoolTripData.objects.create(
+                        request=req,
+                        requesting_office=(self.request.user.office_department or '').strip(),
+                        places_to_be_visited=motorpool_fields.get('motorpool_places_to_be_visited', '') or '',
+                        itinerary_of_travel=motorpool_fields.get('motorpool_itinerary_of_travel', '') or '',
+                        trip_datetime=motorpool_fields.get('motorpool_trip_datetime'),
+                        number_of_days=motorpool_fields.get('motorpool_number_of_days'),
+                        number_of_passengers=motorpool_fields.get('motorpool_number_of_passengers'),
+                        contact_person=(data.get('custom_full_name') or '') if data.get('custom_full_name') else '',
+                        contact_number=(data.get('custom_contact_number') or '') if data.get('custom_contact_number') else '',
+                    )
                 notify_request_submitted(req)
 
         return redirect(reverse('gso_accounts:requestor_dashboard') + '?submitted=1')
@@ -145,10 +179,46 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
             return redirect('gso_requests:requestor_request_detail', pk=self.object.pk)
         return super().get(request, *args, **kwargs)
 
+    def get_form(self, form_class=None):
+        """
+        Populate Motorpool planned fields from MotorpoolTripData on edit pages.
+        """
+        form = super().get_form(form_class)
+        if self.object and getattr(self.object.unit, 'code', '').strip().lower() == 'motorpool':
+            mp = getattr(self.object, 'motorpool_trip', None)
+            if mp:
+                form.initial.update({
+                    'motorpool_places_to_be_visited': mp.places_to_be_visited,
+                    'motorpool_itinerary_of_travel': mp.itinerary_of_travel,
+                    'motorpool_trip_datetime': mp.trip_datetime,
+                    'motorpool_number_of_days': mp.number_of_days,
+                    'motorpool_number_of_passengers': mp.number_of_passengers,
+                })
+        return form
+
     def form_valid(self, form):
         # Keep unit unchanged on edit
         form.instance.unit_id = self.object.unit_id
         response = super().form_valid(form)
+
+        if self.object and getattr(self.object.unit, 'code', '').strip().lower() == 'motorpool':
+            mp = getattr(self.object, 'motorpool_trip', None)
+            if not mp:
+                mp = MotorpoolTripData.objects.create(request=self.object)
+
+            mp.places_to_be_visited = form.cleaned_data.get('motorpool_places_to_be_visited') or ''
+            mp.itinerary_of_travel = form.cleaned_data.get('motorpool_itinerary_of_travel') or ''
+            mp.trip_datetime = form.cleaned_data.get('motorpool_trip_datetime')
+            mp.number_of_days = form.cleaned_data.get('motorpool_number_of_days')
+            mp.number_of_passengers = form.cleaned_data.get('motorpool_number_of_passengers')
+
+            # Keep motorpool contact aligned with requestor contact fields on this edit form.
+            mp.contact_person = form.cleaned_data.get('custom_full_name') or ''
+            mp.contact_number = form.cleaned_data.get('custom_contact_number') or ''
+            # Requesting office is derived from the requestor account.
+            mp.requesting_office = (self.request.user.office_department or '').strip()
+            mp.save()
+
         from apps.gso_accounts.models import log_audit
         log_audit(
             'requestor_edit_request',
@@ -427,6 +497,43 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     Request.Status.ON_HOLD,
                 ) and req.assignments.exists():
                     context['remind_targets'].append(('personnel', 'Assigned personnel', 'Request needs your attention'))
+
+            # Motorpool-specific context (printable request + trip ticket data)
+            context['is_motorpool'] = (getattr(req.unit, 'code', '') or '').lower() == 'motorpool'
+            context['hide_materials_sections'] = False
+            context['motorpool_trip_form'] = None
+            context['motorpool_leg_row_count'] = 6
+            context['can_edit_motorpool_vehicle'] = False
+            context['can_edit_motorpool_actuals'] = False
+
+            if context['is_motorpool']:
+                mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+                context['motorpool_data'] = mp
+                planned_lines = [ln.strip() for ln in (mp.itinerary_of_travel or '').splitlines() if ln.strip()]
+                # Cap rows so UI stays manageable; blanks can still be handwritten on printout.
+                context['motorpool_leg_row_count'] = min(max(len(planned_lines), 1), 8)
+                context['hide_materials_sections'] = True
+
+                is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
+                context['can_edit_motorpool_vehicle'] = is_unit_head and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+
+                is_assigned_personnel = getattr(user, 'is_personnel', False) and req.assignments.filter(personnel=user).exists()
+                allowed_actual_statuses = (
+                    Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
+                    Request.Status.IN_PROGRESS,
+                    Request.Status.ON_HOLD,
+                    Request.Status.DONE_WORKING,
+                )
+                context['can_edit_motorpool_actuals'] = (
+                    (is_unit_head or is_assigned_personnel)
+                    and req.status in allowed_actual_statuses
+                )
+                if context['can_edit_motorpool_vehicle'] or context['can_edit_motorpool_actuals']:
+                    context['motorpool_trip_form'] = MotorpoolTripVehicleAndFuelForm(instance=mp, prefix='motorpool')
+            else:
+                context['motorpool_data'] = None
+
             # Materials issued to this request (Unit Head can add; deducts from inventory)
             context['materials_issued'] = req.inventory_issues.select_related('item', 'performed_by').order_by('-created_at')
             context['can_add_materials'] = (
@@ -530,6 +637,110 @@ class RequestAttachmentView(LoginRequiredMixin, View):
         )
         response['Content-Disposition'] = f'{disposition}; filename="{filename}"'
         return response
+
+
+class MotorpoolTripUpdateView(LoginRequiredMixin, View):
+    """Motorpool: save vehicle identifiers and fuel/consumables used on the trip ticket."""
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
+        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+            raise Http404()
+
+        user = request.user
+        mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+
+        is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
+        is_assigned_personnel = getattr(user, 'is_personnel', False) and req.assignments.filter(personnel=user).exists()
+
+        allowed_actual_statuses = (
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.INSPECTION,
+            Request.Status.IN_PROGRESS,
+            Request.Status.ON_HOLD,
+            Request.Status.DONE_WORKING,
+        )
+        can_edit_vehicle = is_unit_head and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+        can_edit_actuals = (is_unit_head or is_assigned_personnel) and req.status in allowed_actual_statuses
+
+        if not (can_edit_vehicle or can_edit_actuals):
+            messages.error(request, 'You do not have permission to edit motorpool details for this request/state.')
+            return redirect('gso_accounts:staff_request_detail', pk=req.pk)
+
+        form = MotorpoolTripVehicleAndFuelForm(request.POST, instance=mp, prefix='motorpool')
+        if not form.is_valid():
+            messages.error(request, 'Please check the motorpool fields and try again.')
+            return redirect('gso_accounts:staff_request_detail', pk=req.pk)
+
+        obj = form.save(commit=False)
+
+        if not can_edit_vehicle:
+            obj.driver_name = mp.driver_name
+            obj.vehicle_plate = mp.vehicle_plate
+            obj.vehicle_stamp_or_contract_no = mp.vehicle_stamp_or_contract_no
+            obj.vehicle_trans = mp.vehicle_trans
+
+        if not can_edit_actuals:
+            obj.fuel_beginning_liters = mp.fuel_beginning_liters
+            obj.fuel_received_issued_liters = mp.fuel_received_issued_liters
+            obj.fuel_added_purchased_liters = mp.fuel_added_purchased_liters
+            obj.fuel_total_available_liters = mp.fuel_total_available_liters
+            obj.fuel_used_liters = mp.fuel_used_liters
+            obj.fuel_ending_liters = mp.fuel_ending_liters
+            obj.other_consumables_notes = mp.other_consumables_notes
+
+        obj.save()
+        messages.success(request, 'Motorpool details saved.')
+        return redirect('gso_accounts:staff_request_detail', pk=req.pk)
+
+
+class MotorpoolPrintRequestView(LoginRequiredMixin, View):
+    """Render print-friendly Motorpool Request (page A)."""
+
+    def get(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
+        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+            raise Http404()
+        user = request.user
+        is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
+        is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
+        if not (is_unit_head or is_director):
+            raise Http404()
+
+        mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+        context = {
+            'req': req,
+            'mp': mp,
+            'purpose': req.description_for_display,
+        }
+        return TemplateResponse(request, 'motorpool/print_motorpool_request.html', context)
+
+
+class MotorpoolPrintTripTicketView(LoginRequiredMixin, View):
+    """Render print-friendly Driver's Trip Ticket (page B)."""
+
+    def get(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
+        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+            raise Http404()
+        user = request.user
+        is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
+        is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
+        if not (is_unit_head or is_director):
+            raise Http404()
+
+        mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+        planned_lines = [ln.strip() for ln in (mp.itinerary_of_travel or '').splitlines() if ln.strip()]
+        if not planned_lines:
+            planned_lines = [''] * 6
+        context = {
+            'req': req,
+            'mp': mp,
+            'planned_itinerary_lines': planned_lines,
+        }
+        return TemplateResponse(request, 'motorpool/print_trip_ticket.html', context)
 
 
 class AssignPersonnelView(LoginRequiredMixin, View):

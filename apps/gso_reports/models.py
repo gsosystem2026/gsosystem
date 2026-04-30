@@ -223,7 +223,34 @@ def ensure_war_for_request(request_obj, created_by=None):
     for personnel in personnel_qs:
         summary = "To be filled"
         accomplishments = "To be filled"
-        if can_generate_ai:
+
+        unit_code = (getattr(request_obj.unit, 'code', '') or '').strip().lower() if getattr(request_obj, 'unit_id', None) else ''
+        if unit_code == 'motorpool':
+            mp = getattr(request_obj, 'motorpool_trip', None)
+            purpose = (request_obj.description or '').strip()
+            itinerary = (getattr(mp, 'itinerary_of_travel', '') or '').strip()
+            first_line = next((ln.strip() for ln in itinerary.splitlines() if ln.strip()), '')
+
+            summary = 'Motorpool trip' if purpose else 'Motorpool transport'
+
+            parts = []
+            if purpose:
+                parts.append(f"Completed motorpool vehicle transport for: {purpose}.")
+            else:
+                parts.append("Completed motorpool vehicle transport.")
+
+            # Add one more sentence only when we have factual material.
+            fuel_used = getattr(mp, 'fuel_used_liters', None) if mp else None
+            other_notes = (getattr(mp, 'other_consumables_notes', '') or '').strip() if mp else ''
+            if fuel_used not in (None, ''):
+                parts.append(f"Fuel used recorded: {fuel_used} liters.")
+            elif other_notes:
+                parts.append(f"Consumables noted: {other_notes}.")
+            elif first_line:
+                parts.append(f"Itinerary (planned lines): {first_line}.")
+
+            accomplishments = ' '.join(parts).strip()
+        elif can_generate_ai:
             try:
                 ai_draft = generate_war_draft(request_obj=request_obj, personnel=personnel)
                 summary = ai_draft.get("summary") or summary

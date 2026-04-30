@@ -87,6 +87,7 @@ urlpatterns = [
     path('staff/work-reports/feedback/', FeedbackReportsView.as_view(), name='staff_work_reports_feedback'),
     path('staff/account-management/', views.StaffAccountManagementView.as_view(), name='staff_account_management'),
     path('staff/account-management/user/add/', views.DirectorUserCreateView.as_view(), name='staff_account_user_add'),
+    path('staff/account-management/user/add/verify/', views.DirectorUserCreateVerifyView.as_view(), name='staff_account_user_add_verify'),
     path('staff/account-management/user/<int:pk>/edit/', views.DirectorUserEditView.as_view(), name='staff_account_user_edit'),
     path('staff/account-management/user/<int:pk>/status-action/', views.UserStatusActionView.as_view(), name='staff_account_user_status_action'),
     path('staff/account-management/user/<int:pk>/delete-permanent/', views.UserDeletePermanentView.as_view(), name='staff_account_user_delete_permanent'),

@@ -3,10 +3,10 @@ import logging
 
 from django.conf import settings
 from django.core.cache import cache
-from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.urls import reverse
 
+from core.emailing import send_gso_email
 from .models import Notification
 
 logger = logging.getLogger(__name__)
@@ -49,14 +49,14 @@ def _safe_send_email(user, title, message, link='', to_email=''):
         },
     )
     try:
-        msg = EmailMultiAlternatives(
+        send_gso_email(
             subject=f'GSO Notification: {title}',
-            body=text_body,
+            message=text_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[email],
+            recipient_list=[email],
+            html_message=html_body,
+            fail_silently=False,
         )
-        msg.attach_alternative(html_body, 'text/html')
-        msg.send(fail_silently=False)
     except Exception:
         logger.exception('Failed sending notification email to user_id=%s', getattr(user, 'id', None))
 
