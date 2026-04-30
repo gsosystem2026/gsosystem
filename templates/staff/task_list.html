@@ -188,20 +188,39 @@ document.addEventListener('DOMContentLoaded', function () {
             event.preventDefault();
             const action = form.getAttribute('action');
             if (!action) return;
+            const method = (form.getAttribute('method') || 'POST').toUpperCase();
+            const payload = new FormData(form);
+            if (window.GSOPersonnelOffline && typeof window.GSOPersonnelOffline.submitOrQueue === 'function' && window.GSOPersonnelOffline.isPersonnelAction(action)) {
+                window.GSOPersonnelOffline.submitOrQueue({
+                    action: addPartialParam(action),
+                    method: method,
+                    formData: payload,
+                    onHtml: function (html) {
+                        renderModalBodyFromHtml(html);
+                        refreshTaskList();
+                    },
+                    onQueue: function () {
+                        refreshTaskList();
+                    }
+                }).catch(function () {
+                    requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not queue action. Please try again.</p>';
+                });
+                return;
+            }
             fetch(addPartialParam(action), {
-                method: (form.getAttribute('method') || 'POST').toUpperCase(),
+                method: method,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                body: new FormData(form),
+                body: payload,
                 credentials: 'same-origin'
             })
-                .then(function (r) { return r.text(); })
-                .then(function (html) {
-                    renderModalBodyFromHtml(html);
-                    refreshTaskList();
-                })
-                .catch(function () {
-                    requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not submit action. Please try again.</p>';
-                });
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                renderModalBodyFromHtml(html);
+                refreshTaskList();
+            })
+            .catch(function () {
+                requestModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not submit action. Please try again.</p>';
+            });
         });
     }
 

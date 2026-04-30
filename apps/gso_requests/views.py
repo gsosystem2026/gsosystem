@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
 from django.db import transaction
+from django.core.cache import cache
 
 from django.http import Http404, HttpResponse, FileResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404
@@ -878,6 +879,29 @@ WORK_STATUS_ALLOWED = (
     Request.Status.DONE_WORKING,
 )
 
+SYNC_IDEMPOTENCY_TTL_SECONDS = 60 * 60 * 24
+
+
+def _is_offline_sync(request):
+    return (request.headers.get('X-Offline-Sync') or '').strip() == '1'
+
+
+def _idempotency_claim(request, req_obj, action_name):
+    key = (request.headers.get('X-Idempotency-Key') or '').strip()
+    if not key:
+        return True, False
+    cache_key = f"gso:sync:{action_name}:{request.user.pk}:{req_obj.pk}:{key}"
+    claimed = cache.add(cache_key, timezone.now().isoformat(), timeout=SYNC_IDEMPOTENCY_TTL_SECONDS)
+    return claimed, True
+
+
+def _offline_sync_response_ok():
+    return JsonResponse({'ok': True})
+
+
+def _offline_sync_response_error(message, status=400):
+    return JsonResponse({'ok': False, 'error': message}, status=status)
+
 
 class UpdateWorkStatusView(LoginRequiredMixin, View):
     """Phase 5.1: Personnel set work status (In Progress, On Hold, Done working)."""
@@ -886,33 +910,61 @@ class UpdateWorkStatusView(LoginRequiredMixin, View):
     def post(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit'), pk=pk)
         user = request.user
+        offline_sync = _is_offline_sync(request)
         if not getattr(user, 'is_personnel', False):
-            messages.error(request, 'Only assigned personnel can update work status.')
+            msg = 'Only assigned personnel can update work status.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=403)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if not req.assignments.filter(personnel=user).exists():
-            messages.error(request, 'You are not assigned to this request.')
+            msg = 'You are not assigned to this request.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=403)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
+        claimed, key_used = _idempotency_claim(request, req, 'update_status')
+        if key_used and not claimed:
+            return _offline_sync_response_ok() if offline_sync else redirect('gso_accounts:staff_request_detail', pk=pk)
         new_status = request.POST.get('status', '').strip()
         if new_status not in (s for s, _ in Request.Status.choices if s in WORK_STATUS_ALLOWED):
-            messages.error(request, 'Invalid status.')
+            msg = 'Invalid status.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=400)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if req.status == Request.Status.DIRECTOR_APPROVED:
             if _requires_inspection(req):
                 allowed_from_approved = (Request.Status.INSPECTION, Request.Status.IN_PROGRESS)
                 if new_status not in allowed_from_approved:
-                    messages.error(request, 'From Approved you can only set Inspection or In Progress for this unit.')
+                    msg = 'From Approved you can only set Inspection or In Progress for this unit.'
+                    if offline_sync:
+                        return _offline_sync_response_error(msg, status=409)
+                    messages.error(request, msg)
                     return redirect('gso_accounts:staff_request_detail', pk=pk)
             elif new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
-                messages.error(request, 'From Approved you can only set In Progress or On Hold.')
+                msg = 'From Approved you can only set In Progress or On Hold.'
+                if offline_sync:
+                    return _offline_sync_response_error(msg, status=409)
+                messages.error(request, msg)
                 return redirect('gso_accounts:staff_request_detail', pk=pk)
         if req.status == Request.Status.INSPECTION and new_status not in (Request.Status.IN_PROGRESS, Request.Status.ON_HOLD):
-            messages.error(request, 'From Inspection you can only set In Progress or On Hold.')
+            msg = 'From Inspection you can only set In Progress or On Hold.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=409)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if req.status == Request.Status.IN_PROGRESS and new_status not in (Request.Status.ON_HOLD, Request.Status.DONE_WORKING):
-            messages.error(request, 'From In Progress you can only set On Hold or Done working.')
+            msg = 'From In Progress you can only set On Hold or Done working.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=409)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if req.status == Request.Status.ON_HOLD and new_status not in (Request.Status.IN_PROGRESS, Request.Status.DONE_WORKING):
-            messages.error(request, 'From On Hold you can only set In Progress or Done working.')
+            msg = 'From On Hold you can only set In Progress or Done working.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=409)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         old_status = req.status
         req.status = new_status
@@ -923,6 +975,8 @@ class UpdateWorkStatusView(LoginRequiredMixin, View):
         req.save(update_fields=update_fields)
         from apps.gso_notifications.utils import notify_after_personnel_work_status_change
         notify_after_personnel_work_status_change(req, old_status, new_status)
+        if offline_sync:
+            return _offline_sync_response_ok()
         messages.success(request, f'Status set to {req.get_status_display()}.')
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 
@@ -978,11 +1032,17 @@ class AddRequestMessageView(LoginRequiredMixin, View):
     def post(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit'), pk=pk)
         user = request.user
+        offline_sync = _is_offline_sync(request)
         if getattr(user, 'is_requestor', False):
-            messages.error(request, 'Only staff can post messages here.')
+            msg = 'Only staff can post messages here.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=403)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         if getattr(user, 'is_unit_head', False) or getattr(user, 'is_personnel', False):
             if user.unit_id != req.unit_id:
+                if offline_sync:
+                    return _offline_sync_response_error('Access denied for this request.', status=403)
                 raise Http404()
         chat_allowed = req.status in (
             Request.Status.DIRECTOR_APPROVED,
@@ -992,12 +1052,22 @@ class AddRequestMessageView(LoginRequiredMixin, View):
             Request.Status.DONE_WORKING,
         )
         if not chat_allowed:
-            messages.error(request, 'Chat is only available after the request is approved and until it is completed.')
+            msg = 'Chat is only available after the request is approved and until it is completed.'
+            if offline_sync:
+                return _offline_sync_response_error(msg, status=409)
+            messages.error(request, msg)
             return redirect('gso_accounts:staff_request_detail', pk=pk)
+        claimed, key_used = _idempotency_claim(request, req, 'request_message')
+        if key_used and not claimed:
+            return _offline_sync_response_ok() if offline_sync else redirect('gso_accounts:staff_request_detail', pk=pk)
         form = RequestMessageForm(request.POST)
         if form.is_valid():
             RequestMessage.objects.create(request=req, user=user, message=form.cleaned_data['message'])
+            if offline_sync:
+                return _offline_sync_response_ok()
             messages.success(request, 'Message added.')
+        elif offline_sync:
+            return _offline_sync_response_error('Message is required.', status=400)
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 
 

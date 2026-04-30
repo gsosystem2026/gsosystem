@@ -181,6 +181,7 @@ Header matches requestor layout; no footer (content fills viewport).
     }
 })();
 </script>
+<script src="{% static 'js/personnel_offline_sync.js' %}"></script>
 <script>
 (function() {
     var VERSION_KEY = 'gso_app_version';
@@ -207,6 +208,13 @@ Header matches requestor layout; no footer (content fills viewport).
     }
     checkVersion();
     setInterval(checkVersion, 5 * 60 * 1000);
+})();
+</script>
+<script>
+(function () {
+    if (window.GSOPersonnelOffline && typeof window.GSOPersonnelOffline.init === 'function') {
+        window.GSOPersonnelOffline.init();
+    }
 })();
 </script>
 {% block extra_js %}{% endblock %}
