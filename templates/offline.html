@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Offline — GSO{% endblock %}
+{% block body_class %}bg-slate-100 text-slate-900 min-h-screen{% endblock %}
+{% block content %}
+<main class="min-h-screen flex items-center justify-center p-6">
+    <section class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+        <img src="{% static 'img/logo/gso_logo.png' %}" alt="GSO" class="h-14 w-auto mx-auto mb-5 object-contain"/>
+        <h1 class="text-2xl font-bold">You are offline</h1>
+        <p class="mt-2 text-slate-600">You can still view cached personnel pages and queue personnel actions. Changes will sync automatically once internet is back.</p>
+        <button type="button" onclick="window.location.reload()" class="mt-6 inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-white font-semibold hover:bg-primary/90">
+            Retry
+        </button>
+    </section>
+</main>
+{% endblock %}

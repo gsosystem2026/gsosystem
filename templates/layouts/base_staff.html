@@ -9,6 +9,9 @@ Header matches requestor layout; no footer (content fills viewport).
 
 {% block extra_head %}
 <link href="{% static 'css/tailwind.css' %}" rel="stylesheet"/>
+<link rel="manifest" href="{% url 'web_manifest' %}"/>
+<meta name="theme-color" content="#1152d4"/>
+<meta name="mobile-web-app-capable" content="yes"/>
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
@@ -215,6 +218,15 @@ Header matches requestor layout; no footer (content fills viewport).
     if (window.GSOPersonnelOffline && typeof window.GSOPersonnelOffline.init === 'function') {
         window.GSOPersonnelOffline.init();
     }
+})();
+</script>
+<script>
+(function () {
+    if (!('serviceWorker' in navigator)) return;
+    if (!window.isSecureContext) return;
+    window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/service-worker.js').catch(function () {});
+    });
 })();
 </script>
 {% block extra_js %}{% endblock %}

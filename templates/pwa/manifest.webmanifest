@@ -1,0 +1,23 @@
+{% load static %}
+{
+  "name": "GSO Personnel",
+  "short_name": "GSO",
+  "description": "GSO staff personnel task management with offline sync support.",
+  "start_url": "/accounts/staff/task-management/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1152d4",
+  "icons": [
+    {
+      "src": "{% static 'img/logo/gso_logo.png' %}",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "{% static 'img/logo/gso_logo.png' %}",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

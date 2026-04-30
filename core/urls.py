@@ -4,6 +4,7 @@ URL configuration for GSO project.
 from django.contrib import admin
 from django.shortcuts import redirect
 from django.urls import path, include
+from core import views as core_views
 
 
 def root_redirect(request):
@@ -17,6 +18,9 @@ def root_redirect(request):
 
 urlpatterns = [
     path('', root_redirect),
+    path('service-worker.js', core_views.service_worker_view, name='service_worker'),
+    path('manifest.webmanifest', core_views.manifest_view, name='web_manifest'),
+    path('offline/', core_views.OfflineFallbackView.as_view(), name='offline_fallback'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('apps.gso_api.urls')),
     path('accounts/social/', include('allauth.urls')),
