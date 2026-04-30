@@ -1,8 +1,10 @@
 {% load static %}
 const APP_VERSION = "{{ app_version|default:'1.0' }}";
-const SHELL_CACHE = `gso-shell-${APP_VERSION}`;
-const RUNTIME_CACHE = `gso-runtime-${APP_VERSION}`;
+const SW_SCHEMA_VERSION = "2";
+const SHELL_CACHE = `gso-shell-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
+const RUNTIME_CACHE = `gso-runtime-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
 const OFFLINE_URL = "/offline/";
+const STAFF_FALLBACK_URL = "/accounts/staff/task-management/";
 
 const SHELL_URLS = [
   OFFLINE_URL,
@@ -49,6 +51,16 @@ function isPersonnelPage(requestUrl) {
     || /\/accounts\/staff\/request-management\/\d+\/$/.test(requestUrl.pathname);
 }
 
+function offlineNavigationFallback(request) {
+  return caches.match(request).then((cached) => {
+    if (cached) return cached;
+    return caches.match(STAFF_FALLBACK_URL).then((staffFallback) => {
+      if (staffFallback) return staffFallback;
+      return caches.match(OFFLINE_URL);
+    });
+  });
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -81,10 +93,7 @@ self.addEventListener("fetch", (event) => {
           return response;
         })
         .catch(() =>
-          caches.match(request).then((cached) => {
-            if (cached) return cached;
-            return caches.match(OFFLINE_URL);
-          })
+          offlineNavigationFallback(request)
         )
     );
   }
