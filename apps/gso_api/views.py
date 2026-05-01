@@ -10,11 +10,13 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.core.cache import cache
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 
 from apps.gso_accounts.models import User
-from apps.gso_requests.models import Request, RequestAssignment
-from apps.gso_inventory.models import InventoryItem
+from apps.gso_requests.models import Request, RequestAssignment, RequestMessage
+from apps.gso_inventory.models import InventoryItem, MaterialRequest
 from apps.gso_units.models import Unit
 from apps.gso_notifications.models import Notification, DeviceToken
 
@@ -26,6 +28,8 @@ from .serializers import (
     InventoryItemSerializer,
     UserMeSerializer,
     NotificationSerializer,
+    RequestMessageSerializer,
+    MaterialRequestSerializer,
 )
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
@@ -224,6 +228,95 @@ class RequestViewSet(viewsets.ModelViewSet):
         notify_after_personnel_work_status_change(req, old_status, new_status)
         serializer = RequestDetailSerializer(req, context=self.get_serializer_context())
         return Response(serializer.data)
+
+    @action(detail=True, methods=['get', 'post'], url_path='messages')
+    def messages(self, request, pk=None):
+        """Staff chat messages for request detail."""
+        req = self.get_object()
+        user = request.user
+        if getattr(user, 'is_requestor', False):
+            return Response({'detail': 'Only staff can access request chat.'}, status=status.HTTP_403_FORBIDDEN)
+        if getattr(user, 'is_unit_head', False) or getattr(user, 'is_personnel', False):
+            if user.unit_id != req.unit_id:
+                return Response({'detail': 'Access denied for this request.'}, status=status.HTTP_403_FORBIDDEN)
+        chat_allowed = req.status in (
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.INSPECTION,
+            Request.Status.IN_PROGRESS,
+            Request.Status.ON_HOLD,
+            Request.Status.DONE_WORKING,
+        )
+        if not chat_allowed:
+            return Response(
+                {'detail': 'Chat is only available after approval and until completion.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        if request.method.lower() == 'get':
+            qs = req.messages.select_related('user').order_by('created_at')
+            return Response(RequestMessageSerializer(qs, many=True).data)
+
+        text = (request.data.get('message') or '').strip()
+        if not text:
+            return Response({'detail': 'Message is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        msg = RequestMessage.objects.create(request=req, user=user, message=text)
+        return Response(RequestMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['get', 'post'], url_path='material-requests')
+    def material_requests(self, request, pk=None):
+        """Personnel material requests per request (list + submit)."""
+        req = self.get_object()
+        user = request.user
+        if getattr(user, 'is_requestor', False):
+            return Response({'detail': 'Only staff can access material requests.'}, status=status.HTTP_403_FORBIDDEN)
+        if getattr(user, 'is_unit_head', False) or getattr(user, 'is_personnel', False):
+            if user.unit_id != req.unit_id:
+                return Response({'detail': 'Access denied for this request.'}, status=status.HTTP_403_FORBIDDEN)
+        if request.method.lower() == 'get':
+            qs = req.material_requests.select_related('item', 'requested_by', 'approved_by').order_by('-created_at')
+            return Response(MaterialRequestSerializer(qs, many=True).data)
+
+        if not getattr(user, 'is_personnel', False):
+            return Response({'detail': 'Only assigned personnel can request materials.'}, status=status.HTTP_403_FORBIDDEN)
+        if not req.assignments.filter(personnel=user).exists():
+            return Response({'detail': 'You are not assigned to this request.'}, status=status.HTTP_403_FORBIDDEN)
+        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED):
+            return Response(
+                {'detail': 'Cannot request materials for a completed or cancelled request.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        item_id = request.data.get('item_id')
+        quantity = request.data.get('quantity')
+        notes = (request.data.get('notes') or '').strip()
+        try:
+            item_id = int(item_id)
+            quantity = int(quantity)
+        except (TypeError, ValueError):
+            return Response({'detail': 'item_id and quantity are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity <= 0:
+            return Response({'detail': 'Quantity must be at least 1.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            item = InventoryItem.objects.get(pk=item_id, unit_id=req.unit_id)
+        except InventoryItem.DoesNotExist:
+            return Response({'detail': 'Item not found for this unit.'}, status=status.HTTP_400_BAD_REQUEST)
+        if quantity > item.quantity:
+            return Response(
+                {'detail': f'Not enough stock. Available: {item.quantity} {item.unit_of_measure}.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        mr = MaterialRequest.objects.create(
+            request=req,
+            item=item,
+            quantity=quantity,
+            notes=notes,
+            requested_by=user,
+            status=MaterialRequest.Status.PENDING,
+        )
+        from apps.gso_notifications.utils import notify_material_request_submitted
+        notify_material_request_submitted(mr)
+        return Response(MaterialRequestSerializer(mr).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['get'], url_path='my-tasks')
     def my_tasks(self, request):
@@ -425,6 +518,45 @@ class UserMeView(APIView):
             return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
         serializer = UserMeSerializer(request.user)
         return Response(serializer.data)
+
+    def patch(self, request):
+        """PATCH /api/v1/users/me/ — update own profile basics (first_name, last_name, email)."""
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
+        changed = []
+        for field in ('first_name', 'last_name', 'email'):
+            if field in request.data:
+                setattr(user, field, (request.data.get(field) or '').strip())
+                changed.append(field)
+        if not changed:
+            return Response({'detail': 'No valid fields to update.'}, status=status.HTTP_400_BAD_REQUEST)
+        user.save(update_fields=changed)
+        return Response(UserMeSerializer(user).data)
+
+
+class UserPasswordChangeView(APIView):
+    """POST /api/v1/users/change-password/ — change current user password."""
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return Response({'detail': 'Authentication required.'}, status=status.HTTP_401_UNAUTHORIZED)
+        current_password = (request.data.get('current_password') or '').strip()
+        new_password = (request.data.get('new_password') or '').strip()
+        if not current_password or not new_password:
+            return Response(
+                {'detail': 'Current password and new password are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = request.user
+        if not user.check_password(current_password):
+            return Response({'detail': 'Current password is incorrect.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response({'detail': ' '.join(e.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        return Response({'detail': 'Password updated.'})
 
 
 class VersionView(APIView):

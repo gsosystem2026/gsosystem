@@ -23,7 +23,10 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
   @override
   void initState() {
     super.initState();
-    _api = ApiClient(accessToken: widget.auth.readAccessToken);
+    _api = ApiClient(
+      accessToken: widget.auth.readAccessToken,
+      refreshAccessToken: widget.auth.refreshAccessToken,
+    );
     _load();
   }
 

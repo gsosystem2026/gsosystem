@@ -1,13 +1,20 @@
 import 'package:dio/dio.dart';
 
 import '../config/env.dart';
+import '../models/app_notification.dart';
+import '../models/material_request_item.dart';
+import '../models/request_message.dart';
 import '../models/request_task.dart';
 
 typedef AccessTokenProvider = Future<String?> Function();
+typedef RefreshAccessToken = Future<String?> Function();
 
 class ApiClient {
-  ApiClient({required AccessTokenProvider accessToken})
-      : _accessToken = accessToken {
+  ApiClient({
+    required AccessTokenProvider accessToken,
+    RefreshAccessToken? refreshAccessToken,
+  })  : _accessToken = accessToken,
+        _refreshAccessToken = refreshAccessToken {
     _dio = Dio(
       BaseOptions(
         baseUrl: '$kGsoApiBase/api/v1',
@@ -26,11 +33,35 @@ class ApiClient {
           }
           return handler.next(options);
         },
+        onError: (err, handler) async {
+          final refresh = _refreshAccessToken;
+          final status = err.response?.statusCode;
+          final retried = err.requestOptions.extra['jwt_refreshed'] == true;
+          if (refresh == null || status != 401 || retried) {
+            return handler.next(err);
+          }
+
+          final freshAccess = await refresh();
+          if (freshAccess == null || freshAccess.isEmpty) {
+            return handler.next(err);
+          }
+
+          final req = err.requestOptions;
+          req.extra['jwt_refreshed'] = true;
+          req.headers['Authorization'] = 'Bearer $freshAccess';
+          try {
+            final response = await _dio.fetch(req);
+            return handler.resolve(response);
+          } on DioException catch (e) {
+            return handler.next(e);
+          }
+        },
       ),
     );
   }
 
   final AccessTokenProvider _accessToken;
+  final RefreshAccessToken? _refreshAccessToken;
   late final Dio _dio;
 
   Future<List<RequestTask>> fetchMyTasks() async {
@@ -132,6 +163,132 @@ class ApiClient {
       ),
     );
     return Map<String, dynamic>.from(response.data!);
+  }
+
+  Future<List<AppNotification>> fetchNotifications() async {
+    final response = await _dio.get<dynamic>('/notifications/');
+    final data = response.data;
+    if (data is List) {
+      return data
+          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    if (data is Map && data['results'] is List) {
+      final results = data['results'] as List<dynamic>;
+      return results
+          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return const [];
+  }
+
+  Future<int> fetchUnreadNotificationCount() async {
+    final response = await _dio.get<Map<String, dynamic>>('/notifications/unread_count/');
+    final data = response.data ?? const <String, dynamic>{};
+    final count = data['count'];
+    if (count is int) return count;
+    if (count is num) return count.toInt();
+    return 0;
+  }
+
+  Future<void> markNotificationRead(int id) async {
+    await _dio.post('/notifications/$id/mark_read/');
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    await _dio.post('/notifications/mark_all_read/');
+  }
+
+  Future<Map<String, dynamic>> fetchCurrentUser() async {
+    final response = await _dio.get<Map<String, dynamic>>('/users/me/');
+    return Map<String, dynamic>.from(response.data ?? const <String, dynamic>{});
+  }
+
+  Future<Map<String, dynamic>> updateCurrentUser({
+    required String firstName,
+    required String lastName,
+    required String email,
+  }) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/users/me/',
+      data: {
+        'first_name': firstName,
+        'last_name': lastName,
+        'email': email,
+      },
+    );
+    return Map<String, dynamic>.from(response.data ?? const <String, dynamic>{});
+  }
+
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _dio.post(
+      '/users/change-password/',
+      data: {
+        'current_password': currentPassword,
+        'new_password': newPassword,
+      },
+    );
+  }
+
+  Future<List<RequestMessageItem>> fetchRequestMessages(int requestId) async {
+    final response = await _dio.get<List<dynamic>>('/requests/$requestId/messages/');
+    final list = response.data ?? [];
+    return list
+        .map((e) => RequestMessageItem.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<RequestMessageItem> postRequestMessage(int requestId, String message) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/requests/$requestId/messages/',
+      data: {'message': message},
+    );
+    return RequestMessageItem.fromJson(
+      Map<String, dynamic>.from(response.data ?? const <String, dynamic>{}),
+    );
+  }
+
+  Future<List<MaterialRequestItem>> fetchRequestMaterialRequests(int requestId) async {
+    final response = await _dio.get<List<dynamic>>('/requests/$requestId/material-requests/');
+    final list = response.data ?? [];
+    return list
+        .map((e) => MaterialRequestItem.fromJson(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<MaterialRequestItem> submitMaterialRequest({
+    required int requestId,
+    required int itemId,
+    required int quantity,
+    String? notes,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/requests/$requestId/material-requests/',
+      data: {
+        'item_id': itemId,
+        'quantity': quantity,
+        'notes': (notes ?? '').trim(),
+      },
+    );
+    return MaterialRequestItem.fromJson(
+      Map<String, dynamic>.from(response.data ?? const <String, dynamic>{}),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchInventoryItems() async {
+    final response = await _dio.get<dynamic>('/inventory/');
+    final data = response.data;
+    if (data is List) {
+      return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    if (data is Map && data['results'] is List) {
+      final results = data['results'] as List<dynamic>;
+      return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return const [];
   }
 
   String messageFromError(Object e) {

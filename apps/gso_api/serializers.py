@@ -4,8 +4,8 @@ Serializers for GSO REST API.
 from rest_framework import serializers
 
 from apps.gso_accounts.models import User
-from apps.gso_requests.models import Request, RequestAssignment
-from apps.gso_inventory.models import InventoryItem
+from apps.gso_requests.models import Request, RequestAssignment, RequestMessage
+from apps.gso_inventory.models import InventoryItem, MaterialRequest
 from apps.gso_units.models import Unit
 from apps.gso_notifications.models import Notification
 
@@ -104,6 +104,17 @@ class NotificationSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'message', 'link', 'read', 'created_at']
 
 
+class RequestMessageSerializer(serializers.ModelSerializer):
+    user_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RequestMessage
+        fields = ['id', 'message', 'created_at', 'user', 'user_name']
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.username
+
+
 class InventoryItemSerializer(serializers.ModelSerializer):
     unit_name = serializers.CharField(source='unit.name', read_only=True)
     is_low_stock = serializers.ReadOnlyField()
@@ -116,3 +127,39 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             'is_low_stock', 'location', 'serial_or_asset_number',
             'created_at', 'updated_at',
         ]
+
+
+class MaterialRequestSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source='item.name', read_only=True)
+    unit_of_measure = serializers.CharField(source='item.unit_of_measure', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    requested_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MaterialRequest
+        fields = [
+            'id',
+            'request',
+            'item',
+            'item_name',
+            'unit_of_measure',
+            'quantity',
+            'notes',
+            'status',
+            'status_display',
+            'requested_by',
+            'requested_by_name',
+            'approved_by',
+            'approved_by_name',
+            'approved_at',
+            'created_at',
+        ]
+
+    def get_requested_by_name(self, obj):
+        return obj.requested_by.get_full_name() or obj.requested_by.username
+
+    def get_approved_by_name(self, obj):
+        if not obj.approved_by_id:
+            return None
+        return obj.approved_by.get_full_name() or obj.approved_by.username

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 
 import '../data/outbox_database.dart';
@@ -10,13 +11,43 @@ class OfflineSyncService {
   static final OfflineSyncService instance = OfflineSyncService._();
 
   AccessTokenProvider? _accessToken;
+  RefreshAccessToken? _refreshAccessToken;
   Timer? _timer;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  ConnectivityResult _connectivity = ConnectivityResult.none;
   bool _running = false;
 
-  void bind({required AccessTokenProvider accessToken}) {
+  void bind({
+    required AccessTokenProvider accessToken,
+    RefreshAccessToken? refreshAccessToken,
+  }) {
     _accessToken = accessToken;
+    _refreshAccessToken = refreshAccessToken;
     _timer ??= Timer.periodic(const Duration(seconds: 20), (_) => syncOnce());
+    _connectivitySub ??= Connectivity().onConnectivityChanged.listen(_handleConnectivity);
+    Connectivity().checkConnectivity().then((results) {
+      if (results.isEmpty) return;
+      _connectivity = results.first;
+      if (_isOnline) {
+        syncOnce();
+      }
+    });
   }
+
+  void _handleConnectivity(List<ConnectivityResult> results) {
+    if (results.isEmpty) return;
+    final previous = _isOnline;
+    _connectivity = results.first;
+    if (!previous && _isOnline) {
+      syncOnce();
+    }
+  }
+
+  bool get _isOnline =>
+      _connectivity != ConnectivityResult.none &&
+      _connectivity != ConnectivityResult.bluetooth;
+
+  Future<void> triggerSyncNow() => syncOnce();
 
   Future<void> syncOnce() async {
     if (_running) return;
@@ -25,7 +56,10 @@ class OfflineSyncService {
 
     _running = true;
     try {
-      final api = ApiClient(accessToken: accessToken);
+      final api = ApiClient(
+        accessToken: accessToken,
+        refreshAccessToken: _refreshAccessToken,
+      );
       final due = await OutboxDatabase.instance.dueOps(limit: 20);
       for (final op in due) {
         await OutboxDatabase.instance.markSyncing(op.id);

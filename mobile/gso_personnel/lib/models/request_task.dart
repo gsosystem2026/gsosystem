@@ -6,6 +6,7 @@ class RequestTask {
     this.title,
     this.description,
     this.location,
+    this.materials = false,
     required this.status,
     required this.statusDisplay,
     this.isEmergency = false,
@@ -19,6 +20,7 @@ class RequestTask {
   final String? title;
   final String? description;
   final String? location;
+  final bool materials;
   final String status;
   final String statusDisplay;
   final bool isEmergency;
@@ -38,6 +40,7 @@ class RequestTask {
       title: json['title'] as String?,
       description: json['description'] as String?,
       location: json['location'] as String?,
+      materials: json['materials'] == true,
       status: (json['status'] ?? '').toString(),
       statusDisplay: (json['status_display'] ?? json['status'] ?? '').toString(),
       isEmergency: json['is_emergency'] == true,
@@ -85,6 +88,7 @@ class RequestTask {
     String? title,
     String? description,
     String? location,
+    bool? materials,
     String? status,
     String? statusDisplay,
     bool? isEmergency,
@@ -98,6 +102,7 @@ class RequestTask {
       title: title ?? this.title,
       description: description ?? this.description,
       location: location ?? this.location,
+      materials: materials ?? this.materials,
       status: status ?? this.status,
       statusDisplay: statusDisplay ?? this.statusDisplay,
       isEmergency: isEmergency ?? this.isEmergency,

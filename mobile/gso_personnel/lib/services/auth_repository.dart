@@ -30,6 +30,8 @@ class AuthRepository {
 
   Future<String?> readAccessToken() => _storage.read(key: _kAccess);
 
+  Future<String?> readRefreshToken() => _storage.read(key: _kRefresh);
+
   Future<void> signInWithPassword({
     required String username,
     required String password,
@@ -56,6 +58,34 @@ class AuthRepository {
   Future<void> signOut() async {
     await _storage.delete(key: _kAccess);
     await _storage.delete(key: _kRefresh);
+  }
+
+  /// Attempts to refresh access token using stored refresh token.
+  /// Returns new access token on success, or null when refresh is not possible.
+  Future<String?> refreshAccessToken() async {
+    final refresh = await readRefreshToken();
+    if (refresh == null || refresh.isEmpty) return null;
+    try {
+      final response = await _api.post<Map<String, dynamic>>(
+        '/auth/token/refresh/',
+        data: {'refresh': refresh},
+      );
+      final data = response.data;
+      final access = data?['access'];
+      if (access is! String || access.isEmpty) return null;
+      await _storage.write(key: _kAccess, value: access);
+      final maybeRefresh = data?['refresh'];
+      if (maybeRefresh is String && maybeRefresh.isNotEmpty) {
+        await _storage.write(key: _kRefresh, value: maybeRefresh);
+      }
+      return access;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 400 || code == 401) {
+        await signOut();
+      }
+      return null;
+    }
   }
 
   String _messageFromDio(DioException e) {
