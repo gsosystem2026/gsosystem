@@ -267,6 +267,13 @@ except ValueError:
 _default_cors_origins = 'http://localhost:3000,http://127.0.0.1:3000' if DEBUG else ''
 CORS_ALLOWED_ORIGINS = _env_list('CORS_ALLOWED_ORIGINS', _default_cors_origins)
 CORS_ALLOW_ALL_ORIGINS = _env_bool('CORS_ALLOW_ALL_ORIGINS', False if not DEBUG else False)
+# Allow custom headers on API POST (Flutter web outbox replay, browser preflight).
+try:
+    from corsheaders.defaults import default_headers
+
+    CORS_ALLOW_HEADERS = list(default_headers) + ['x-idempotency-key']
+except ImportError:
+    pass
 
 # CSRF: comma-separated HTTPS origins in production, e.g. https://gso.school.edu
 CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', '')

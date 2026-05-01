@@ -225,6 +225,50 @@ class RequestViewSet(viewsets.ModelViewSet):
         serializer = RequestDetailSerializer(req, context=self.get_serializer_context())
         return Response(serializer.data)
 
+    @action(detail=False, methods=['get'], url_path='my-tasks')
+    def my_tasks(self, request):
+        """Personnel: assigned requests in active work states (matches web Task Management)."""
+        user = request.user
+        if not getattr(user, 'is_personnel', False):
+            return Response({'detail': 'Only personnel can use this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
+        qs = (
+            Request.objects.filter(
+                assignments__personnel=user,
+                status__in=(
+                    Request.Status.DIRECTOR_APPROVED,
+                    Request.Status.INSPECTION,
+                    Request.Status.IN_PROGRESS,
+                    Request.Status.ON_HOLD,
+                    Request.Status.DONE_WORKING,
+                ),
+            )
+            .select_related('unit', 'requestor')
+            .prefetch_related('assignments__personnel')
+            .distinct()
+            .order_by('-updated_at')
+        )
+        serializer = RequestListSerializer(qs, many=True, context=self.get_serializer_context())
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='my-task-history')
+    def my_task_history(self, request):
+        """Personnel: assigned requests completed or cancelled."""
+        user = request.user
+        if not getattr(user, 'is_personnel', False):
+            return Response({'detail': 'Only personnel can use this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
+        qs = (
+            Request.objects.filter(
+                assignments__personnel=user,
+                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+            )
+            .select_related('unit', 'requestor')
+            .prefetch_related('assignments__personnel')
+            .distinct()
+            .order_by('-updated_at')
+        )
+        serializer = RequestListSerializer(qs, many=True, context=self.get_serializer_context())
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def complete(self, request, pk=None):
         """Unit Head marks request complete (status DONE_WORKING → COMPLETED)."""

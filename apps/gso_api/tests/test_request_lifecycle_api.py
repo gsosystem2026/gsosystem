@@ -80,3 +80,25 @@ class RequestLifecycleApiTests(TestCase):
         self.request_obj.refresh_from_db()
         self.assertEqual(self.request_obj.status, Request.Status.IN_PROGRESS)
 
+    def test_personnel_my_tasks_lists_active_assigned_only(self):
+        self.client.force_authenticate(self.unit_head)
+        self.client.post(
+            f'/api/v1/requests/{self.request_obj.pk}/assign/',
+            {'personnel_ids': [self.personnel.pk]},
+            format='json',
+        )
+        self.client.force_authenticate(self.director)
+        self.client.post(f'/api/v1/requests/{self.request_obj.pk}/approve/', {}, format='json')
+
+        self.client.force_authenticate(self.personnel)
+        r = self.client.get('/api/v1/requests/my-tasks/')
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.data), 1)
+        self.assertEqual(r.data[0]['id'], self.request_obj.pk)
+        self.assertEqual(r.data[0]['status'], Request.Status.DIRECTOR_APPROVED)
+
+    def test_non_personnel_my_tasks_forbidden(self):
+        self.client.force_authenticate(self.requestor)
+        r = self.client.get('/api/v1/requests/my-tasks/')
+        self.assertEqual(r.status_code, 403)
+
