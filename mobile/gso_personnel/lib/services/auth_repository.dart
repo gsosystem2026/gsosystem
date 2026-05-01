@@ -28,6 +28,30 @@ class AuthRepository {
     return a != null && a.isNotEmpty;
   }
 
+  /// True only when a stored token exists and belongs to a PERSONNEL account.
+  Future<bool> hasValidPersonnelSession() async {
+    final access = await readAccessToken();
+    if (access == null || access.isEmpty) return false;
+    try {
+      final response = await _api.get<Map<String, dynamic>>(
+        '/users/me/',
+        options: Options(headers: {'Authorization': 'Bearer $access'}),
+      );
+      final role = (response.data?['role'] ?? '').toString().toUpperCase();
+      final ok = role == 'PERSONNEL';
+      if (!ok) {
+        await signOut();
+      }
+      return ok;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 401 || code == 403) {
+        await signOut();
+      }
+      return false;
+    }
+  }
+
   Future<String?> readAccessToken() => _storage.read(key: _kAccess);
 
   Future<String?> readRefreshToken() => _storage.read(key: _kRefresh);
@@ -47,8 +71,20 @@ class AuthRepository {
           data['refresh'] is! String) {
         throw const AuthException('Invalid response from server.');
       }
-      await _storage.write(key: _kAccess, value: data['access'] as String);
-      await _storage.write(key: _kRefresh, value: data['refresh'] as String);
+      final access = data['access'] as String;
+      final refresh = data['refresh'] as String;
+      final me = await _api.get<Map<String, dynamic>>(
+        '/users/me/',
+        options: Options(headers: {'Authorization': 'Bearer $access'}),
+      );
+      final role = (me.data?['role'] ?? '').toString().toUpperCase();
+      if (role != 'PERSONNEL') {
+        throw const AuthException(
+          'This mobile app is for Personnel accounts only.',
+        );
+      }
+      await _storage.write(key: _kAccess, value: access);
+      await _storage.write(key: _kRefresh, value: refresh);
     } on DioException catch (e) {
       final msg = _messageFromDio(e);
       throw AuthException(msg);

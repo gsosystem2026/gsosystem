@@ -55,7 +55,7 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _checkSession() async {
-    final ok = await _auth.hasToken();
+    final ok = await _auth.hasValidPersonnelSession();
     if (mounted) setState(() => _loggedIn = ok);
   }
 

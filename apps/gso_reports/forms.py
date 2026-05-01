@@ -20,7 +20,7 @@ class WARForm(forms.ModelForm):
         widgets = {
             'summary': forms.TextInput(attrs={'placeholder': 'Project title', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'accomplishments': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe the project/work…', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'success_indicators': forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
+            'success_indicators': forms.SelectMultiple(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 min-h-36'}),
             'material_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'labor_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
         }
@@ -36,7 +36,7 @@ class WARForm(forms.ModelForm):
         self.fields['period_end'].label = 'Date Completed'
         self.fields['success_indicators'].label = 'Success Indicators'
         self.fields['success_indicators'].required = False
-        self.fields['success_indicators'].help_text = 'Select the indicators this work supports. These are used later in IPMT.'
+        self.fields['success_indicators'].help_text = 'Select one or more indicators this work supports. These are used later in IPMT.'
         self.fields['success_indicators'].queryset = SuccessIndicator.objects.filter(is_active=True).order_by('display_order', 'code')
         self.fields['total_cost_display'].initial = self.instance.total_cost if getattr(self.instance, 'pk', None) else None
 
