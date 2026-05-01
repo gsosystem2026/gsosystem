@@ -132,9 +132,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       accessToken: widget.auth.readAccessToken,
       refreshAccessToken: widget.auth.refreshAccessToken,
     );
-    if (_task.materials) {
-      _loadMaterialData();
-    }
+    _loadMaterialData();
     _loadMessages();
     _chatPollTimer = Timer.periodic(
       const Duration(seconds: 15),
@@ -388,8 +386,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ),
               ),
               const SizedBox(height: 14),
-              if (_task.materials) ...[
-                Container(
+              Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -519,8 +516,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
-              ],
+              const SizedBox(height: 14),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
