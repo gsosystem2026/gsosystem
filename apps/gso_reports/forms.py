@@ -4,7 +4,30 @@ from django.db.models import Q
 from .models import SuccessIndicator, WorkAccomplishmentReport
 
 
+class SuccessIndicatorChoiceField(forms.ModelChoiceField):
+    """Compact labels for WAR dropdown so native select stays usable."""
+
+    def label_from_instance(self, obj):
+        code = (obj.code or '').strip()
+        name = (obj.name or '').strip()
+        if len(name) > 55:
+            name = f"{name[:55].rstrip()}..."
+        if code and name:
+            return f"{code} - {name}"
+        return code or name or str(obj.pk)
+
+
 class WARForm(forms.ModelForm):
+    success_indicators = SuccessIndicatorChoiceField(
+        queryset=SuccessIndicator.objects.none(),
+        required=False,
+        empty_label='-- Select success indicator --',
+        widget=forms.Select(
+            attrs={
+                'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100',
+            }
+        ),
+    )
     total_cost_display = forms.DecimalField(
         label='Total Cost',
         required=False,
@@ -20,7 +43,6 @@ class WARForm(forms.ModelForm):
         widgets = {
             'summary': forms.TextInput(attrs={'placeholder': 'Project title', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'accomplishments': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Describe the project/work…', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
-            'success_indicators': forms.SelectMultiple(attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 min-h-36'}),
             'material_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
             'labor_cost': forms.NumberInput(attrs={'step': '0.01', 'min': '0', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2'}),
         }
@@ -34,10 +56,12 @@ class WARForm(forms.ModelForm):
         self.fields['personnel'].label = 'Assigned Personnel'
         self.fields['period_start'].label = 'Date Started'
         self.fields['period_end'].label = 'Date Completed'
-        self.fields['success_indicators'].label = 'Success Indicators'
+        self.fields['success_indicators'].label = 'Success Indicator'
         self.fields['success_indicators'].required = False
-        self.fields['success_indicators'].help_text = 'Select one or more indicators this work supports. These are used later in IPMT.'
+        self.fields['success_indicators'].help_text = 'Select the indicator this work supports. This is used later in IPMT.'
         self.fields['success_indicators'].queryset = SuccessIndicator.objects.filter(is_active=True).order_by('display_order', 'code')
+        if getattr(self.instance, 'pk', None) and not self.is_bound:
+            self.fields['success_indicators'].initial = self.instance.success_indicators.first()
         self.fields['total_cost_display'].initial = self.instance.total_cost if getattr(self.instance, 'pk', None) else None
 
         if request_obj is not None:
@@ -57,6 +81,8 @@ class WARForm(forms.ModelForm):
             ).filter(
                 Q(target_unit__isnull=True) | Q(target_unit=request_obj.unit)
             ).order_by('display_order', 'code')
+            if getattr(self.instance, 'pk', None) and not self.is_bound:
+                self.fields['success_indicators'].initial = self.instance.success_indicators.first()
 
         if getattr(self.instance, 'pk', None):
             # Edit mode: personnel and period are fixed for this WAR entry.
@@ -77,6 +103,17 @@ class WARForm(forms.ModelForm):
             cleaned['period_start'] = self.instance.period_start
             cleaned['period_end'] = self.instance.period_end
         return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        selected_indicator = self.cleaned_data.get('success_indicators')
+        if commit:
+            instance.save()
+            if selected_indicator:
+                instance.success_indicators.set([selected_indicator])
+            else:
+                instance.success_indicators.clear()
+        return instance
 
 
 MONTH_CHOICES = [(i, f'{i:02d} — {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][i-1]}') for i in range(1, 13)]
