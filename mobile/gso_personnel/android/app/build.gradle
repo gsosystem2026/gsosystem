@@ -54,6 +54,14 @@ android {
             }
         }
     }
+
+    // Release APK filename: GSO-Personnel-v{versionName}-{versionCode}-release.apk
+    applicationVariants.configureEach { variant ->
+        variant.outputs.configureEach { output ->
+            output.outputFileName =
+                    "GSO-Personnel-v${variant.versionName}-${variant.versionCode}-${variant.buildType.name}.apk"
+        }
+    }
 }
 
 flutter {

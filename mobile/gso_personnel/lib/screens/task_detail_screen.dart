@@ -213,6 +213,20 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     super.dispose();
   }
 
+  /// Offline / transport failures (not validation or 4xx from server).
+  bool _isConnectivityStyleMessage(String? msg) {
+    if (msg == null || msg.trim().isEmpty) return false;
+    final m = msg.toLowerCase();
+    return m.contains('no internet') ||
+        m.contains('connection') ||
+        m.contains('timed out') ||
+        m.contains('timeout') ||
+        m.contains('network') ||
+        m.contains('offline') ||
+        m.contains('socket') ||
+        m.contains('failed host lookup');
+  }
+
   Future<void> _loadFullRequestDetail() async {
     if (_isMotorpoolUnit || _motorpool != null) {
       setState(() => _loadingMotorpool = true);
@@ -553,7 +567,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               _motorpoolDetailError ??
                   'Trip ticket data was not returned. Try refresh, or ensure this request is on the Motorpool unit.',
               style: t.bodySmall?.copyWith(
-                color: _motorpoolDetailError != null ? Colors.red.shade800 : AppColors.slate600,
+                color: _motorpoolDetailError != null && !_isConnectivityStyleMessage(_motorpoolDetailError)
+                    ? Colors.red.shade800
+                    : AppColors.slate600,
                 height: 1.35,
               ),
             ),
