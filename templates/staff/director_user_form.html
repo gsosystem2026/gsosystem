@@ -80,12 +80,18 @@
                 <div class="space-y-3">
                     <div>
                         <label for="id_password1" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">New password</label>
-                        {{ form.password1 }}
+                        <div class="relative gso-password-field-wrap">
+                            {{ form.password1 }}
+                            {% include "includes/_gso_password_toggle_button.html" %}
+                        </div>
                         {% if form.password1.errors %}<p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ form.password1.errors.0 }}</p>{% endif %}
                     </div>
                     <div>
                         <label for="id_password2" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Confirm new password</label>
-                        {{ form.password2 }}
+                        <div class="relative gso-password-field-wrap">
+                            {{ form.password2 }}
+                            {% include "includes/_gso_password_toggle_button.html" %}
+                        </div>
                         {% if form.password2.errors %}<p class="text-sm text-red-600 dark:text-red-400 mt-1">{{ form.password2.errors.0 }}</p>{% endif %}
                     </div>
                 </div>

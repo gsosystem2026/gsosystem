@@ -72,14 +72,14 @@ class GsoSetPasswordForm(SetPasswordForm):
         widget=forms.PasswordInput(attrs={
             'placeholder': 'New password',
             'autocomplete': 'new-password',
-            'class': 'w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
+            'class': 'w-full px-3 py-2.5 pr-12 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
         })
     )
     new_password2 = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'placeholder': 'Confirm new password',
             'autocomplete': 'new-password',
-            'class': 'w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
+            'class': 'w-full px-3 py-2.5 pr-12 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none'
         })
     )
 
@@ -185,13 +185,13 @@ class DirectorUserEditForm(forms.ModelForm):
     password1 = forms.CharField(
         label='New password (leave blank to keep current)',
         required=False,
-        widget=forms.PasswordInput(attrs={'placeholder': 'New password', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+        widget=forms.PasswordInput(attrs={'placeholder': 'New password', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 pr-12 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         strip=False,
     )
     password2 = forms.CharField(
         label='Confirm new password',
         required=False,
-        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
+        widget=forms.PasswordInput(attrs={'placeholder': 'Confirm', 'autocomplete': 'new-password', 'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 pr-12 text-sm focus:ring-2 focus:ring-primary/30 focus:border-primary'}),
         strip=False,
     )
 
