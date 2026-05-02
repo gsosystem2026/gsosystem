@@ -338,10 +338,6 @@
           <div>
             <h2 class="text-lg font-bold text-slate-900 dark:text-white">Pending Requests Overview</h2>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Submitted requests waiting for assignment or action.</p>
-            <p id="dashboard-pending-refresh-status" class="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-2 flex-wrap" aria-live="polite">
-              <span id="dashboard-pending-spinner" class="hidden inline-block size-3 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
-              <span>Auto-refreshes every 15s. Last updated: <time id="dashboard-pending-last-updated">—</time></span>
-            </p>
           </div>
           <a href="{% url 'gso_accounts:staff_request_management' %}?status=SUBMITTED" class="text-primary text-sm font-semibold hover:underline">View Request Management</a>
         </div>
@@ -571,25 +567,13 @@
   var wrapper = document.getElementById('dashboard-pending-requests-wrapper');
   if (!wrapper) return;
   var url = '{% url "gso_accounts:staff_dashboard_pending_requests" %}';
-  var spinner = document.getElementById('dashboard-pending-spinner');
-  var timeEl = document.getElementById('dashboard-pending-last-updated');
-  function fmt() {
-    try { return new Date().toLocaleString('en-PH', { dateStyle: 'short', timeStyle: 'short' }); }
-    catch (e) { return new Date().toISOString(); }
-  }
-  if (timeEl) timeEl.textContent = fmt();
   setInterval(function() {
-    if (spinner) spinner.classList.remove('hidden');
     fetch(url, { credentials: 'same-origin' })
       .then(function(r) { return r.text(); })
       .then(function(html) {
         if (html && wrapper) wrapper.innerHTML = html;
-        if (timeEl) timeEl.textContent = fmt();
       })
-      .catch(function() {})
-      .finally(function() {
-        if (spinner) spinner.classList.add('hidden');
-      });
+      .catch(function() {});
   }, 15000);
 })();
 </script>

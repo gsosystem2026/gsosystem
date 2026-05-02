@@ -642,6 +642,7 @@
     var userStatusSuccessPopup = document.getElementById('userStatusSuccessPopup');
     var userStatusSuccessText = document.getElementById('userStatusSuccessText');
     var activeStatusUserId = '';
+    var userStatusRequestInFlight = false;
     var userDeleteModal = document.getElementById('userDeleteModal');
     var userDeleteForm = document.getElementById('userDeleteForm');
     var userDeleteUserLabel = document.getElementById('userDeleteUserLabel');
@@ -652,6 +653,7 @@
     var userDeleteSuccessPopup = document.getElementById('userDeleteSuccessPopup');
     var userDeleteSuccessText = document.getElementById('userDeleteSuccessText');
     var activeDeleteUserId = '';
+    var userDeleteRequestInFlight = false;
     function openModal(el) { if (el) el.classList.remove('hidden'); }
     function closeModal(el) { if (el) el.classList.add('hidden'); }
 
@@ -998,7 +1000,9 @@
     if (userStatusForm) {
         userStatusForm.addEventListener('submit', function (e) {
             e.preventDefault();
+            if (userStatusRequestInFlight) return;
             if (!activeStatusUserId) return;
+            userStatusRequestInFlight = true;
             if (userStatusError) { userStatusError.classList.add('hidden'); userStatusError.textContent = ''; }
             if (window.GSOUI && typeof window.GSOUI.setButtonLoading === 'function') {
                 window.GSOUI.setButtonLoading(userStatusSubmitBtn, 'Applying status...');
@@ -1031,6 +1035,7 @@
                 }
             })
             .finally(function () {
+                userStatusRequestInFlight = false;
                 if (userStatusSubmitBtn && userStatusSubmitBtn.dataset.originalHtml) {
                     userStatusSubmitBtn.disabled = false;
                     userStatusSubmitBtn.removeAttribute('aria-busy');
@@ -1049,7 +1054,9 @@
     if (userDeleteForm) {
         userDeleteForm.addEventListener('submit', function (e) {
             e.preventDefault();
+            if (userDeleteRequestInFlight) return;
             if (!activeDeleteUserId) return;
+            userDeleteRequestInFlight = true;
             if (userDeleteError) { userDeleteError.classList.add('hidden'); userDeleteError.textContent = ''; }
             if (window.GSOUI && typeof window.GSOUI.setButtonLoading === 'function') {
                 window.GSOUI.setButtonLoading(userDeleteSubmitBtn, 'Deleting account...');
@@ -1082,6 +1089,7 @@
                 }
             })
             .finally(function () {
+                userDeleteRequestInFlight = false;
                 if (userDeleteSubmitBtn && userDeleteSubmitBtn.dataset.originalHtml) {
                     userDeleteSubmitBtn.disabled = false;
                     userDeleteSubmitBtn.removeAttribute('aria-busy');

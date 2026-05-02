@@ -12,6 +12,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView, FormView
+from django.db import transaction
 from django.db.models import Q, Count
 from django.core.cache import cache
 from django.db.models.deletion import ProtectedError
@@ -942,7 +943,7 @@ class UserApiKeysPanelView(LoginRequiredMixin, View):
             log_audit(
                 'api_key_create',
                 request.user,
-                f'Created API key {obj.prefix}… for user {target.username} (id={target.pk})',
+                f'Created API key {obj.prefix}… for user {target.username}',
                 target_model='gso_accounts.UserAPIKey',
                 target_id=str(obj.pk),
             )
@@ -966,7 +967,7 @@ class UserApiKeysPanelView(LoginRequiredMixin, View):
             log_audit(
                 'api_key_revoke',
                 request.user,
-                f'Revoked API key {key_obj.prefix}… for user {target.username} (id={target.pk})',
+                f'Revoked API key {key_obj.prefix}… for user {target.username}',
                 target_model='gso_accounts.UserAPIKey',
                 target_id=str(key_obj.pk),
             )
@@ -1002,7 +1003,7 @@ class AssignOICView(LoginRequiredMixin, View):
         from apps.gso_notifications.utils import notify_oic_assigned
         notify_oic_assigned(oic_user, director)
         from apps.gso_accounts.models import log_audit
-        log_audit('oic_assign', request.user, f'Assigned OIC: {oic_user.get_full_name() or oic_user.username} (id={oic_user.pk})', target_model='gso_accounts.User', target_id=str(oic_user.pk))
+        log_audit('oic_assign', request.user, f'Assigned OIC: {oic_user.get_full_name() or oic_user.username}', target_model='gso_accounts.User', target_id=str(oic_user.pk))
         success_msg = f'{oic_user.get_full_name() or oic_user.username} is now Officer-in-Charge and can approve requests.'
         if is_ajax:
             return JsonResponse({
@@ -1029,7 +1030,7 @@ class RevokeOICView(LoginRequiredMixin, View):
             from apps.gso_notifications.utils import notify_oic_revoked
             notify_oic_revoked(previous_oic, director)
             from apps.gso_accounts.models import log_audit
-            log_audit('oic_revoke', request.user, f'Revoked OIC: {previous_oic.get_full_name() or previous_oic.username} (id={previous_oic.pk})', target_model='gso_accounts.User', target_id=str(previous_oic.pk))
+            log_audit('oic_revoke', request.user, f'Revoked OIC: {previous_oic.get_full_name() or previous_oic.username}', target_model='gso_accounts.User', target_id=str(previous_oic.pk))
         messages.success(request, 'OIC revoked. Only the Director can approve requests now.')
         return redirect('gso_accounts:staff_account_management')
 
@@ -1042,81 +1043,92 @@ class UserStatusActionView(LoginRequiredMixin, View):
         if not getattr(request.user, 'is_director', False):
             messages.error(request, 'Only the Director can manage account restrictions.')
             return redirect('gso_accounts:staff_dashboard')
-        target = get_object_or_404(User, pk=pk)
-        if target.role == User.Role.DIRECTOR:
-            return JsonResponse({'ok': False, 'error': 'Director accounts cannot be restricted here.'}, status=400)
-        if target.pk == request.user.pk:
-            return JsonResponse({'ok': False, 'error': 'You cannot restrict your own account.'}, status=400)
 
         action = (request.POST.get('action') or '').strip().lower()
         reason_category = (request.POST.get('reason_category') or '').strip()
         reason_details = (request.POST.get('reason_details') or '').strip()
         suspended_until_raw = (request.POST.get('suspended_until') or '').strip()
 
-        status_before = target.account_status
-        log_action = ''
-        log_message = ''
+        with transaction.atomic():
+            target = get_object_or_404(User.objects.select_for_update(), pk=pk)
+            if target.role == User.Role.DIRECTOR:
+                return JsonResponse({'ok': False, 'error': 'Director accounts cannot be restricted here.'}, status=400)
+            if target.pk == request.user.pk:
+                return JsonResponse({'ok': False, 'error': 'You cannot restrict your own account.'}, status=400)
 
-        if action == 'suspend':
-            if not reason_category or not reason_details:
-                return JsonResponse({'ok': False, 'error': 'Reason category and details are required for suspension.'}, status=400)
-            target.account_status = User.AccountStatus.SUSPENDED
-            target.is_active = True
-            target.restriction_reason_category = reason_category
-            target.restriction_reason_details = reason_details
-            target.suspended_until = None
-            if suspended_until_raw:
-                dt = parse_datetime(suspended_until_raw)
-                if dt is None:
-                    d = parse_date(suspended_until_raw)
-                    if d:
-                        dt = timezone.datetime.combine(d, timezone.datetime.max.time())
-                if dt is not None:
-                    if timezone.is_naive(dt):
-                        dt = timezone.make_aware(dt, timezone.get_current_timezone())
-                    target.suspended_until = dt
-            log_action = 'user_suspend'
-            log_message = f'Suspended user {target.get_full_name() or target.username} (id={target.pk}).'
-        elif action == 'deactivate':
-            if not reason_category or not reason_details:
-                return JsonResponse({'ok': False, 'error': 'Reason category and details are required for deactivation.'}, status=400)
-            target.account_status = User.AccountStatus.DEACTIVATED
-            target.is_active = False
-            target.restriction_reason_category = reason_category
-            target.restriction_reason_details = reason_details
-            target.suspended_until = None
-            log_action = 'user_deactivate'
-            log_message = f'Deactivated user {target.get_full_name() or target.username} (id={target.pk}).'
-        elif action in ('reactivate', 'reinstate'):
-            target.account_status = User.AccountStatus.ACTIVE
-            target.is_active = True
-            target.restriction_reason_category = ''
-            target.restriction_reason_details = ''
-            target.suspended_until = None
-            log_action = 'user_reactivate'
-            log_message = f'Reactivated user {target.get_full_name() or target.username} (id={target.pk}).'
-        else:
-            return JsonResponse({'ok': False, 'error': 'Invalid status action.'}, status=400)
+            status_before = target.account_status
+            log_action = ''
+            log_message = ''
 
-        target.status_changed_at = timezone.now()
-        target.status_changed_by = request.user
-        target.save(update_fields=[
-            'account_status',
-            'is_active',
-            'restriction_reason_category',
-            'restriction_reason_details',
-            'suspended_until',
-            'status_changed_at',
-            'status_changed_by',
-        ])
-        from apps.gso_accounts.models import log_audit
-        log_audit(
-            log_action,
-            request.user,
-            f'{log_message} Status: {status_before} -> {target.account_status}. Reason: {reason_category or "-"} {reason_details or "-"}',
-            target_model='gso_accounts.User',
-            target_id=str(target.pk),
-        )
+            if action == 'suspend':
+                if not reason_category or not reason_details:
+                    return JsonResponse({'ok': False, 'error': 'Reason category and details are required for suspension.'}, status=400)
+                target.account_status = User.AccountStatus.SUSPENDED
+                target.is_active = True
+                target.restriction_reason_category = reason_category
+                target.restriction_reason_details = reason_details
+                target.suspended_until = None
+                if suspended_until_raw:
+                    dt = parse_datetime(suspended_until_raw)
+                    if dt is None:
+                        d = parse_date(suspended_until_raw)
+                        if d:
+                            dt = timezone.datetime.combine(d, timezone.datetime.max.time())
+                    if dt is not None:
+                        if timezone.is_naive(dt):
+                            dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                        target.suspended_until = dt
+                log_action = 'user_suspend'
+                log_message = f'Suspended user {target.get_full_name() or target.username}.'
+            elif action == 'deactivate':
+                if not reason_category or not reason_details:
+                    return JsonResponse({'ok': False, 'error': 'Reason category and details are required for deactivation.'}, status=400)
+                target.account_status = User.AccountStatus.DEACTIVATED
+                target.is_active = False
+                target.restriction_reason_category = reason_category
+                target.restriction_reason_details = reason_details
+                target.suspended_until = None
+                log_action = 'user_deactivate'
+                log_message = f'Deactivated user {target.get_full_name() or target.username}.'
+            elif action in ('reactivate', 'reinstate'):
+                target.account_status = User.AccountStatus.ACTIVE
+                target.is_active = True
+                target.restriction_reason_category = ''
+                target.restriction_reason_details = ''
+                target.suspended_until = None
+                log_action = 'user_reactivate'
+                log_message = f'Reactivated user {target.get_full_name() or target.username}.'
+            else:
+                return JsonResponse({'ok': False, 'error': 'Invalid status action.'}, status=400)
+
+            # Idempotent: duplicate parallel/tab submits see final DB state — no second audit row.
+            if status_before == target.account_status:
+                return JsonResponse({
+                    'ok': True,
+                    'message': f'Account is already {target.get_account_status_display()}.',
+                    'status': target.account_status,
+                    'status_display': target.get_account_status_display(),
+                })
+
+            target.status_changed_at = timezone.now()
+            target.status_changed_by = request.user
+            target.save(update_fields=[
+                'account_status',
+                'is_active',
+                'restriction_reason_category',
+                'restriction_reason_details',
+                'suspended_until',
+                'status_changed_at',
+                'status_changed_by',
+            ])
+            from apps.gso_accounts.models import log_audit
+            log_audit(
+                log_action,
+                request.user,
+                f'{log_message} Status: {status_before} -> {target.account_status}. Reason: {reason_category or "-"} {reason_details or "-"}',
+                target_model='gso_accounts.User',
+                target_id=str(target.pk),
+            )
         return JsonResponse({
             'ok': True,
             'message': f'Account status updated to {target.get_account_status_display()}.',
@@ -1161,7 +1173,7 @@ class UserDeletePermanentView(LoginRequiredMixin, View):
         log_audit(
             'user_delete_permanent',
             request.user,
-            f'Permanently deleted user {target_label} ({target_username}) (id={target_id}).',
+            f'Permanently deleted user {target_label} ({target_username}).',
             target_model='gso_accounts.User',
             target_id=str(target_id),
         )
