@@ -2,10 +2,7 @@
 <footer class="mt-auto py-8 border-t border-slate-200 dark:border-slate-800 px-6 md:px-10">
     <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
         <p class="text-slate-500 dark:text-slate-400 text-sm">© {% now "Y" %} General Services Office. All rights reserved.</p>
-        <div class="flex gap-6 text-sm text-slate-500 dark:text-slate-400">
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'privacy' %}">Privacy Policy</a>
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'terms' %}">Terms of Service</a>
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'support' %}">Contact Support</a>
-        </div>
+        {% include "includes/footer_legal_buttons.html" with legal_nav_extra_classes="text-sm text-slate-500 dark:text-slate-400" %}
     </div>
 </footer>
+{% include "includes/public_info_modals.html" %}

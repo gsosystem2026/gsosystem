@@ -9,6 +9,10 @@ from django.db import transaction
 
 from openpyxl import load_workbook
 
+from apps.gso_accounts.legacy_migration_workbook import (
+    workbook_has_ipmt_fingerprint,
+    workbook_has_war_header,
+)
 from apps.gso_reports.models import IPMTDraft
 from apps.gso_units.models import Unit
 
@@ -62,6 +66,24 @@ class Command(BaseCommand):
         wb = load_workbook(filename=str(excel_path), data_only=True)
         stats = Stats()
         try:
+            has_ipmt = workbook_has_ipmt_fingerprint(wb)
+            has_war = workbook_has_war_header(wb)
+            if has_ipmt and has_war:
+                raise CommandError(
+                    "This workbook looks like multiple templates at once "
+                    "(WAR tables and IPMT layout). Use a separate file per report type."
+                )
+            if has_war and not has_ipmt:
+                raise CommandError(
+                    'This workbook matches the legacy WAR Excel template. '
+                    'Choose Report Type "WAR", not IPMT.'
+                )
+            if not has_ipmt:
+                raise CommandError(
+                    "No legacy IPMT workbook layout found (expected Individual Performance Monitoring "
+                    "fields and Success Indicators / Actual Accomplishments table)."
+                )
+
             ws = wb.worksheets[0]
             metadata = self._parse_metadata(ws)
             detected_unit = self._match_unit_from_text(metadata["unit_text"])

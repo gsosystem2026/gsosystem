@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
@@ -163,4 +165,104 @@ class RequestLifecycleApiTests(TestCase):
         list_res = self.client.get(f'/api/v1/requests/{self.request_obj.pk}/material-requests/')
         self.assertEqual(list_res.status_code, 200)
         self.assertEqual(len(list_res.data), 1)
+
+    def test_personnel_cannot_submit_material_request_when_done_working(self):
+        self.client.force_authenticate(self.unit_head)
+        self.client.post(
+            f'/api/v1/requests/{self.request_obj.pk}/assign/',
+            {'personnel_ids': [self.personnel.pk]},
+            format='json',
+        )
+        self.request_obj.status = Request.Status.DONE_WORKING
+        self.request_obj.save(update_fields=['status', 'updated_at'])
+
+        self.client.force_authenticate(self.personnel)
+        post_res = self.client.post(
+            f'/api/v1/requests/{self.request_obj.pk}/material-requests/',
+            {'item_id': self.inventory_item.pk, 'quantity': 1, 'notes': ''},
+            format='json',
+        )
+        self.assertEqual(post_res.status_code, 409)
+
+    def test_motorpool_detail_includes_trip_and_actuals_permissions(self):
+        motorpool_unit = Unit.objects.create(name='Motorpool', code='motorpool', is_active=True)
+        self.unit_head.unit = motorpool_unit
+        self.unit_head.save(update_fields=['unit'])
+        self.personnel.unit = motorpool_unit
+        self.personnel.save(update_fields=['unit'])
+        mr = Request.objects.create(
+            requestor=self.requestor,
+            unit=motorpool_unit,
+            title='Trip to office',
+            description='Official travel',
+            location='Campus',
+            status=Request.Status.SUBMITTED,
+        )
+        self.client.force_authenticate(self.unit_head)
+        self.client.post(
+            f'/api/v1/requests/{mr.pk}/assign/',
+            {'personnel_ids': [self.personnel.pk]},
+            format='json',
+        )
+        self.client.force_authenticate(self.director)
+        self.client.post(f'/api/v1/requests/{mr.pk}/approve/', {}, format='json')
+
+        self.client.force_authenticate(self.personnel)
+        detail = self.client.get(f'/api/v1/requests/{mr.pk}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn('motorpool', detail.data)
+        self.assertIsNotNone(detail.data['motorpool'])
+        self.assertIn('trip', detail.data['motorpool'])
+        self.assertFalse(detail.data['motorpool']['can_edit_vehicle'])
+        self.assertTrue(detail.data['motorpool']['can_edit_actuals'])
+
+        patch_res = self.client.patch(
+            f'/api/v1/requests/{mr.pk}/motorpool-trip/',
+            {'fuel_used_liters': '10.5', 'other_consumables_notes': 'Oil top-up'},
+            format='json',
+        )
+        self.assertEqual(patch_res.status_code, 200)
+        trip = patch_res.data['motorpool']['trip']
+        self.assertEqual(Decimal(str(trip['fuel_used_liters'])), Decimal('10.5'))
+        self.assertEqual(trip['other_consumables_notes'], 'Oil top-up')
+
+    def test_motorpool_detail_matches_display_name_even_if_slug_not_motorpool(self):
+        """Legacy units may use a nonstandard code while keeping the canonical name "Motorpool"."""
+        mp_unit = Unit.objects.create(name='Motorpool', code='motorpool-transport', is_active=True)
+        self.unit_head.unit = mp_unit
+        self.unit_head.save(update_fields=['unit'])
+        self.personnel.unit = mp_unit
+        self.personnel.save(update_fields=['unit'])
+        mr = Request.objects.create(
+            requestor=self.requestor,
+            unit=mp_unit,
+            title='Trip',
+            description='Travel',
+            location='Site',
+            status=Request.Status.DIRECTOR_APPROVED,
+        )
+        self.client.force_authenticate(self.unit_head)
+        detail = self.client.get(f'/api/v1/requests/{mr.pk}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertIsNotNone(detail.data['motorpool'])
+        self.assertIn('trip', detail.data['motorpool'])
+
+    def test_motorpool_detail_when_unit_name_contains_motorpool_but_slug_differs(self):
+        """Sites may label the unit "Motorpool …" while the slug is unrelated."""
+        mp_unit = Unit.objects.create(name='Motorpool Division', code='fleet-services', is_active=True)
+        self.unit_head.unit = mp_unit
+        self.unit_head.save(update_fields=['unit'])
+        mr = Request.objects.create(
+            requestor=self.requestor,
+            unit=mp_unit,
+            title='Official travel',
+            description='Conference',
+            location='City Hall',
+            status=Request.Status.DIRECTOR_APPROVED,
+        )
+        self.client.force_authenticate(self.unit_head)
+        detail = self.client.get(f'/api/v1/requests/{mr.pk}/')
+        self.assertEqual(detail.status_code, 200)
+        self.assertIsNotNone(detail.data['motorpool'])
+        self.assertIn('trip', detail.data['motorpool'])
 

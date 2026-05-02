@@ -111,27 +111,27 @@
     <!-- Unit List Section -->
     <div class="mt-12 w-full max-w-4xl px-4">
         <h3 class="text-center text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-8">Departmental Units</h3>
-        <div class="flex flex-wrap justify-center gap-4">
-            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+        <div class="grid grid-cols-4 gap-2 sm:gap-4 w-full">
+            <div class="flex min-h-full min-w-0 w-full flex-col items-center justify-center gap-2 p-2 sm:p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+                <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">build</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Repair &amp; Maintenance</span>
             </div>
-            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+            <div class="flex min-h-full min-w-0 w-full flex-col items-center justify-center gap-2 p-2 sm:p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+                <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">water_drop</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Utility Services</span>
             </div>
-            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+            <div class="flex min-h-full min-w-0 w-full flex-col items-center justify-center gap-2 p-2 sm:p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+                <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">bolt</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Electrical Unit</span>
             </div>
-            <div class="w-[150px] flex flex-col items-center gap-2 p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
-                <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
+            <div class="flex min-h-full min-w-0 w-full flex-col items-center justify-center gap-2 p-2 sm:p-4 rounded-xl bg-white/40 dark:bg-slate-900/40 border border-slate-200/50 dark:border-slate-800/50 backdrop-blur-sm group hover:bg-white dark:hover:bg-slate-900 transition-all">
+                <div class="w-10 h-10 shrink-0 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
                     <span class="material-symbols-outlined text-[20px]">directions_car</span>
                 </div>
                 <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase text-center leading-tight">Motorpool</span>
@@ -158,13 +158,11 @@
 <footer class="w-full py-6 px-6 text-center text-slate-400 dark:text-slate-500 text-xs">
     <div class="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
         <p>© {% now "Y" %} General Services Office. All rights reserved.</p>
-        <div class="flex gap-6">
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'privacy' %}">Privacy Policy</a>
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'terms' %}">Terms of Service</a>
-            <a class="hover:text-primary transition-colors" href="{% url 'gso_accounts:public_info' 'support' %}">Contact Support</a>
-        </div>
+        {% include "includes/footer_legal_buttons.html" %}
     </div>
 </footer>
+
+{% include "includes/public_info_modals.html" %}
 
 <script>
 (function() {

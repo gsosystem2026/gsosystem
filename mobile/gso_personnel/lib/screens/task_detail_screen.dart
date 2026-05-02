@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import '../data/outbox_database.dart';
 import '../models/material_request_item.dart';
+import '../models/motorpool_trip.dart';
 import '../models/request_message.dart';
 import '../models/request_task.dart';
 import '../services/api_client.dart';
@@ -29,6 +30,10 @@ class TaskDetailScreen extends StatefulWidget {
 }
 
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
+  static final _motorpoolUnitNameRe = RegExp(
+    r'(?<![\w-])motorpool(?![\w-])',
+    caseSensitive: false,
+  );
   static const _uuid = Uuid();
   late RequestTask _task;
   late ApiClient _api;
@@ -45,11 +50,55 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   bool _loadingMessages = false;
   bool _sendingMessage = false;
   Timer? _chatPollTimer;
+  MotorpoolEnvelope? _motorpool;
+  bool _loadingMotorpool = false;
+  bool _savingMotorpool = false;
+  /// Set when GET /requests/:id/ fails (network/auth); avoids a blank screen with no trip card.
+  String? _motorpoolDetailError;
+  final _driverCtrl = TextEditingController();
+  final _plateCtrl = TextEditingController();
+  final _stampCtrl = TextEditingController();
+  final _transCtrl = TextEditingController();
+  final _fuelBeginningCtrl = TextEditingController();
+  final _fuelReceivedCtrl = TextEditingController();
+  final _fuelAddedCtrl = TextEditingController();
+  final _fuelTotalCtrl = TextEditingController();
+  final _fuelUsedCtrl = TextEditingController();
+  final _fuelEndingCtrl = TextEditingController();
+  final _consumablesNotesCtrl = TextEditingController();
+
+  bool get _isMotorpoolUnit {
+    var code = (_task.unitCode ?? '').trim().toLowerCase();
+    code = code.replaceAll('_', '-');
+    if (code.startsWith('motorpool')) return true;
+    final name = _task.unitName ?? '';
+    final n = name.trim().toLowerCase();
+    if (n == 'motorpool') return true;
+    return _motorpoolUnitNameRe.hasMatch(n);
+  }
 
   bool get _requiresInspectionFirst {
     final unit = (_task.unitName ?? '').toLowerCase();
     return unit.contains('repair') || unit.contains('electrical');
   }
+
+  /// Same as web `can_request_materials` (`gso_requests/views.py`).
+  bool get _canRequestMaterials {
+    const allowed = {
+      'DIRECTOR_APPROVED',
+      'INSPECTION',
+      'IN_PROGRESS',
+      'ON_HOLD',
+    };
+    return allowed.contains(_task.status);
+  }
+
+  bool get _showMaterialsCard =>
+      !_isMotorpoolUnit &&
+      (_canRequestMaterials || _materialRequests.isNotEmpty);
+
+  bool get _showMotorpoolCard =>
+      _loadingMotorpool || _motorpool != null || _isMotorpoolUnit;
 
   List<_StatusAction> _availableActions() {
     switch (_task.status) {
@@ -132,7 +181,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       accessToken: widget.auth.readAccessToken,
       refreshAccessToken: widget.auth.refreshAccessToken,
     );
-    _loadMaterialData();
+    if (_canRequestMaterials && !_isMotorpoolUnit) {
+      _loadingMaterials = true;
+    }
+    _loadFullRequestDetail();
+    _loadMaterialSection();
     _loadMessages();
     _chatPollTimer = Timer.periodic(
       const Duration(seconds: 15),
@@ -146,34 +199,159 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     _messageCtrl.dispose();
     _qtyCtrl.dispose();
     _materialNotesCtrl.dispose();
+    _driverCtrl.dispose();
+    _plateCtrl.dispose();
+    _stampCtrl.dispose();
+    _transCtrl.dispose();
+    _fuelBeginningCtrl.dispose();
+    _fuelReceivedCtrl.dispose();
+    _fuelAddedCtrl.dispose();
+    _fuelTotalCtrl.dispose();
+    _fuelUsedCtrl.dispose();
+    _fuelEndingCtrl.dispose();
+    _consumablesNotesCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadMaterialData({bool showLoading = true}) async {
-    if (showLoading) {
+  Future<void> _loadFullRequestDetail() async {
+    if (_isMotorpoolUnit || _motorpool != null) {
+      setState(() => _loadingMotorpool = true);
+    }
+    try {
+      final payload = await _api.fetchRequestDetailPayload(_task.id);
+      if (!mounted) return;
+      setState(() {
+        _task = payload.task;
+        _motorpool = payload.motorpool;
+        _loadingMotorpool = false;
+        _motorpoolDetailError = null;
+        _syncMotorpoolControllersFromTrip();
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingMotorpool = false;
+        _motorpoolDetailError = _api.messageFromError(e);
+      });
+    }
+  }
+
+  void _syncMotorpoolControllersFromTrip() {
+    final trip = _motorpool?.trip;
+    if (trip == null) {
+      _driverCtrl.clear();
+      _plateCtrl.clear();
+      _stampCtrl.clear();
+      _transCtrl.clear();
+      _fuelBeginningCtrl.clear();
+      _fuelReceivedCtrl.clear();
+      _fuelAddedCtrl.clear();
+      _fuelTotalCtrl.clear();
+      _fuelUsedCtrl.clear();
+      _fuelEndingCtrl.clear();
+      _consumablesNotesCtrl.clear();
+      return;
+    }
+    _driverCtrl.text = trip.driverName ?? '';
+    _plateCtrl.text = trip.vehiclePlate ?? '';
+    _stampCtrl.text = trip.vehicleStampOrContractNo ?? '';
+    _transCtrl.text = trip.vehicleTrans ?? '';
+    _fuelBeginningCtrl.text = trip.fuelBeginningLiters ?? '';
+    _fuelReceivedCtrl.text = trip.fuelReceivedIssuedLiters ?? '';
+    _fuelAddedCtrl.text = trip.fuelAddedPurchasedLiters ?? '';
+    _fuelTotalCtrl.text = trip.fuelTotalAvailableLiters ?? '';
+    _fuelUsedCtrl.text = trip.fuelUsedLiters ?? '';
+    _fuelEndingCtrl.text = trip.fuelEndingLiters ?? '';
+    _consumablesNotesCtrl.text = trip.otherConsumablesNotes ?? '';
+  }
+
+  Future<void> _saveMotorpoolEdits() async {
+    if (_motorpool == null || _savingMotorpool) return;
+    final canV = _motorpool!.canEditVehicle;
+    final canA = _motorpool!.canEditActuals;
+    if (!canV && !canA) return;
+    final body = <String, dynamic>{};
+    if (canV) {
+      body['driver_name'] = _driverCtrl.text.trim();
+      body['vehicle_plate'] = _plateCtrl.text.trim();
+      body['vehicle_stamp_or_contract_no'] = _stampCtrl.text.trim();
+      body['vehicle_trans'] = _transCtrl.text.trim();
+    }
+    if (canA) {
+      body['fuel_beginning_liters'] = _fuelBeginningCtrl.text.trim();
+      body['fuel_received_issued_liters'] = _fuelReceivedCtrl.text.trim();
+      body['fuel_added_purchased_liters'] = _fuelAddedCtrl.text.trim();
+      body['fuel_total_available_liters'] = _fuelTotalCtrl.text.trim();
+      body['fuel_used_liters'] = _fuelUsedCtrl.text.trim();
+      body['fuel_ending_liters'] = _fuelEndingCtrl.text.trim();
+      body['other_consumables_notes'] = _consumablesNotesCtrl.text.trim();
+    }
+    setState(() => _savingMotorpool = true);
+    try {
+      final env = await _api.patchMotorpoolTrip(_task.id, body);
+      if (!mounted) return;
+      setState(() {
+        _motorpool = env;
+        _savingMotorpool = false;
+        _syncMotorpoolControllersFromTrip();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Trip ticket saved.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _savingMotorpool = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_api.messageFromError(e))),
+      );
+    }
+  }
+
+  Future<void> _loadMaterialSection() async {
+    if (_isMotorpoolUnit) {
+      if (mounted) {
+        setState(() {
+          _loadingMaterials = false;
+          _materialRequests = [];
+          _inventoryItems = [];
+          _selectedItemId = null;
+        });
+      }
+      return;
+    }
+    if (_canRequestMaterials && mounted) {
       setState(() => _loadingMaterials = true);
     }
     try {
-      final inventory = await _api.fetchInventoryItems();
       final requests = await _api.fetchRequestMaterialRequests(_task.id);
+      List<Map<String, dynamic>> available = [];
+      if (_canRequestMaterials) {
+        final inventory = await _api.fetchInventoryItems();
+        available = inventory
+            .where((e) => ((e['quantity'] as num?)?.toInt() ?? 0) > 0)
+            .toList();
+      }
       if (!mounted) return;
-      final available = inventory
-          .where((e) => ((e['quantity'] as num?)?.toInt() ?? 0) > 0)
-          .toList();
       setState(() {
-        _inventoryItems = available;
         _materialRequests = requests;
-        final hasSelected = available.any(
-          (it) => (it['id'] as num?)?.toInt() == _selectedItemId,
-        );
-        if (!hasSelected) {
-          _selectedItemId = available.isEmpty ? null : (available.first['id'] as num?)?.toInt();
+        if (_canRequestMaterials) {
+          _inventoryItems = available;
+          final hasSelected = available.any(
+            (it) => (it['id'] as num?)?.toInt() == _selectedItemId,
+          );
+          if (!hasSelected) {
+            _selectedItemId =
+                available.isEmpty ? null : (available.first['id'] as num?)?.toInt();
+          }
+        } else {
+          _inventoryItems = [];
+          _selectedItemId = null;
         }
-        if (showLoading) _loadingMaterials = false;
+        _loadingMaterials = false;
       });
     } catch (_) {
       if (!mounted) return;
-      if (showLoading) setState(() => _loadingMaterials = false);
+      setState(() => _loadingMaterials = false);
     }
   }
 
@@ -273,8 +451,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     try {
       final data = await _api.postWorkStatus(_task.id, status);
       final updated = RequestTask.fromJson(data);
+      final mp = MotorpoolEnvelope.tryParse(Map<String, dynamic>.from(data));
       if (!mounted) return;
-      setState(() => _task = updated);
+      setState(() {
+        _task = updated;
+        _motorpool = mp;
+        _syncMotorpoolControllersFromTrip();
+      });
+      await _loadMaterialSection();
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Status: ${updated.statusDisplay}')),
       );
@@ -291,6 +476,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             updatedAt: DateTime.now(),
           );
         });
+        await _loadMaterialSection();
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -311,6 +498,250 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Widget _motorpoolFuelField(TextEditingController c, String label) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: c,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMotorpoolCard(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final mp = _motorpool;
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.slate200),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Trip ticket',
+                  style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Refresh',
+                onPressed: _loadingMotorpool ? null : _loadFullRequestDetail,
+                icon: const Icon(Icons.refresh_rounded, size: 20),
+              ),
+            ],
+          ),
+          if (_loadingMotorpool && mp == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          if (!_loadingMotorpool && mp == null && _isMotorpoolUnit) ...[
+            const SizedBox(height: 8),
+            Text(
+              _motorpoolDetailError ??
+                  'Trip ticket data was not returned. Try refresh, or ensure this request is on the Motorpool unit.',
+              style: t.bodySmall?.copyWith(
+                color: _motorpoolDetailError != null ? Colors.red.shade800 : AppColors.slate600,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _loadingMotorpool ? null : _loadFullRequestDetail,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+            ),
+          ],
+          if (mp != null) ...[
+            if (_loadingMotorpool) ...[
+              const SizedBox(height: 8),
+              const Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Text(
+              'Planned trip',
+              style: t.labelLarge?.copyWith(
+                color: AppColors.slate600,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _infoTile(context, 'Office / requesting party', mp.trip.requestingOffice),
+            const SizedBox(height: 12),
+            _infoTile(context, 'Places to visit', mp.trip.placesToBeVisited),
+            const SizedBox(height: 12),
+            _infoTile(context, 'Itinerary', mp.trip.itineraryOfTravel),
+            const SizedBox(height: 12),
+            _infoTile(context, 'Trip date / time', mp.trip.tripDatetime),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _infoTile(
+                    context,
+                    'Days',
+                    mp.trip.numberOfDays != null ? '${mp.trip.numberOfDays}' : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _infoTile(
+                    context,
+                    'Passengers',
+                    mp.trip.numberOfPassengers != null ? '${mp.trip.numberOfPassengers}' : null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _infoTile(context, 'Contact person', mp.trip.contactPerson),
+            const SizedBox(height: 12),
+            _infoTile(context, 'Contact number', mp.trip.contactNumber),
+            const SizedBox(height: 16),
+            Text(
+              'Vehicle',
+              style: t.labelLarge?.copyWith(
+                color: AppColors.slate600,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (mp.canEditVehicle) ...[
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: _driverCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Driver',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: _plateCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Plate no.',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: _stampCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Sticker / stamp / contract',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: _transCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'AC / Transmission',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+            ] else ...[
+              _infoTile(context, 'Driver', mp.trip.driverName),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Plate no.', mp.trip.vehiclePlate),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Sticker / stamp / contract', mp.trip.vehicleStampOrContractNo),
+              const SizedBox(height: 12),
+              _infoTile(context, 'AC / Transmission', mp.trip.vehicleTrans),
+            ],
+            const SizedBox(height: 16),
+            Text(
+              'Fuel (liters) & consumables',
+              style: t.labelLarge?.copyWith(
+                color: AppColors.slate600,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Printing the official trip ticket is available to Unit Heads on the web.',
+              style: t.bodySmall?.copyWith(color: AppColors.slate500),
+            ),
+            const SizedBox(height: 10),
+            if (mp.canEditActuals) ...[
+              _motorpoolFuelField(_fuelBeginningCtrl, 'Beginning balance'),
+              _motorpoolFuelField(_fuelReceivedCtrl, 'Fuel received'),
+              _motorpoolFuelField(_fuelAddedCtrl, 'Added / purchased'),
+              _motorpoolFuelField(_fuelTotalCtrl, 'Total available'),
+              _motorpoolFuelField(_fuelUsedCtrl, 'Fuel used'),
+              _motorpoolFuelField(_fuelEndingCtrl, 'Ending balance'),
+              TextField(
+                controller: _consumablesNotesCtrl,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Oil, tolls & other notes',
+                  alignLabelWithHint: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ] else ...[
+              _infoTile(context, 'Beginning balance', mp.trip.fuelBeginningLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Fuel received', mp.trip.fuelReceivedIssuedLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Added / purchased', mp.trip.fuelAddedPurchasedLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Total available', mp.trip.fuelTotalAvailableLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Fuel used', mp.trip.fuelUsedLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Ending balance', mp.trip.fuelEndingLiters),
+              const SizedBox(height: 12),
+              _infoTile(context, 'Oil, tolls & other notes', mp.trip.otherConsumablesNotes),
+            ],
+            if (mp.canEditVehicle || mp.canEditActuals) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.icon(
+                  onPressed:
+                      (_savingMotorpool || _loadingMotorpool) ? null : _saveMotorpoolEdits,
+                  icon: _savingMotorpool
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save_rounded),
+                  label: const Text('Save trip ticket'),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -385,8 +816,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-              Container(
+              if (_showMotorpoolCard) ...[
+                const SizedBox(height: 14),
+                _buildMotorpoolCard(context),
+              ],
+              if (_showMaterialsCard) ...[
+                const SizedBox(height: 14),
+                Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(14),
@@ -398,125 +834,142 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          Text(
-                            'Request materials',
-                            style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                          Expanded(
+                            child: Text(
+                              _canRequestMaterials
+                                  ? 'Request materials'
+                                  : 'Material requests',
+                              style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                            ),
                           ),
-                          const Spacer(),
                           IconButton(
-                            tooltip: 'Refresh materials',
-                            onPressed: _loadMaterialData,
+                            tooltip: 'Refresh',
+                            onPressed: _loadMaterialSection,
                             icon: const Icon(Icons.refresh_rounded, size: 20),
                           ),
                         ],
                       ),
-                      if (_loadingMaterials)
+                      if (_canRequestMaterials) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'Request items from unit inventory. Unit Head must approve before stock is deducted.',
+                          style: t.bodySmall?.copyWith(color: AppColors.slate500),
+                        ),
+                      ],
+                      if (_canRequestMaterials && _loadingMaterials)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 10),
                           child: Center(child: CircularProgressIndicator()),
                         )
                       else ...[
-                        DropdownButtonFormField<int>(
-                          value: _selectedItemId,
-                          items: _inventoryItems
-                              .map(
-                                (it) => DropdownMenuItem<int>(
-                                  value: (it['id'] as num).toInt(),
-                                  child: Text(
-                                    '${it['name']} (stock: ${it['quantity']} ${it['unit_of_measure'] ?? ''})',
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: _inventoryItems.isEmpty
-                              ? null
-                              : (v) => setState(() => _selectedItemId = v),
-                          decoration: const InputDecoration(
-                            labelText: 'Item',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 110,
-                              child: TextField(
-                                controller: _qtyCtrl,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Quantity',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _materialNotesCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Notes (optional)',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: FilledButton.icon(
-                            onPressed: (_submittingMaterial || _inventoryItems.isEmpty)
-                                ? null
-                                : _submitMaterialRequest,
-                            icon: _submittingMaterial
-                                ? const SizedBox(
-                                    width: 14,
-                                    height: 14,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                : const Icon(Icons.add_shopping_cart_rounded),
-                            label: const Text('Submit material request'),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'Request history',
-                          style: t.labelLarge?.copyWith(
-                            color: AppColors.slate600,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        if (_materialRequests.isEmpty)
-                          Text(
-                            'No material requests yet.',
-                            style: t.bodySmall?.copyWith(color: AppColors.slate500),
-                          )
-                        else
-                          ..._materialRequests.take(5).map(
-                                (mr) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.slate100,
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(color: AppColors.slate200),
-                                    ),
+                        if (_canRequestMaterials) ...[
+                          DropdownButtonFormField<int>(
+                            value: _selectedItemId,
+                            items: _inventoryItems
+                                .map(
+                                  (it) => DropdownMenuItem<int>(
+                                    value: (it['id'] as num).toInt(),
                                     child: Text(
-                                      '${mr.itemName} x${mr.quantity} • ${mr.statusDisplay}',
-                                      style: t.bodySmall,
+                                      '${it['name']} (stock: ${it['quantity']} ${it['unit_of_measure'] ?? ''})',
                                     ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _inventoryItems.isEmpty
+                                ? null
+                                : (v) => setState(() => _selectedItemId = v),
+                            decoration: const InputDecoration(
+                              labelText: 'Item',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 110,
+                                child: TextField(
+                                  controller: _qtyCtrl,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Quantity',
+                                    border: OutlineInputBorder(),
                                   ),
                                 ),
                               ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextField(
+                                  controller: _materialNotesCtrl,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Notes (optional)',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: FilledButton.icon(
+                              onPressed: (_submittingMaterial || _inventoryItems.isEmpty)
+                                  ? null
+                                  : _submitMaterialRequest,
+                              icon: _submittingMaterial
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.add_shopping_cart_rounded),
+                              label: const Text('Submit material request'),
+                            ),
+                          ),
+                          if (_materialRequests.isNotEmpty) const SizedBox(height: 12),
+                        ],
+                        if (_canRequestMaterials || _materialRequests.isNotEmpty) ...[
+                          if (_canRequestMaterials) ...[
+                            Text(
+                              'Request history',
+                              style: t.labelLarge?.copyWith(
+                                color: AppColors.slate600,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
+                          if (_materialRequests.isEmpty && _canRequestMaterials)
+                            Text(
+                              'No material requests yet.',
+                              style: t.bodySmall?.copyWith(color: AppColors.slate500),
+                            )
+                          else
+                            ..._materialRequests.take(5).map(
+                                  (mr) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.slate100,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: AppColors.slate200),
+                                      ),
+                                      child: Text(
+                                        '${mr.itemName} x${mr.quantity} • ${mr.statusDisplay}',
+                                        style: t.bodySmall,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                        ],
                       ],
                     ],
                   ),
                 ),
-              const SizedBox(height: 14),
+                const SizedBox(height: 14),
+              ],
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,

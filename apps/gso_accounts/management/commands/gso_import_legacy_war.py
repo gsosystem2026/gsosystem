@@ -13,20 +13,14 @@ from django.utils import timezone
 
 from openpyxl import load_workbook
 
+from apps.gso_accounts.legacy_migration_workbook import (
+    find_war_header_row,
+    workbook_has_ipmt_fingerprint,
+    workbook_has_war_header,
+)
 from apps.gso_requests.models import Request, RequestAssignment
 from apps.gso_reports.models import WorkAccomplishmentReport
 from apps.gso_units.models import Unit
-
-
-BASE_HEADER_TOKENS = {
-    "date started",
-    "description",
-    "requesting office",
-    "assigned personnel",
-    "status",
-}
-ACTIVITY_HEADER_TOKENS = {"name of activity", "name of project"}
-DATE_COMPLETED_TOKENS = {"date completed", "date complete"}
 
 
 @dataclass
@@ -134,6 +128,25 @@ class Command(BaseCommand):
         wb = load_workbook(filename=str(excel_path), data_only=True)
         stats = Stats()
         try:
+            has_ipmt = workbook_has_ipmt_fingerprint(wb)
+            has_war = workbook_has_war_header(wb)
+            if has_ipmt and has_war:
+                raise CommandError(
+                    "This workbook looks like multiple templates at once "
+                    "(IPMT layout and a WAR data table). Use a separate file per report type."
+                )
+            if has_ipmt and not has_war:
+                raise CommandError(
+                    'This workbook matches the legacy IPMT Excel template. '
+                    'Choose Report Type "IPMT", not WAR.'
+                )
+            if not has_war:
+                raise CommandError(
+                    "No legacy Work Accomplishment Report layout was found "
+                    '(expected columns such as Date Started, Description, Requesting Office, '
+                    '"Name of Activity" or "Name of Project", Date Completed).'
+                )
+
             detected_unit = self._detect_unit_from_workbook(wb)
             if detected_unit and detected_unit.id != unit.id:
                 raise CommandError(
@@ -283,16 +296,7 @@ class Command(BaseCommand):
         return user
 
     def _find_header_row(self, sheet):
-        for idx, row in enumerate(sheet.iter_rows(min_row=1, max_row=min(40, sheet.max_row), values_only=True), start=1):
-            tokens = {_norm(v).lower().rstrip(":").rstrip() for v in row if _norm(v)}
-            normalized = {t.replace("  ", " ") for t in tokens}
-            if (
-                BASE_HEADER_TOKENS.issubset(normalized)
-                and normalized.intersection(ACTIVITY_HEADER_TOKENS)
-                and normalized.intersection(DATE_COMPLETED_TOKENS)
-            ):
-                return idx
-        return None
+        return find_war_header_row(sheet)
 
     def _build_requestor_office_map(self, User):
         office_map = {}

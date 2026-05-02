@@ -1,0 +1,171 @@
+{# Popups for Privacy / Terms / Support. Close control: scoped CSS + JS hover class so animation works even when Tailwind layer/cache misses utilities; card avoids overflow-hidden clipping scale. #}
+<style>
+    /* Not in Tailwind layers — wins over preflight; matches base_requestor close-btn motion */
+    .public-info-close-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.5rem;
+        padding: 0.375rem;
+        color: #94a3b8;
+        transition: transform 0.2s ease, color 0.2s ease, background-color 0.2s ease;
+        position: relative;
+        z-index: 2;
+    }
+    .public-info-close-btn.is-hover {
+        transform: scale(1.1);
+        color: #1152d4;
+        background-color: #f1f5f9;
+    }
+    .public-info-close-btn:active {
+        transform: scale(0.95);
+    }
+    .public-info-close-btn.is-hover:active {
+        transform: scale(0.95);
+    }
+    .public-info-close-icon {
+        font-size: 1.25rem;
+        display: inline-block;
+        transition: transform 0.2s ease;
+    }
+    .public-info-close-btn.is-hover .public-info-close-icon {
+        transform: rotate(90deg);
+    }
+    .dark .public-info-close-btn.is-hover {
+        background-color: #1e293b;
+        color: #60a5fa;
+    }
+</style>
+<div id="public-info-modal-privacy" class="hidden fixed inset-0 z-[120]" aria-hidden="true" role="dialog" aria-labelledby="public-info-title-privacy">
+    <button type="button" class="absolute inset-0 z-0 bg-slate-900/45 backdrop-blur-[1px] js-public-info-backdrop cursor-default border-0 p-0" aria-label="Close dialog" tabindex="-1"></button>
+    <div class="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
+        <div class="pointer-events-auto flex min-h-0 w-full max-w-2xl max-h-[90vh] flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex-shrink-0 rounded-t-2xl border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800/80 flex items-start justify-between gap-4">
+                <div class="min-w-0 pr-2">
+                    <h2 id="public-info-title-privacy" class="text-lg font-bold text-slate-900 dark:text-white">Privacy Policy</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">How GSO Request Management collects and uses data.</p>
+                    <p class="mt-1 text-xs text-slate-500">Last updated: April 2026</p>
+                </div>
+                <button type="button" class="js-public-info-close public-info-close-btn flex-shrink-0" aria-label="Close">
+                    <span class="material-symbols-outlined public-info-close-icon" aria-hidden="true">close</span>
+                </button>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-5 py-5 space-y-5 text-sm">
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Information We Collect</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">We collect account profile details, request submission data, attachments, and service processing logs needed to deliver GSO services.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">How We Use Information</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">Data is used to process service requests, coordinate units and personnel, generate reports, and improve response performance.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Data Access and Retention</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">Access is role-based and limited to authorized personnel. Request and audit data are retained according to institutional policy and legal requirements.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="public-info-modal-terms" class="hidden fixed inset-0 z-[120]" aria-hidden="true" role="dialog" aria-labelledby="public-info-title-terms">
+    <button type="button" class="absolute inset-0 z-0 bg-slate-900/45 backdrop-blur-[1px] js-public-info-backdrop cursor-default border-0 p-0" aria-label="Close dialog" tabindex="-1"></button>
+    <div class="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
+        <div class="pointer-events-auto flex min-h-0 w-full max-w-2xl max-h-[90vh] flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex-shrink-0 rounded-t-2xl border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800/80 flex items-start justify-between gap-4">
+                <div class="min-w-0 pr-2">
+                    <h2 id="public-info-title-terms" class="text-lg font-bold text-slate-900 dark:text-white">Terms of Service</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Usage rules for all users of the GSO Request Management system.</p>
+                    <p class="mt-1 text-xs text-slate-500">Last updated: April 2026</p>
+                </div>
+                <button type="button" class="js-public-info-close public-info-close-btn flex-shrink-0" aria-label="Close">
+                    <span class="material-symbols-outlined public-info-close-icon" aria-hidden="true">close</span>
+                </button>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-5 py-5 space-y-5 text-sm">
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Authorized Use</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">The system is for official service requests and related operations only. Users must provide accurate and complete information.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Account Responsibility</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">Users are responsible for securing their credentials and for all activity performed using their accounts.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Operational Limits</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">The GSO team may suspend misuse, perform maintenance, and update features to protect service quality and security.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="public-info-modal-support" class="hidden fixed inset-0 z-[120]" aria-hidden="true" role="dialog" aria-labelledby="public-info-title-support">
+    <button type="button" class="absolute inset-0 z-0 bg-slate-900/45 backdrop-blur-[1px] js-public-info-backdrop cursor-default border-0 p-0" aria-label="Close dialog" tabindex="-1"></button>
+    <div class="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
+        <div class="pointer-events-auto flex min-h-0 w-full max-w-2xl max-h-[90vh] flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+            <div class="flex-shrink-0 rounded-t-2xl border-b border-slate-200 bg-slate-50 px-5 py-4 dark:border-slate-700 dark:bg-slate-800/80 flex items-start justify-between gap-4">
+                <div class="min-w-0 pr-2">
+                    <h2 id="public-info-title-support" class="text-lg font-bold text-slate-900 dark:text-white">Contact Support</h2>
+                    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">Where to report issues or ask for assistance.</p>
+                    <p class="mt-1 text-xs text-slate-500">Last updated: April 2026</p>
+                </div>
+                <button type="button" class="js-public-info-close public-info-close-btn flex-shrink-0" aria-label="Close">
+                    <span class="material-symbols-outlined public-info-close-icon" aria-hidden="true">close</span>
+                </button>
+            </div>
+            <div class="min-h-0 flex-1 overflow-y-auto rounded-b-2xl px-5 py-5 space-y-5 text-sm">
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Help Channels</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">For account, request, or report issues, contact the GSO Office through your official office channel or assigned coordinator.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Include These Details</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">Share your request ID, a short issue description, expected result, and screenshots if available so support can respond faster.</p>
+                </section>
+                <section>
+                    <h3 class="font-semibold text-slate-900 dark:text-white">Service Hours</h3>
+                    <p class="mt-2 leading-6 text-slate-600 dark:text-slate-400">Support follows regular office hours unless emergency handling is required by authorized units.</p>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+    function openModal(key) {
+        var modal = document.getElementById('public-info-modal-' + key);
+        if (!modal) return;
+        modal.classList.remove('hidden');
+        modal.setAttribute('aria-hidden', 'false');
+    }
+    document.querySelectorAll('.js-public-info-open').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var key = btn.getAttribute('data-public-info');
+            if (key) openModal(key);
+        });
+    });
+    document.querySelectorAll('[id^="public-info-modal-"]').forEach(function(modal) {
+        modal.querySelectorAll('.js-public-info-close, .js-public-info-backdrop').forEach(function(el) {
+            el.addEventListener('click', function() { closeModal(modal); });
+        });
+    });
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        document.querySelectorAll('[id^="public-info-modal-"]:not(.hidden)').forEach(function(modal) {
+            closeModal(modal);
+        });
+    });
+    /* Hover animation does not depend on Tailwind generating hover: utilities */
+    document.querySelectorAll('.public-info-close-btn').forEach(function(btn) {
+        btn.addEventListener('mouseenter', function() { btn.classList.add('is-hover'); });
+        btn.addEventListener('mouseleave', function() { btn.classList.remove('is-hover'); });
+    });
+})();
+</script>

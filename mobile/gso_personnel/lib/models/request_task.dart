@@ -12,6 +12,7 @@ class RequestTask {
     this.isEmergency = false,
     this.requestorName,
     this.unitName,
+    this.unitCode,
     this.updatedAt,
   });
 
@@ -26,6 +27,7 @@ class RequestTask {
   final bool isEmergency;
   final String? requestorName;
   final String? unitName;
+  final String? unitCode;
   final DateTime? updatedAt;
 
   factory RequestTask.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class RequestTask {
       isEmergency: json['is_emergency'] == true,
       requestorName: json['requestor_name'] as String?,
       unitName: json['unit_name'] as String?,
+      unitCode: json['unit_code']?.toString(),
       updatedAt: updated,
     );
   }
@@ -94,6 +97,7 @@ class RequestTask {
     bool? isEmergency,
     String? requestorName,
     String? unitName,
+    String? unitCode,
     DateTime? updatedAt,
   }) {
     return RequestTask(
@@ -108,6 +112,7 @@ class RequestTask {
       isEmergency: isEmergency ?? this.isEmergency,
       requestorName: requestorName ?? this.requestorName,
       unitName: unitName ?? this.unitName,
+      unitCode: unitCode ?? this.unitCode,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }

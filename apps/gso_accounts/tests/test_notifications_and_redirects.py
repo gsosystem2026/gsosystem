@@ -158,13 +158,6 @@ class StaffHistoryAndWarPermissionTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class PublicInfoPagesTests(TestCase):
-    def test_footer_info_pages_render(self):
-        for page in ('privacy', 'terms', 'support'):
-            response = self.client.get(reverse('gso_accounts:public_info', args=[page]))
-            self.assertEqual(response.status_code, 200)
-
-
 class InviteEmailPreflightTests(TestCase):
     @override_settings(
         EMAIL_BACKEND='django.core.mail.backends.smtp.EmailBackend',

@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import '../config/env.dart';
 import '../models/app_notification.dart';
 import '../models/material_request_item.dart';
+import '../models/motorpool_trip.dart';
+import '../models/request_detail_payload.dart';
 import '../models/request_message.dart';
 import '../models/request_task.dart';
 
@@ -144,9 +146,31 @@ class ApiClient {
         (data['detail']?.toString().toLowerCase() == 'not found.');
   }
 
-  Future<RequestTask> fetchRequestDetail(int id) async {
+  Future<RequestDetailPayload> fetchRequestDetailPayload(int id) async {
     final response = await _dio.get<Map<String, dynamic>>('/requests/$id/');
-    return RequestTask.fromJson(Map<String, dynamic>.from(response.data!));
+    return RequestDetailPayload.fromJson(Map<String, dynamic>.from(response.data!));
+  }
+
+  Future<RequestTask> fetchRequestDetail(int id) async {
+    final payload = await fetchRequestDetailPayload(id);
+    return payload.task;
+  }
+
+  /// PATCH motorpool-trip; response body is `{ "motorpool": { ... } }`.
+  Future<MotorpoolEnvelope> patchMotorpoolTrip(
+    int requestId,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/requests/$requestId/motorpool-trip/',
+      data: body,
+    );
+    final data = Map<String, dynamic>.from(response.data ?? const <String, dynamic>{});
+    final raw = data['motorpool'];
+    if (raw is! Map) {
+      throw StateError('Unexpected motorpool patch response.');
+    }
+    return MotorpoolEnvelope.fromJson(Map<String, dynamic>.from(raw));
   }
 
   /// Returns updated request JSON (detail shape).

@@ -27,16 +27,16 @@
             </p>
         </div>
         <div class="flex items-center gap-4">
-            <form method="get" class="flex items-center gap-2">
+            <form method="get" id="wr-filter-form" class="flex items-center gap-2">
                 <div class="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg px-3 py-1.5 border border-slate-200 dark:border-slate-700 gap-2">
                     <span class="material-symbols-outlined text-slate-400">calendar_today</span>
-                    <input type="date" name="start" value="{{ date_from_input }}"
+                    <input type="date" name="start" id="wr-filter-start" value="{{ date_from_input }}"
                            class="bg-transparent border-none text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-0 p-0" />
                     <span class="text-xs text-slate-400">–</span>
-                    <input type="date" name="end" value="{{ date_to_input }}"
+                    <input type="date" name="end" id="wr-filter-end" value="{{ date_to_input }}"
                            class="bg-transparent border-none text-xs text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-0 p-0" />
                 </div>
-                <input type="hidden" name="range" value="{{ active_range }}">
+                <input type="hidden" name="range" id="wr-filter-range" value="{{ active_range }}">
                 <button type="submit" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-xs font-medium rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
                     Apply
                 </button>
@@ -49,176 +49,9 @@
         </div>
     </div>
 
-    <!-- KPI cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-lg material-symbols-outlined">task_alt</span>
-                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_total_completed_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
-                    <span class="material-symbols-outlined !text-xs">{% if kpi_total_completed_delta.direction == 'up' %}trending_up{% elif kpi_total_completed_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
-                    <span class="ml-1">{{ kpi_total_completed_delta.value }}</span>
-                </span>
-            </div>
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Tasks Completed</p>
-            <h3 class="text-2xl font-bold mt-1">{{ kpi_total_completed|default:"—" }}</h3>
-        </div>
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 rounded-lg material-symbols-outlined">timer</span>
-                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_avg_completion_days_delta.direction == 'down' or kpi_avg_completion_days_delta.direction == 'flat' %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
-                    <span class="material-symbols-outlined !text-xs">{% if kpi_avg_completion_days_delta.direction == 'up' %}trending_up{% elif kpi_avg_completion_days_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
-                    <span class="ml-1">{{ kpi_avg_completion_days_delta.value }}</span>
-                </span>
-            </div>
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Average Completion Time</p>
-            <h3 class="text-2xl font-bold mt-1">
-                {% if kpi_avg_completion_days is not None %}{{ kpi_avg_completion_days }} Days{% else %}—{% endif %}
-            </h3>
-        </div>
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded-lg material-symbols-outlined">verified</span>
-                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_success_rate_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
-                    <span class="material-symbols-outlined !text-xs">{% if kpi_success_rate_delta.direction == 'up' %}trending_up{% elif kpi_success_rate_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
-                    <span class="ml-1">{{ kpi_success_rate_delta.value }}</span>
-                </span>
-            </div>
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Success Rate</p>
-            <h3 class="text-2xl font-bold mt-1">
-                {% if kpi_success_rate is not None %}{{ kpi_success_rate }}%{% else %}—{% endif %}
-            </h3>
-        </div>
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-                <span class="p-2 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded-lg material-symbols-outlined">star</span>
-                <span class="text-xs font-bold flex items-center px-2 py-0.5 rounded-full {% if kpi_avg_rating_delta.is_positive %}text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20{% else %}text-red-500 bg-red-50 dark:bg-red-900/20{% endif %}">
-                    <span class="material-symbols-outlined !text-xs">{% if kpi_avg_rating_delta.direction == 'up' %}trending_up{% elif kpi_avg_rating_delta.direction == 'down' %}trending_down{% else %}trending_flat{% endif %}</span>
-                    <span class="ml-1">{{ kpi_avg_rating_delta.value }}</span>
-                </span>
-            </div>
-            <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Personnel Rating</p>
-            <h3 class="text-2xl font-bold mt-1">
-                {% if kpi_avg_rating is not None %}{{ kpi_avg_rating }}/5{% else %}—{% endif %}
-            </h3>
-        </div>
-    </div>
-
-    <!-- Charts row -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Tasks completed bar chart (placeholder) -->
-        <div class="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <div class="flex items-center justify-between mb-6">
-                <h4 class="font-bold text-sm">Tasks Completed by Unit</h4>
-                <span class="material-symbols-outlined text-slate-400 cursor-pointer">more_horiz</span>
-            </div>
-            <div class="flex gap-3 pt-4">
-                {% for bar in unit_bars %}
-                <div class="flex-1 flex flex-col items-end gap-2 group h-64">
-                    <div class="w-full rounded-t-lg transition-all {% if bar.is_top %}bg-primary{% else %}bg-primary/20 group-hover:bg-primary{% endif %}"
-                         style="height: {{ bar.height_pct }};"></div>
-                    <span class="text-[10px] text-slate-400 font-bold">{{ bar.label }}</span>
-                </div>
-                {% empty %}
-                <p class="text-xs text-slate-500 dark:text-slate-400">No completed requests in this period.</p>
-                {% endfor %}
-            </div>
-        </div>
-        <!-- Skill / unit distribution doughnut (placeholder) -->
-        <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col">
-            <h4 class="font-bold text-sm mb-6">Unit Distribution</h4>
-            <div class="flex-1 flex items-center justify-center relative">
-                <div class="w-40 h-40 rounded-full border-[12px] border-slate-100 dark:border-slate-800 relative flex items-center justify-center">
-                    <div class="absolute inset-0 rounded-full border-[12px] border-primary border-t-transparent border-r-transparent rotate-45"></div>
-                    <div class="text-center">
-                        <p class="text-xl font-bold">{{ unit_count|default:0 }} Units</p>
-                        <p class="text-[10px] text-slate-500">with completed work in range</p>
-                    </div>
-                </div>
-            </div>
-            <div class="mt-4 space-y-2">
-                {% for unit in unit_distribution %}
-                <div class="flex items-center justify-between text-[11px]">
-                    <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full {% if forloop.first %}bg-primary{% else %}bg-slate-400{% endif %}"></span>
-                        {{ unit.label }}
-                    </div>
-                    <span class="font-bold">{{ unit.percent }}%</span>
-                </div>
-                {% empty %}
-                <p class="text-[11px] text-slate-500 dark:text-slate-400">No units with completed work in this period.</p>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-
-    <!-- Performance trends line chart -->
-    <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div class="flex items-center justify-between mb-6">
-            <h4 class="font-bold text-sm">Performance Trends over Time</h4>
-            <div class="flex gap-2">
-                <a href="?range=weekly"
-                   class="text-[10px] font-bold px-3 py-1 rounded-md {% if active_range == 'weekly' %}bg-primary text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200{% endif %}">
-                    Weekly
-                </a>
-                <a href="?range=monthly"
-                   class="text-[10px] font-bold px-3 py-1 rounded-md {% if active_range != 'weekly' %}bg-primary text-white{% else %}bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200{% endif %}">
-                    Monthly
-                </a>
-            </div>
-        </div>
-        <div class="h-48 flex items-end gap-2 pt-2">
-            {% for point in trend_points %}
-            <div class="flex-1 flex flex-col items-center gap-1">
-                <div class="w-full rounded-t-lg bg-primary/20" style="height: {{ point.height_pct }};"></div>
-                <span class="text-[9px] text-slate-400 font-medium whitespace-nowrap">{{ point.label }}</span>
-            </div>
-            {% empty %}
-            <p class="text-xs text-slate-500 dark:text-slate-400">No completed requests in this period.</p>
-            {% endfor %}
-        </div>
-    </div>
-
-    <!-- Top performing personnel table (static placeholder) -->
-    <div class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-        <div class="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-            <h4 class="font-bold text-sm">Top Performing Personnel</h4>
-            <span class="text-xs text-slate-500 dark:text-slate-400">Based on WAR count in the last 30 days</span>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="w-full text-left">
-                <thead class="bg-slate-50 dark:bg-slate-800/50">
-                    <tr>
-                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Personnel Name</th>
-                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Unit</th>
-                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Accomplishments</th>
-                        <th class="px-6 py-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Success Indicator</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                    {% for p in top_personnel %}
-                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
-                        <td class="px-6 py-4 font-semibold">{{ p.name }}</td>
-                        <td class="px-6 py-4 text-slate-600 dark:text-slate-400">{{ p.unit_name }}</td>
-                        <td class="px-6 py-4">{{ p.accomplishments }} WARs</td>
-                        <td class="px-6 py-4">
-                            <div class="flex items-center gap-2">
-                                <div class="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden max-w-[100px]">
-                                    <div class="h-full bg-emerald-500" style="width: 100%"></div>
-                                </div>
-                                <span class="text-[10px] font-bold text-emerald-600">&nbsp;</span>
-                            </div>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="4" class="px-6 py-6 text-center text-slate-500 dark:text-slate-400">
-                            No Work Accomplishment Reports found in this period.
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <div id="work-reports-dashboard-swap" class="space-y-8 transition-opacity duration-150"
+         data-dashboard-url="{{ staff_work_reports_dashboard_data_url|default:'' }}">
+        {% include 'staff/_work_reports_dashboard_analytics.html' %}
     </div>
 </div>
 <div id="migrate-report-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="migrate-report-modal-title">
@@ -235,8 +68,8 @@
             <div>
                 <label for="migrate-report-type" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Report Type</label>
                 <select id="migrate-report-type" name="report_type" required class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
-                    <option value="war">WAR (enabled)</option>
-                    <option value="ipmt">IPMT (enabled)</option>
+                    <option value="war">WAR</option>
+                    <option value="ipmt">IPMT</option>
                 </select>
             </div>
             <div>
@@ -271,6 +104,9 @@
         <div id="migrate-process-success" class="hidden mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
             <span class="material-symbols-outlined">check_circle</span>
         </div>
+        <div id="migrate-process-warning" class="hidden mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/35 dark:text-amber-200">
+            <span class="material-symbols-outlined">warning</span>
+        </div>
         <div id="migrate-process-error" class="hidden mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
             <span class="material-symbols-outlined">error</span>
         </div>
@@ -278,10 +114,78 @@
         <p id="migrate-process-message" class="mt-2 text-sm text-slate-600 dark:text-slate-300">Please wait while the report is being processed.</p>
         <p id="migrate-process-countdown" class="hidden mt-2 text-xs text-slate-500 dark:text-slate-400"></p>
         <div class="mt-4">
-            <button type="button" id="migrate-process-close-btn" class="hidden px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Close now</button>
+            <button type="button" id="migrate-process-close-btn" class="hidden px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Dismiss</button>
         </div>
     </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var swap = document.getElementById('work-reports-dashboard-swap');
+    var filterForm = document.getElementById('wr-filter-form');
+    if (swap && filterForm) {
+        var baseUrl = swap.getAttribute('data-dashboard-url');
+        if (baseUrl) {
+            function wrSyncFormFields(data) {
+                var ri = filterForm.querySelector('[name="range"]');
+                var si = filterForm.querySelector('[name="start"]');
+                var ei = filterForm.querySelector('[name="end"]');
+                if (ri && data.active_range !== undefined && data.active_range !== null) {
+                    ri.value = data.active_range;
+                }
+                if (si && data.date_from_input) si.value = data.date_from_input;
+                if (ei && data.date_to_input) ei.value = data.date_to_input;
+            }
+            function wrPushQuery(qs) {
+                var path = window.location.pathname;
+                var next = qs ? path + '?' + qs : path;
+                if (next !== window.location.pathname + window.location.search) {
+                    window.history.pushState({ wrAnalytics: true }, '', next);
+                }
+            }
+            function wrLoadDashboard(queryString, pushHistory) {
+                var sep = queryString ? (baseUrl.indexOf('?') >= 0 ? '&' : '?') : '';
+                var url = queryString ? baseUrl + sep + queryString.replace(/^\?/, '') : baseUrl;
+                swap.classList.add('opacity-60', 'pointer-events-none');
+                window.fetch(url, {
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (!data || !data.ok || typeof data.html !== 'string') return;
+                        swap.innerHTML = data.html;
+                        wrSyncFormFields(data);
+                        if (pushHistory) {
+                            var sp = new URLSearchParams();
+                            sp.set('range', data.active_range || 'monthly');
+                            sp.set('start', data.date_from_input || '');
+                            sp.set('end', data.date_to_input || '');
+                            wrPushQuery(sp.toString());
+                        }
+                    })
+                    .catch(function () { /* silent; full-page refresh still works */ })
+                    .finally(function () {
+                        swap.classList.remove('opacity-60', 'pointer-events-none');
+                    });
+            }
+            filterForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                wrLoadDashboard(new URLSearchParams(new FormData(filterForm)).toString(), true);
+            });
+            swap.addEventListener('click', function (event) {
+                var btn = event.target.closest('[data-wr-range]');
+                if (!btn) return;
+                event.preventDefault();
+                wrLoadDashboard('range=' + encodeURIComponent(btn.getAttribute('data-wr-range') || 'monthly'), true);
+            });
+            window.addEventListener('popstate', function () {
+                var q = window.location.search.replace(/^\?/, '');
+                wrLoadDashboard(q, false);
+            });
+        }
+    }
+});
+</script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const modal = document.getElementById('migrate-report-modal');
@@ -294,6 +198,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const processOverlay = document.getElementById('migrate-process-overlay');
     const processSpinner = document.getElementById('migrate-process-spinner');
     const processSuccess = document.getElementById('migrate-process-success');
+    const processWarning = document.getElementById('migrate-process-warning');
     const processError = document.getElementById('migrate-process-error');
     const processTitle = document.getElementById('migrate-process-title');
     const processMessage = document.getElementById('migrate-process-message');
@@ -361,10 +266,6 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!processOverlay) return;
         stopTimers();
         processOverlay.classList.add('hidden');
-        if (inlineFeedback) {
-            inlineFeedback.classList.add('hidden');
-            inlineFeedback.textContent = '';
-        }
     }
     function showProcessingOverlay(modeLabel) {
         if (!processOverlay) return;
@@ -372,40 +273,50 @@ document.addEventListener('DOMContentLoaded', function () {
         processOverlay.classList.remove('hidden');
         processSpinner.classList.remove('hidden');
         processSuccess.classList.add('hidden');
+        if (processWarning) processWarning.classList.add('hidden');
         processError.classList.add('hidden');
         processCloseBtn.classList.add('hidden');
         processCountdown.classList.add('hidden');
         processTitle.textContent = modeLabel + ' in progress...';
         processMessage.textContent = 'Please wait while the report is being processed.';
     }
-    function showResultOverlay(level, text) {
+    function showResultOverlay(level, text, headline) {
         if (!processOverlay) return;
         stopTimers();
         processOverlay.classList.remove('hidden');
         processSpinner.classList.add('hidden');
         processSuccess.classList.add('hidden');
+        if (processWarning) processWarning.classList.add('hidden');
         processError.classList.add('hidden');
         if (level === 'success') processSuccess.classList.remove('hidden');
-        if (level === 'error' || level === 'warning') processError.classList.remove('hidden');
-        processTitle.textContent = level === 'success' ? 'Migration completed' : 'Migration result';
-        processMessage.textContent = text || 'Migration finished.';
+        else if (level === 'warning' && processWarning) processWarning.classList.remove('hidden');
+        else processError.classList.remove('hidden');
+        if (headline) {
+            processTitle.textContent = headline;
+        } else if (level === 'success') {
+            processTitle.textContent = 'Done';
+        } else if (level === 'warning') {
+            processTitle.textContent = 'Check this result';
+        } else {
+            processTitle.textContent = 'Could not complete';
+        }
+        processMessage.textContent = text || '';
         processCloseBtn.classList.remove('hidden');
         let seconds = 10;
         processCountdown.classList.remove('hidden');
-        processCountdown.textContent = 'Closing automatically in ' + seconds + 's';
+        processCountdown.textContent = 'Hiding this message in ' + seconds + 's';
         countdownTimer = window.setInterval(function () {
             seconds -= 1;
             if (seconds <= 0) {
                 window.clearInterval(countdownTimer);
                 countdownTimer = null;
-                processCountdown.textContent = 'Closing...';
+                processCountdown.textContent = '';
                 return;
             }
-            processCountdown.textContent = 'Closing automatically in ' + seconds + 's';
+            processCountdown.textContent = 'Hiding this message in ' + seconds + 's';
         }, 1000);
         autoCloseTimer = window.setTimeout(function () {
             hideProcessOverlay();
-            closeModal();
         }, 10000);
     }
 
@@ -415,7 +326,6 @@ document.addEventListener('DOMContentLoaded', function () {
     if (backdrop) backdrop.onclick = closeModal;
     if (processCloseBtn) processCloseBtn.onclick = function () {
         hideProcessOverlay();
-        closeModal();
     };
 
     if (form) {
@@ -428,7 +338,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 formData.set('mode', submitter.value);
             }
             if (inlineFeedback) inlineFeedback.classList.add('hidden');
-            const modeLabel = (formData.get('mode') === 'apply') ? 'Apply migration' : 'Dry-run migration';
+            const submittedApply = formData.get('mode') === 'apply';
+            const modeLabel = submittedApply ? 'Apply migration' : 'Dry-run migration';
             showProcessingOverlay(modeLabel);
             submitButtons.forEach(function (btn) {
                 if (submitter === btn) {
@@ -447,18 +358,31 @@ document.addEventListener('DOMContentLoaded', function () {
                 let payload = {};
                 try { payload = await response.json(); } catch (e) { payload = {}; }
                 const level = payload.level || (response.ok ? 'success' : 'error');
-                const msg = payload.message || (response.ok ? 'Migration completed.' : 'Migration failed.');
+                const msg = payload.message || (
+                    response.ok ? 'Finished.' : (
+                        submittedApply ? 'Import failed.' : 'Dry-run validation failed.'
+                    )
+                );
+                let headline = payload.overlay_title || null;
+                if (!headline && level === 'error') {
+                    headline = submittedApply ? 'Import failed' : 'Dry-run validation failed';
+                }
                 setFeedback(inlineFeedback, level, msg);
-                showResultOverlay(level, msg);
-                if (response.ok) {
+                showResultOverlay(level, msg, headline);
+                const applySuccess = payload.apply === true && level === 'success';
+                if (response.ok && applySuccess) {
                     form.reset();
                 }
                 submitButtons.forEach(function (btn) { resetButtonState(btn); });
             })
             .catch(function () {
-                const msg = 'Could not process migration right now. Please try again.';
+                const submittedApplyCatch = submittedApply;
+                const msg = submittedApplyCatch
+                    ? 'Could not finish the import request. Please try again.'
+                    : 'Could not finish dry-run validation. Please try again.';
+                const eh = submittedApplyCatch ? 'Import interrupted' : 'Dry-run interrupted';
                 setFeedback(inlineFeedback, 'error', msg);
-                showResultOverlay('error', msg);
+                showResultOverlay('error', msg, eh);
                 submitButtons.forEach(function (btn) { resetButtonState(btn); });
             });
         });

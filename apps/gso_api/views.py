@@ -13,6 +13,9 @@ from django.core.cache import cache
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
+from decimal import Decimal, InvalidOperation
+
+from rest_framework.exceptions import ValidationError
 
 from apps.gso_accounts.models import User
 from apps.gso_requests.models import Request, RequestAssignment, RequestMessage
@@ -30,6 +33,8 @@ from .serializers import (
     NotificationSerializer,
     RequestMessageSerializer,
     MaterialRequestSerializer,
+    motorpool_capabilities_for_api,
+    MotorpoolTripDataSerializer,
 )
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
@@ -279,9 +284,15 @@ class RequestViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Only assigned personnel can request materials.'}, status=status.HTTP_403_FORBIDDEN)
         if not req.assignments.filter(personnel=user).exists():
             return Response({'detail': 'You are not assigned to this request.'}, status=status.HTTP_403_FORBIDDEN)
-        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED):
+        material_request_allowed_statuses = (
+            Request.Status.DIRECTOR_APPROVED,
+            Request.Status.INSPECTION,
+            Request.Status.IN_PROGRESS,
+            Request.Status.ON_HOLD,
+        )
+        if req.status not in material_request_allowed_statuses:
             return Response(
-                {'detail': 'Cannot request materials for a completed or cancelled request.'},
+                {'detail': 'Material requests are only allowed while work is active.'},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -317,6 +328,98 @@ class RequestViewSet(viewsets.ModelViewSet):
         from apps.gso_notifications.utils import notify_material_request_submitted
         notify_material_request_submitted(mr)
         return Response(MaterialRequestSerializer(mr).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='motorpool-trip')
+    def motorpool_trip_partial_update(self, request, pk=None):
+        """Update Motorpool trip ticket fields (permissions match web MotorpoolTripUpdateView)."""
+        req = self.get_object()
+        user = request.user
+
+        caps = motorpool_capabilities_for_api(req, user)
+        if caps is None:
+            return Response(
+                {'detail': 'Motorpool data is only available for motorpool unit requests.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        mp, can_vehicle, can_actuals = caps
+        if not (can_vehicle or can_actuals):
+            return Response(
+                {'detail': 'You do not have permission to edit motorpool details for this request/state.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        payload = request.data if isinstance(request.data, dict) else {}
+
+        def parse_dec(val):
+            if val is None or val == '':
+                return None
+            try:
+                return Decimal(str(val))
+            except InvalidOperation:
+                raise ValidationError(f'Invalid decimal: {val}')
+
+        assigned_driver_labels = []
+        for assign in req.assignments.select_related('personnel').order_by('assigned_at'):
+            lbl = (assign.personnel.get_full_name() or assign.personnel.username or '').strip()
+            if lbl and lbl not in assigned_driver_labels:
+                assigned_driver_labels.append(lbl)
+
+        try:
+            if can_vehicle:
+                if 'driver_name' in payload:
+                    val = (payload.get('driver_name') or '').strip()
+                    if val and assigned_driver_labels and val not in assigned_driver_labels:
+                        return Response(
+                            {'detail': 'Driver must be one of the assigned personnel for this request.'},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    mp.driver_name = val or ''
+                for key in ('vehicle_plate', 'vehicle_stamp_or_contract_no', 'vehicle_trans'):
+                    if key in payload:
+                        raw = payload.get(key)
+                        setattr(
+                            mp,
+                            key,
+                            (str(raw).strip() if raw is not None else '') or '',
+                        )
+
+            if can_actuals:
+                for key in (
+                    'fuel_beginning_liters',
+                    'fuel_received_issued_liters',
+                    'fuel_added_purchased_liters',
+                    'fuel_total_available_liters',
+                    'fuel_used_liters',
+                    'fuel_ending_liters',
+                ):
+                    if key in payload:
+                        setattr(mp, key, parse_dec(payload.get(key)))
+                if 'other_consumables_notes' in payload:
+                    mp.other_consumables_notes = (
+                        (payload.get('other_consumables_notes') or '').strip()
+                    )
+
+            mp.save()
+        except ValidationError as exc:
+            detail = exc.detail
+            if isinstance(detail, dict):
+                return Response(detail, status=status.HTTP_400_BAD_REQUEST)
+            if isinstance(detail, list):
+                return Response({'detail': detail}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'detail': str(detail)}, status=status.HTTP_400_BAD_REQUEST)
+
+        mp.refresh_from_db()
+        caps2 = motorpool_capabilities_for_api(req, user)
+        mp_out, cv, ca = caps2
+        return Response(
+            {
+                'motorpool': {
+                    'trip': MotorpoolTripDataSerializer(mp_out).data,
+                    'can_edit_vehicle': cv,
+                    'can_edit_actuals': ca,
+                },
+            }
+        )
 
     @action(detail=False, methods=['get'], url_path='my-tasks')
     def my_tasks(self, request):

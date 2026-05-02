@@ -248,3 +248,28 @@ class LegacyWarImportCommandTests(TestCase):
                 path.unlink(missing_ok=True)
             except PermissionError:
                 pass
+
+    def test_command_rejects_ipmt_workbook(self):
+        from apps.gso_accounts.tests.test_legacy_ipmt_import_command import LegacyIPMTImportCommandTests
+
+        wb = LegacyIPMTImportCommandTests()._build_ipmt_workbook()
+        fd, temp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)
+        path = Path(temp_path)
+        try:
+            wb.save(path)
+            wb.close()
+            with self.assertRaises(CommandError) as ctx:
+                call_command(
+                    "gso_import_legacy_war",
+                    str(path),
+                    "--unit-code",
+                    "electrical",
+                    "--dry-run",
+                )
+            self.assertIn("IPMT", str(ctx.exception))
+        finally:
+            try:
+                path.unlink(missing_ok=True)
+            except PermissionError:
+                pass

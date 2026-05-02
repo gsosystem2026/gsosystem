@@ -14,6 +14,8 @@ from django.core.management.base import CommandError
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, get_object_or_404, render
+from django.template.loader import render_to_string
+from django.views import View
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -201,6 +203,211 @@ def _can_access_work_reports(user):
     return getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False)
 
 
+def build_work_reports_analytics_context(get_params):
+    """
+    Build template/JSON context for Work Reports dashboard KPIs and charts.
+    get_params: QueryDict-like with .get('range'|'start'|'end').
+    """
+    today = timezone.localdate()
+    range_key = (get_params.get('range') or 'monthly').lower()
+    if range_key not in ('weekly', 'monthly'):
+        range_key = 'monthly'
+    start_param = get_params.get('start') or ''
+    end_param = get_params.get('end') or ''
+    date_from = None
+    date_to = None
+    try:
+        if start_param and end_param:
+            date_from = _date.fromisoformat(start_param)
+            date_to = _date.fromisoformat(end_param)
+    except ValueError:
+        date_from = None
+        date_to = None
+    if date_from is None or date_to is None:
+        if range_key == 'weekly':
+            days_back = 6
+        else:
+            days_back = 29
+        date_to = today
+        date_from = today - timezone.timedelta(days=days_back)
+
+    completed_qs = Request.objects.filter(
+        status=Request.Status.COMPLETED,
+        updated_at__date__gte=date_from,
+        updated_at__date__lte=date_to,
+    )
+    total_completed = completed_qs.count()
+    if total_completed == 0:
+        completed_qs = Request.objects.filter(status=Request.Status.COMPLETED)
+        total_completed = completed_qs.count()
+        if total_completed:
+            first_completed = completed_qs.order_by('updated_at').first().updated_at.date()
+            last_completed = completed_qs.order_by('-updated_at').first().updated_at.date()
+            date_from, date_to = first_completed, last_completed
+
+    duration_expr = ExpressionWrapper(
+        F('updated_at') - F('created_at'),
+        output_field=DurationField(),
+    )
+    avg_duration = (
+        completed_qs.annotate(duration=duration_expr)
+        .aggregate(avg_duration=Avg('duration'))
+        .get('avg_duration')
+    )
+    avg_days = round(avg_duration.total_seconds() / 86400, 1) if avg_duration else None
+
+    finished_qs = Request.objects.filter(
+        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+        updated_at__date__gte=date_from,
+        updated_at__date__lte=date_to,
+    )
+    finished_total = finished_qs.count()
+    success_rate = round((total_completed / finished_total) * 100, 1) if finished_total else None
+
+    feedback_qs = RequestFeedback.objects.filter(
+        request__status=Request.Status.COMPLETED,
+        created_at__date__gte=date_from,
+        created_at__date__lte=date_to,
+        rating__isnull=False,
+    )
+    avg_rating = feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
+    avg_rating_rounded = round(avg_rating, 1) if avg_rating else None
+
+    unit_counts = list(
+        completed_qs.values('unit__name')
+        .annotate(total=Count('id'))
+        .order_by('-total')[:6]
+    )
+    max_total = max((u['total'] for u in unit_counts), default=0)
+    unit_bars = []
+    for idx, row in enumerate(unit_counts):
+        label = row['unit__name'] or '—'
+        if max_total:
+            height_pct = int(30 + 70 * (row['total'] / max_total))
+        else:
+            height_pct = 0
+        unit_bars.append(
+            {
+                'label': label,
+                'height_pct': f"{height_pct}%",
+                'is_top': idx == 0,
+            }
+        )
+
+    total_for_dist = sum((u['total'] for u in unit_counts), 0)
+    unit_distribution = []
+    for row in unit_counts:
+        label = row['unit__name'] or '—'
+        percent = round((row['total'] / total_for_dist) * 100) if total_for_dist else 0
+        unit_distribution.append({'label': label, 'percent': percent})
+    unit_count = len(unit_distribution)
+
+    war_qs = WorkAccomplishmentReport.objects.filter(
+        period_end__gte=date_from,
+        period_end__lte=date_to,
+    ).exclude(
+        personnel__username__iexact=getattr(
+            settings,
+            'GSO_LEGACY_MIGRATION_PERSONNEL_USERNAME',
+            'migrated_legacy',
+        )
+    ).select_related('personnel', 'personnel__unit')
+    personnel_rows = (
+        war_qs.values(
+            'personnel_id',
+            'personnel__first_name',
+            'personnel__last_name',
+            'personnel__username',
+            'personnel__unit__name',
+        )
+        .annotate(total=Count('id'))
+        .order_by('-total')[:5]
+    )
+    top_personnel = []
+    for row in personnel_rows:
+        first = (row.get('personnel__first_name') or '').strip()
+        last = (row.get('personnel__last_name') or '').strip()
+        full_name = (first + ' ' + last).strip() or row.get('personnel__username') or '—'
+        top_personnel.append(
+            {
+                'name': full_name,
+                'unit_name': row.get('personnel__unit__name') or '—',
+                'accomplishments': row['total'],
+            }
+        )
+
+    trend_points = []
+    days_count = (date_to - date_from).days + 1
+    for offset in range(days_count):
+        day = date_from + timezone.timedelta(days=offset)
+        count = completed_qs.filter(updated_at__date=day).count()
+        label = day.strftime('%b %d')
+        trend_points.append({'label': label.lstrip('0'), 'count': count})
+    max_trend = max((p['count'] for p in trend_points), default=0)
+    for p in trend_points:
+        if max_trend:
+            height = int(20 + 80 * (p['count'] / max_trend))
+        else:
+            height = 0
+        p['height_pct'] = f"{height}%"
+
+    period_days = (date_to - date_from).days + 1
+    prev_to = date_from - timedelta(days=1)
+    prev_from = prev_to - timedelta(days=period_days - 1)
+
+    prev_completed_qs = Request.objects.filter(
+        status=Request.Status.COMPLETED,
+        updated_at__date__gte=prev_from,
+        updated_at__date__lte=prev_to,
+    )
+    prev_total_completed = prev_completed_qs.count()
+    prev_duration = (
+        prev_completed_qs.annotate(duration=duration_expr)
+        .aggregate(avg_duration=Avg('duration'))
+        .get('avg_duration')
+    )
+    prev_avg_days = round(prev_duration.total_seconds() / 86400, 1) if prev_duration else None
+    prev_finished_qs = Request.objects.filter(
+        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+        updated_at__date__gte=prev_from,
+        updated_at__date__lte=prev_to,
+    )
+    prev_finished_total = prev_finished_qs.count()
+    prev_success_rate = round((prev_total_completed / prev_finished_total) * 100, 1) if prev_finished_total else None
+    prev_feedback_qs = RequestFeedback.objects.filter(
+        request__status=Request.Status.COMPLETED,
+        created_at__date__gte=prev_from,
+        created_at__date__lte=prev_to,
+        rating__isnull=False,
+    )
+    prev_avg_rating = prev_feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
+    prev_avg_rating_rounded = round(prev_avg_rating, 1) if prev_avg_rating else None
+
+    return {
+        'date_range_label': f"{date_from.strftime('%b %d, %Y')} - {date_to.strftime('%b %d, %Y')}",
+        'date_from_input': date_from.isoformat(),
+        'date_to_input': date_to.isoformat(),
+        'kpi_total_completed': total_completed,
+        'kpi_avg_completion_days': avg_days,
+        'kpi_success_rate': success_rate,
+        'kpi_avg_rating': avg_rating_rounded,
+        'kpi_total_completed_delta': _delta_display(total_completed, prev_total_completed),
+        'kpi_avg_completion_days_delta': _delta_display(
+            avg_days,
+            prev_avg_days,
+            suffix='d',
+        ),
+        'kpi_success_rate_delta': _delta_display(success_rate, prev_success_rate, suffix='%'),
+        'kpi_avg_rating_delta': _delta_display(avg_rating_rounded, prev_avg_rating_rounded),
+        'unit_bars': unit_bars,
+        'unit_distribution': unit_distribution,
+        'unit_count': unit_count,
+        'top_personnel': top_personnel,
+        'active_range': range_key,
+        'trend_points': trend_points,
+    }
+
+
 class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
     """Work Reports landing: analytics overview for Director/GSO."""
     template_name = 'staff/work_reports.html'
@@ -217,235 +424,74 @@ class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        today = timezone.localdate()
-        # Range selector: weekly (last 7 days) or monthly (last 30 days) unless custom start/end provided
-        range_key = self.request.GET.get('range', 'monthly').lower()
-        if range_key not in ('weekly', 'monthly'):
-            range_key = 'monthly'
-        start_param = self.request.GET.get('start') or ''
-        end_param = self.request.GET.get('end') or ''
-        date_from = None
-        date_to = None
-        # Custom date range from inputs if both provided and valid
-        try:
-            if start_param and end_param:
-                date_from = _date.fromisoformat(start_param)
-                date_to = _date.fromisoformat(end_param)
-        except ValueError:
-            date_from = None
-            date_to = None
-        if date_from is None or date_to is None:
-            if range_key == 'weekly':
-                days_back = 6
-            else:
-                days_back = 29
-            date_to = today
-            date_from = today - timezone.timedelta(days=days_back)
-
-        # Completed requests in window (fallback to all-time if none)
-        completed_qs = Request.objects.filter(
-            status=Request.Status.COMPLETED,
-            updated_at__date__gte=date_from,
-            updated_at__date__lte=date_to,
-        )
-        total_completed = completed_qs.count()
-        if total_completed == 0:
-            # Fallback: use all completed requests so charts are never empty
-            completed_qs = Request.objects.filter(status=Request.Status.COMPLETED)
-            total_completed = completed_qs.count()
-            if total_completed:
-                first_completed = completed_qs.order_by('updated_at').first().updated_at.date()
-                last_completed = completed_qs.order_by('-updated_at').first().updated_at.date()
-                date_from, date_to = first_completed, last_completed
-
-        # Average completion time (created_at -> updated_at) in days
-        duration_expr = ExpressionWrapper(
-            F('updated_at') - F('created_at'),
-            output_field=DurationField(),
-        )
-        avg_duration = (
-            completed_qs.annotate(duration=duration_expr)
-            .aggregate(avg_duration=Avg('duration'))
-            .get('avg_duration')
-        )
-        avg_days = round(avg_duration.total_seconds() / 86400, 1) if avg_duration else None
-
-        # Success rate: completed vs completed+cancelled
-        finished_qs = Request.objects.filter(
-            status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
-            updated_at__date__gte=date_from,
-            updated_at__date__lte=date_to,
-        )
-        finished_total = finished_qs.count()
-        success_rate = round((total_completed / finished_total) * 100, 1) if finished_total else None
-
-        # Average rating from feedback (1–5)
-        feedback_qs = RequestFeedback.objects.filter(
-            request__status=Request.Status.COMPLETED,
-            created_at__date__gte=date_from,
-            created_at__date__lte=date_to,
-            rating__isnull=False,
-        )
-        avg_rating = feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
-        avg_rating_rounded = round(avg_rating, 1) if avg_rating else None
-
-        # Tasks by unit (completed requests)
-        unit_counts = list(
-            completed_qs.values('unit__name')
-            .annotate(total=Count('id'))
-            .order_by('-total')[:6]
-        )
-        max_total = max((u['total'] for u in unit_counts), default=0)
-        unit_bars = []
-        for idx, row in enumerate(unit_counts):
-            label = row['unit__name'] or '—'
-            if max_total:
-                height_pct = int(30 + 70 * (row['total'] / max_total))
-            else:
-                height_pct = 0
-            unit_bars.append(
-                {
-                    'label': label,
-                    'height_pct': f"{height_pct}%",
-                    'is_top': idx == 0,
-                }
-            )
-
-        # Unit distribution percentages (same data as bars)
-        total_for_dist = sum((u['total'] for u in unit_counts), 0)
-        unit_distribution = []
-        for row in unit_counts:
-            label = row['unit__name'] or '—'
-            percent = round((row['total'] / total_for_dist) * 100) if total_for_dist else 0
-            unit_distribution.append({'label': label, 'percent': percent})
-        unit_count = len(unit_distribution)
-
-        # Top personnel based on WAR count in window
-        war_qs = WorkAccomplishmentReport.objects.filter(
-            period_end__gte=date_from,
-            period_end__lte=date_to,
-        ).exclude(
-            personnel__username__iexact=getattr(
-                settings,
-                'GSO_LEGACY_MIGRATION_PERSONNEL_USERNAME',
-                'migrated_legacy',
-            )
-        ).select_related('personnel', 'personnel__unit')
-        personnel_rows = (
-            war_qs.values(
-                'personnel_id',
-                'personnel__first_name',
-                'personnel__last_name',
-                'personnel__username',
-                'personnel__unit__name',
-            )
-            .annotate(total=Count('id'))
-            .order_by('-total')[:5]
-        )
-        top_personnel = []
-        for row in personnel_rows:
-            first = (row.get('personnel__first_name') or '').strip()
-            last = (row.get('personnel__last_name') or '').strip()
-            full_name = (first + ' ' + last).strip() or row.get('personnel__username') or '—'
-            top_personnel.append(
-                {
-                    'name': full_name,
-                    'unit_name': row.get('personnel__unit__name') or '—',
-                    'accomplishments': row['total'],
-                }
-            )
-
-        # Trend over time: completed requests per day in range
-        trend_points = []
-        days_count = (date_to - date_from).days + 1
-        for offset in range(days_count):
-            day = date_from + timezone.timedelta(days=offset)
-            count = completed_qs.filter(updated_at__date=day).count()
-            # Windows strftime does not support %-d; use %d and strip leading zero
-            label = day.strftime('%b %d')
-            trend_points.append({'label': label.lstrip('0'), 'count': count})
-        max_trend = max((p['count'] for p in trend_points), default=0)
-        for p in trend_points:
-            if max_trend:
-                height = int(20 + 80 * (p['count'] / max_trend))
-            else:
-                height = 0
-            p['height_pct'] = f"{height}%"
-
-        period_days = (date_to - date_from).days + 1
-        prev_to = date_from - timedelta(days=1)
-        prev_from = prev_to - timedelta(days=period_days - 1)
-
-        prev_completed_qs = Request.objects.filter(
-            status=Request.Status.COMPLETED,
-            updated_at__date__gte=prev_from,
-            updated_at__date__lte=prev_to,
-        )
-        prev_total_completed = prev_completed_qs.count()
-        prev_duration = (
-            prev_completed_qs.annotate(duration=duration_expr)
-            .aggregate(avg_duration=Avg('duration'))
-            .get('avg_duration')
-        )
-        prev_avg_days = round(prev_duration.total_seconds() / 86400, 1) if prev_duration else None
-        prev_finished_qs = Request.objects.filter(
-            status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
-            updated_at__date__gte=prev_from,
-            updated_at__date__lte=prev_to,
-        )
-        prev_finished_total = prev_finished_qs.count()
-        prev_success_rate = round((prev_total_completed / prev_finished_total) * 100, 1) if prev_finished_total else None
-        prev_feedback_qs = RequestFeedback.objects.filter(
-            request__status=Request.Status.COMPLETED,
-            created_at__date__gte=prev_from,
-            created_at__date__lte=prev_to,
-            rating__isnull=False,
-        )
-        prev_avg_rating = prev_feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
-        prev_avg_rating_rounded = round(prev_avg_rating, 1) if prev_avg_rating else None
-
-        context.update(
-            {
-                'page_title': 'Work Reports',
-                'page_description': 'Analytics based on completed requests, WARs, and feedback.',
-                'date_range_label': f"{date_from.strftime('%b %d, %Y')} - {date_to.strftime('%b %d, %Y')}",
-                'date_from_input': date_from.isoformat(),
-                'date_to_input': date_to.isoformat(),
-                'kpi_total_completed': total_completed,
-                'kpi_avg_completion_days': avg_days,
-                'kpi_success_rate': success_rate,
-                'kpi_avg_rating': avg_rating_rounded,
-                'kpi_total_completed_delta': _delta_display(total_completed, prev_total_completed),
-                # Lower completion days is better.
-                'kpi_avg_completion_days_delta': _delta_display(
-                    avg_days,
-                    prev_avg_days,
-                    suffix='d',
-                ),
-                'kpi_success_rate_delta': _delta_display(success_rate, prev_success_rate, suffix='%'),
-                'kpi_avg_rating_delta': _delta_display(avg_rating_rounded, prev_avg_rating_rounded),
-                'unit_bars': unit_bars,
-                'unit_distribution': unit_distribution,
-                'unit_count': unit_count,
-                'top_personnel': top_personnel,
-                'active_range': range_key,
-                'trend_points': trend_points,
-                'migration_units': Unit.objects.filter(is_active=True).order_by('name'),
-            }
-        )
+        analytics = build_work_reports_analytics_context(self.request.GET)
+        context.update(analytics)
+        context['page_title'] = 'Work Reports'
+        context['page_description'] = 'Analytics based on completed requests, WARs, and feedback.'
+        context['migration_units'] = Unit.objects.filter(is_active=True).order_by('name')
+        context['staff_work_reports_dashboard_data_url'] = reverse('gso_accounts:staff_work_reports_dashboard_data')
         return context
+
+
+class WorkReportsDashboardDataView(View):
+    """Return dashboard HTML snippet + query sync fields for AJAX (no full page reload)."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'ok': False, 'error': 'Unauthorized'}, status=401)
+        if getattr(request.user, 'is_requestor', False):
+            return JsonResponse({'ok': False, 'error': 'Forbidden'}, status=403)
+        if not _can_access_work_reports(request.user):
+            return JsonResponse({'ok': False, 'error': 'Forbidden'}, status=403)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get(self, request, *args, **kwargs):
+        ctx = build_work_reports_analytics_context(request.GET)
+        html = render_to_string(
+            'staff/_work_reports_dashboard_analytics.html',
+            ctx,
+            request=request,
+        )
+        return JsonResponse(
+            {
+                'ok': True,
+                'html': html,
+                'active_range': ctx['active_range'],
+                'date_from_input': ctx['date_from_input'],
+                'date_to_input': ctx['date_to_input'],
+            },
+        )
 
 
 class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
     """Upload and import legacy WAR workbook from Work Reports page."""
     template_name = 'staff/work_reports.html'
 
+    def get(self, request, *args, **kwargs):
+        return redirect('gso_accounts:staff_work_reports')
+
     def _is_ajax(self, request):
         return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
 
-    def _respond(self, request, *, ok, message, redirect_name='gso_accounts:staff_work_reports', level='info', status=200):
+    def _respond(
+        self,
+        request,
+        *,
+        ok,
+        message,
+        redirect_name='gso_accounts:staff_work_reports',
+        level='info',
+        status=200,
+        overlay_title=None,
+        apply_mode=None,
+    ):
         if self._is_ajax(request):
-            return JsonResponse({'ok': ok, 'message': message, 'level': level}, status=status)
+            payload = {'ok': ok, 'message': message, 'level': level}
+            if overlay_title is not None:
+                payload['overlay_title'] = overlay_title
+            if apply_mode is not None:
+                payload['apply'] = apply_mode
+            return JsonResponse(payload, status=status)
         if level == 'success':
             messages.success(request, message)
         elif level == 'error':
@@ -463,7 +509,7 @@ class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
             return self._respond(
                 request,
                 ok=False,
-                message='Only GSO Office and Director can run migration.',
+                message='Only GSO Office and Director can run legacy report dry-run or import.',
                 redirect_name='gso_accounts:staff_dashboard',
                 level='error',
                 status=403,
@@ -473,6 +519,7 @@ class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
         unit_id = (request.POST.get('unit_id') or '').strip()
         report_type = (request.POST.get('report_type') or 'war').strip().lower()
         mode = (request.POST.get('mode') or 'dry_run').strip().lower()
+        is_dry_run = mode != 'apply'
         if not upload:
             return self._respond(request, ok=False, message='Please upload an Excel file first.', level='error', status=400)
         if not unit_id:
@@ -483,7 +530,6 @@ class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
         if not unit:
             return self._respond(request, ok=False, message='Selected unit is invalid or inactive.', level='error', status=400)
 
-        is_dry_run = mode != 'apply'
         temp_path = None
         out = io.StringIO()
         try:
@@ -497,33 +543,97 @@ class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
             if is_dry_run:
                 cmd_args.append('--dry-run')
             call_command(*cmd_args, stdout=out)
-            summary = self._extract_summary(out.getvalue())
+            raw_stdout = out.getvalue()
+            summary = self._extract_summary(raw_stdout)
+            counts = self._parse_migration_stdout_counts(raw_stdout)
             mode_label = 'Dry-run' if is_dry_run else 'Apply'
             report_label = 'WAR' if report_type == 'war' else 'IPMT'
+            base_msg = f"{mode_label} {report_label}: {summary}"
+            overlay_title = 'Dry-run preview'
+            suffix = ''
+            outcome_level = 'success'
+
+            if is_dry_run:
+                if report_type == 'war':
+                    activity = (
+                        counts.get('Requests created', 0)
+                        + counts.get('Requests skipped', 0)
+                        + counts.get('WAR created', 0)
+                        + counts.get('WAR skipped', 0)
+                    )
+                    if activity == 0:
+                        outcome_level = 'warning'
+                        overlay_title = 'Dry-run: no rows processed'
+                        suffix = (
+                            ' The workbook matched the layout but counted no importable legacy rows.'
+                            ' Add data beneath the header or confirm personnel and Target Unit mappings.'
+                        )
+                    else:
+                        overlay_title = 'Dry-run looks good'
+                        suffix = ' Review counts, then use Apply only if everything is correct.'
+                else:
+                    rows = counts.get('Rows parsed', 0)
+                    if rows == 0:
+                        outcome_level = 'warning'
+                        overlay_title = 'Dry-run: no IPMT rows'
+                        suffix = (
+                            ' No accomplishment rows were counted under Success Indicators.'
+                            ' Confirm the worksheet matches the legacy IPMT export.'
+                        )
+                    else:
+                        overlay_title = 'Dry-run looks good'
+                        suffix = ' Review counts, then use Apply only if everything is correct.'
+            else:
+                overlay_title = 'Migration applied successfully'
+
             return self._respond(
                 request,
                 ok=True,
-                message=f"{mode_label} {report_label} migration finished. {summary}",
-                level='success',
+                message=base_msg + suffix,
+                level=outcome_level,
                 status=200,
+                overlay_title=overlay_title,
+                apply_mode=not is_dry_run,
             )
         except CommandError as exc:
             logger.warning('Legacy migration command failed: %s', exc)
+            if is_dry_run:
+                message = f"Dry-run validation failed: {exc}"
+                overlay_title = 'Dry-run validation failed'
+            else:
+                message = f"Import failed: {exc}"
+                overlay_title = 'Import failed'
             return self._respond(
                 request,
                 ok=False,
-                message=f"Migration failed: {exc}",
+                message=message,
                 level='error',
                 status=400,
+                overlay_title=overlay_title,
+                apply_mode=not is_dry_run,
             )
         except Exception:
             logger.exception('Unexpected migration upload failure')
+            if is_dry_run:
+                msg = (
+                    'Dry-run stopped because of an unexpected server error.'
+                    ' No data was imported. Please try again or contact support.'
+                )
+                overlay_title = 'Dry-run interrupted'
+            else:
+                msg = (
+                    'Import stopped because of an unexpected server error.'
+                    ' Changes may not have been applied. Please try again or contact support.'
+                )
+                overlay_title = 'Import interrupted'
             return self._respond(
                 request,
                 ok=False,
-                message='Migration failed due to an unexpected error.',
+                message=msg,
                 level='error',
                 status=500,
+                overlay_title=overlay_title,
+                apply_mode=not is_dry_run,
             )
         finally:
             if temp_path and os.path.exists(temp_path):
@@ -532,6 +642,21 @@ class WorkReportsMigrationView(StaffRequiredMixin, TemplateView):
                 except OSError:
                     logger.warning('Unable to remove temporary migration file: %s', temp_path)
         return self._respond(request, ok=False, message='Migration did not complete.', level='error', status=500)
+
+    def _parse_migration_stdout_counts(self, output_text):
+        counts = {}
+        for raw_line in output_text.splitlines():
+            line = raw_line.strip()
+            if ':' not in line:
+                continue
+            key, _, tail = line.partition(':')
+            key = key.strip()
+            token = tail.strip().split(None, 1)[0] if tail.strip() else ''
+            try:
+                counts[key] = int(token)
+            except ValueError:
+                continue
+        return counts
 
     def _extract_summary(self, output_text):
         wanted = (

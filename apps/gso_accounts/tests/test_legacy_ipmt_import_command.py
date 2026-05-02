@@ -20,7 +20,7 @@ class LegacyIPMTImportCommandTests(TestCase):
         ws.title = "IPMT 2025-04"
         ws.append([None, "INDIVIDUAL PERFORMANCE MONITORING TOOLS"])
         ws.append([None, None])
-        ws.append([None, "Work Accomplishment Report"])
+        ws.append([None, None])
         ws.append([None, None])
         ws.append(["College/Campus/Department/Unit :", unit_text])
         ws.append(["Name of Employee :", employee_name])
@@ -112,6 +112,31 @@ class LegacyIPMTImportCommandTests(TestCase):
                     "--unit-code",
                     "electrical",
                 )
+        finally:
+            try:
+                path.unlink(missing_ok=True)
+            except PermissionError:
+                pass
+
+    def test_command_rejects_war_workbook(self):
+        from apps.gso_accounts.tests.test_legacy_war_import_command import LegacyWarImportCommandTests
+
+        wb = LegacyWarImportCommandTests()._build_legacy_war_workbook()
+        fd, temp_path = tempfile.mkstemp(suffix=".xlsx")
+        os.close(fd)
+        path = Path(temp_path)
+        try:
+            wb.save(path)
+            wb.close()
+            with self.assertRaises(CommandError) as ctx:
+                call_command(
+                    "gso_import_legacy_ipmt",
+                    str(path),
+                    "--unit-code",
+                    "electrical",
+                    "--dry-run",
+                )
+            self.assertIn("WAR", str(ctx.exception))
         finally:
             try:
                 path.unlink(missing_ok=True)

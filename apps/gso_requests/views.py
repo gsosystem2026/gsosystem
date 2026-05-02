@@ -121,7 +121,7 @@ class RequestCreateView(LoginRequiredMixin, FormView):
                 data['attachment'] = attachment if i == 0 else None
                 req = Request.objects.create(**data)
 
-                if (unit.code or '').strip().lower() == 'motorpool':
+                if unit.is_motorpool:
                     # Create motorpool trip data record even if some optional fields are empty,
                     # so printing/ticket UI can be enabled consistently.
                     from .models import MotorpoolTripData
@@ -185,7 +185,7 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
         Populate Motorpool planned fields from MotorpoolTripData on edit pages.
         """
         form = super().get_form(form_class)
-        if self.object and getattr(self.object.unit, 'code', '').strip().lower() == 'motorpool':
+        if self.object and self.object.unit.is_motorpool:
             mp = getattr(self.object, 'motorpool_trip', None)
             if mp:
                 form.initial.update({
@@ -202,7 +202,7 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
         form.instance.unit_id = self.object.unit_id
         response = super().form_valid(form)
 
-        if self.object and getattr(self.object.unit, 'code', '').strip().lower() == 'motorpool':
+        if self.object and self.object.unit.is_motorpool:
             mp = getattr(self.object, 'motorpool_trip', None)
             if not mp:
                 mp = MotorpoolTripData.objects.create(request=self.object)
@@ -500,7 +500,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     context['remind_targets'].append(('personnel', 'Assigned personnel', 'Request needs your attention'))
 
             # Motorpool-specific context (printable request + trip ticket data)
-            context['is_motorpool'] = (getattr(req.unit, 'code', '') or '').lower() == 'motorpool'
+            context['is_motorpool'] = req.unit.is_motorpool
             context['hide_materials_sections'] = False
             context['motorpool_trip_form'] = None
             context['motorpool_leg_row_count'] = 6
@@ -651,7 +651,7 @@ class MotorpoolTripUpdateView(LoginRequiredMixin, View):
 
     def post(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
-        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+        if not req.unit.is_motorpool:
             raise Http404()
 
         user = request.user
@@ -714,7 +714,7 @@ class MotorpoolPrintRequestView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
-        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+        if not req.unit.is_motorpool:
             raise Http404()
         user = request.user
         is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
@@ -736,7 +736,7 @@ class MotorpoolPrintTripTicketView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
-        if (getattr(req.unit, 'code', '') or '').strip().lower() != 'motorpool':
+        if not req.unit.is_motorpool:
             raise Http404()
         user = request.user
         is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
