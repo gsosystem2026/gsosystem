@@ -7,11 +7,14 @@
             <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{{ page_title }}</h1>
             <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
         </div>
+        {% if account_mgmt_is_director %}
         <button type="button" id="openAddUserModalBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
             <span class="material-symbols-outlined text-lg">person_add</span> Add user
         </button>
+        {% endif %}
     </div>
 
+    {% if account_mgmt_is_director %}
     <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800">
             <h2 class="text-sm font-semibold text-slate-900 dark:text-slate-100">Officer-in-Charge (OIC)</h2>
@@ -54,6 +57,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <form method="get" action="{% url 'gso_accounts:staff_account_management' %}" class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 flex flex-wrap items-end gap-4">
         <div class="flex flex-col gap-1">
@@ -138,8 +142,12 @@
                                 <button type="button" class="js-actions-menu-btn inline-flex items-center justify-center h-8 w-8 rounded-lg border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" aria-haspopup="true" aria-expanded="false">
                                     <span class="material-symbols-outlined text-lg">more_horiz</span>
                                 </button>
-                                <div class="js-actions-menu invisible opacity-0 pointer-events-none absolute right-0 top-full w-44 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-20 py-1 transition-opacity duration-150 group-hover/actions:visible group-hover/actions:opacity-100 group-hover/actions:pointer-events-auto">
+                                <div class="js-actions-menu invisible opacity-0 pointer-events-none absolute right-0 top-full w-52 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-lg z-20 py-1 transition-opacity duration-150 group-hover/actions:visible group-hover/actions:opacity-100 group-hover/actions:pointer-events-auto">
+                                    {% if account_mgmt_is_director %}
                                     <button type="button" class="js-edit-user-btn w-full text-left px-3 py-2 text-sm font-medium text-primary hover:bg-slate-50 dark:hover:bg-slate-800" data-edit-url="{% url 'gso_accounts:staff_account_user_edit' u.pk %}" data-user-label="{{ u.get_full_name|default:u.username }}">Edit</button>
+                                    {% endif %}
+                                    <button type="button" class="js-api-keys-btn w-full text-left px-3 py-2 text-sm font-medium text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800" data-api-keys-url="{% url 'gso_accounts:staff_user_api_keys' u.pk %}" data-user-label="{{ u.get_full_name|default:u.username }}">Integration API keys</button>
+                                    {% if account_mgmt_is_director %}
                                     {% if u.account_status == 'ACTIVE' %}
                                     <button type="button" class="js-user-status-action w-full text-left px-3 py-2 text-sm font-semibold text-amber-600 hover:bg-slate-50 dark:hover:bg-slate-800" data-user-id="{{ u.pk }}" data-user-label="{{ u.get_full_name|default:u.username }}" data-action="suspend">Suspend</button>
                                     <button type="button" class="js-user-status-action w-full text-left px-3 py-2 text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" data-user-id="{{ u.pk }}" data-user-label="{{ u.get_full_name|default:u.username }}" data-action="deactivate">Deactivate</button>
@@ -160,6 +168,7 @@
                                     >
                                         Permanently delete
                                     </button>
+                                    {% endif %}
                                 </div>
                             </div>
                         </td>
@@ -324,6 +333,45 @@
             <div id="editUserModalBody" class="p-6">
                 <p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
             </div>
+        </div>
+    </div>
+</div>
+
+<div id="apiKeysModal" class="hidden fixed inset-0 z-[119] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="apiKeysModalTitle">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" data-api-keys-close="1"></div>
+    <div class="flex min-h-full items-center justify-center p-4">
+        <div class="relative w-full max-w-lg rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                <h3 id="apiKeysModalTitle" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Integration API keys</h3>
+                <button type="button" class="close-btn" data-api-keys-close="1" aria-label="Close">
+                    <span class="material-symbols-outlined close-icon">close</span>
+                </button>
+            </div>
+            <div id="apiKeysModalBody" class="p-6">
+                <p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="apiKeyRevokeConfirmModal" class="hidden fixed inset-0 z-[122] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="apiKeyRevokeConfirmTitle">
+    <div class="fixed inset-0 bg-black/50 transition-opacity" data-api-key-revoke-close="1"></div>
+    <div class="relative w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-6">
+        <div class="flex items-center justify-between mb-3">
+            <h3 id="apiKeyRevokeConfirmTitle" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Revoke API key?</h3>
+            <button type="button" class="close-btn" data-api-key-revoke-close="1" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <p class="text-sm text-slate-700 dark:text-slate-300">
+            External systems using this key will <span class="font-semibold">stop working immediately</span>. This cannot be undone—you must generate a new key if you still need access.
+        </p>
+        <div class="flex justify-end gap-3 pt-6">
+            <button type="button" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" data-api-key-revoke-close="1">Cancel</button>
+            <button type="button" id="apiKeyRevokeConfirmBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors">
+                <span class="material-symbols-outlined text-base">gpp_maybe</span>
+                Yes, revoke key
+            </button>
         </div>
     </div>
 </div>
@@ -556,6 +604,8 @@
     [
         'addUserModal',
         'editUserModal',
+        'apiKeysModal',
+        'apiKeyRevokeConfirmModal',
         'userStatusModal',
         'userDeleteModal',
         'oicSelectModal',
@@ -570,6 +620,10 @@
 
     var editUserModal = document.getElementById('editUserModal');
     var editUserModalBody = document.getElementById('editUserModalBody');
+    var apiKeysModal = document.getElementById('apiKeysModal');
+    var apiKeysModalBody = document.getElementById('apiKeysModalBody');
+    var apiKeyRevokeConfirmModal = document.getElementById('apiKeyRevokeConfirmModal');
+    var pendingApiKeyRevoke = { postUrl: '', keyId: '', triggerBtn: null };
     var editUserSuccessPopup = document.getElementById('editUserSuccessPopup');
     var editUserSuccessText = document.getElementById('editUserSuccessText');
     var activeEditUrl = '';
@@ -644,10 +698,172 @@
             });
     }
 
+    function getCsrfToken() {
+        var m = document.cookie.match(/csrftoken=([^;]+)/);
+        return m ? decodeURIComponent(m[1].trim()) : '';
+    }
+
+    function bindApiKeysPanelHandlers() {
+        if (!apiKeysModalBody) return;
+        var root = apiKeysModalBody.querySelector('#userApiKeysPanelRoot');
+        if (!root) return;
+        var postUrl = root.getAttribute('data-post-url');
+        var genBtn = apiKeysModalBody.querySelector('#userApiKeysGenerateBtn');
+        var errEl = apiKeysModalBody.querySelector('#userApiKeysError');
+        var banner = apiKeysModalBody.querySelector('#userApiKeysNewKeyBanner');
+        var rawEl = apiKeysModalBody.querySelector('#userApiKeysRawSecret');
+        var labelInput = apiKeysModalBody.querySelector('#id_api_key_label');
+
+        function showErr(msg) {
+            if (!errEl) return;
+            errEl.textContent = msg || '';
+            errEl.classList.toggle('hidden', !msg);
+        }
+
+        if (genBtn && postUrl) {
+            genBtn.addEventListener('click', function () {
+                showErr('');
+                var fd = new FormData();
+                fd.append('csrfmiddlewaretoken', getCsrfToken());
+                fd.append('action', 'generate');
+                if (labelInput && labelInput.value) fd.append('label', labelInput.value);
+                genBtn.disabled = true;
+                fetch(postUrl, {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() },
+                })
+                    .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+                    .then(function (result) {
+                        if (result.ok && result.data && result.data.ok && result.data.raw_key) {
+                            var raw = result.data.raw_key;
+                            if (labelInput) labelInput.value = '';
+                            return fetch(postUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                                .then(function (r) { return r.text(); })
+                                .then(function (html) {
+                                    apiKeysModalBody.innerHTML = html;
+                                    bindApiKeysPanelHandlers();
+                                    var b = apiKeysModalBody.querySelector('#userApiKeysNewKeyBanner');
+                                    var re = apiKeysModalBody.querySelector('#userApiKeysRawSecret');
+                                    if (b && re) {
+                                        re.textContent = raw;
+                                        b.classList.remove('hidden');
+                                    }
+                                });
+                        }
+                        showErr((result.data && result.data.error) || 'Could not generate key.');
+                    })
+                    .catch(function () { showErr('Could not generate key.'); })
+                    .finally(function () { genBtn.disabled = false; });
+            });
+        }
+
+        apiKeysModalBody.querySelectorAll('.user-api-keys-revoke-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var kid = btn.getAttribute('data-key-id');
+                if (!postUrl || !kid) return;
+                pendingApiKeyRevoke.postUrl = postUrl;
+                pendingApiKeyRevoke.keyId = kid;
+                pendingApiKeyRevoke.triggerBtn = btn;
+                openModal(apiKeyRevokeConfirmModal);
+            });
+        });
+
+        var copyBtn = apiKeysModalBody.querySelector('#userApiKeysCopyBtn');
+        if (copyBtn && rawEl) {
+            copyBtn.addEventListener('click', function () {
+                var t = rawEl.textContent || '';
+                if (!t) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(t).then(function () {
+                        copyBtn.textContent = 'Copied';
+                        setTimeout(function () { copyBtn.textContent = 'Copy'; }, 2000);
+                    });
+                }
+            });
+        }
+    }
+
+    function loadApiKeysPanel(url, label) {
+        if (!url || !apiKeysModalBody) return;
+        var title = document.getElementById('apiKeysModalTitle');
+        if (title) title.textContent = label ? ('API keys — ' + label) : 'Integration API keys';
+        apiKeysModalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading...</p>';
+        openModal(apiKeysModal);
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (r) { return r.text(); })
+            .then(function (html) {
+                apiKeysModalBody.innerHTML = html;
+                bindApiKeysPanelHandlers();
+            })
+            .catch(function () {
+                apiKeysModalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load API keys.</p>';
+            });
+    }
+
+    function closeApiKeyRevokeConfirmModal() {
+        closeModal(apiKeyRevokeConfirmModal);
+        pendingApiKeyRevoke = { postUrl: '', keyId: '', triggerBtn: null };
+    }
+
+    function performPendingApiKeyRevoke() {
+        var postUrl = pendingApiKeyRevoke.postUrl;
+        var kid = pendingApiKeyRevoke.keyId;
+        var btn = pendingApiKeyRevoke.triggerBtn;
+        if (!postUrl || !kid || !apiKeysModalBody) {
+            closeApiKeyRevokeConfirmModal();
+            return;
+        }
+        var fd = new FormData();
+        fd.append('csrfmiddlewaretoken', getCsrfToken());
+        fd.append('action', 'revoke');
+        fd.append('key_id', kid);
+        var confirmBtn = document.getElementById('apiKeyRevokeConfirmBtn');
+        if (btn) btn.disabled = true;
+        if (confirmBtn) confirmBtn.disabled = true;
+        fetch(postUrl, {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': getCsrfToken() },
+        })
+            .then(function (r) { return r.json(); })
+            .then(function () {
+                closeApiKeyRevokeConfirmModal();
+                return fetch(postUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function (r) { return r.text(); })
+                    .then(function (html) {
+                        apiKeysModalBody.innerHTML = html;
+                        bindApiKeysPanelHandlers();
+                    });
+            })
+            .catch(function () {
+                alert('Could not revoke key.');
+                closeApiKeyRevokeConfirmModal();
+            })
+            .finally(function () {
+                if (btn) btn.disabled = false;
+                if (confirmBtn) confirmBtn.disabled = false;
+            });
+    }
+
+    var apiKeyRevokeConfirmBtnEl = document.getElementById('apiKeyRevokeConfirmBtn');
+    if (apiKeyRevokeConfirmBtnEl) {
+        apiKeyRevokeConfirmBtnEl.addEventListener('click', function () {
+            performPendingApiKeyRevoke();
+        });
+    }
+
     document.addEventListener('click', function (e) {
         var btn = e.target.closest('.js-edit-user-btn');
         if (btn) {
             loadEditUserForm(btn.getAttribute('data-edit-url'), btn.getAttribute('data-user-label'));
+            return;
+        }
+        var apiBtn = e.target.closest('.js-api-keys-btn');
+        if (apiBtn) {
+            loadApiKeysPanel(apiBtn.getAttribute('data-api-keys-url'), apiBtn.getAttribute('data-user-label'));
             return;
         }
         var statusBtn = e.target.closest('.js-user-status-action');
@@ -680,6 +896,14 @@
         }
         if (e.target.closest('[data-edit-user-close="1"]')) {
             closeModal(editUserModal);
+            return;
+        }
+        if (e.target.closest('[data-api-key-revoke-close="1"]')) {
+            closeApiKeyRevokeConfirmModal();
+            return;
+        }
+        if (e.target.closest('[data-api-keys-close="1"]')) {
+            closeModal(apiKeysModal);
             return;
         }
         if (e.target.closest('[data-user-status-close="1"]')) {
@@ -754,6 +978,16 @@
     if (editUserModal) {
         editUserModal.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeModal(editUserModal);
+        });
+    }
+    if (apiKeysModal) {
+        apiKeysModal.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeModal(apiKeysModal);
+        });
+    }
+    if (apiKeyRevokeConfirmModal) {
+        apiKeyRevokeConfirmModal.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeApiKeyRevokeConfirmModal();
         });
     }
     if (userStatusModal) {

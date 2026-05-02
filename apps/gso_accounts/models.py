@@ -1,7 +1,39 @@
+import hashlib
+import hmac
+import secrets
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+
+
+def _api_key_hmac_digest(raw_key: str) -> str:
+    """Constant-length digest of full raw API key string (stored only as this digest)."""
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        raw_key.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def user_allow_api_credentials(user) -> bool:
+    """Mirrors interactive login eligibility: active account, not deactivated/suspended."""
+    if user is None or not getattr(user, 'is_authenticated', False):
+        return False
+    if not getattr(user, 'is_active', True):
+        return False
+    status = getattr(user, 'account_status', User.AccountStatus.ACTIVE)
+    if status == User.AccountStatus.DEACTIVATED:
+        return False
+    if status == User.AccountStatus.SUSPENDED:
+        suspended_until = getattr(user, 'suspended_until', None)
+        if suspended_until and suspended_until <= timezone.now():
+            return True
+        if suspended_until:
+            return False
+        return False
+    return True
 
 
 class User(AbstractUser):
@@ -245,3 +277,69 @@ class PasswordResetOTP(models.Model):
 
     def __str__(self):
         return f"OTP for {self.user_id} at {self.created_at}"
+
+
+class UserAPIKey(models.Model):
+    """Long-lived REST API key bound to a user (secret stored as HMAC digest only)."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='api_keys',
+    )
+    label = models.CharField(max_length=120, blank=True, help_text='Optional note, e.g. partner or script name.')
+    prefix = models.CharField(max_length=16, help_text='First characters of the key for identification (not secret).')
+    key_digest = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='api_keys_created',
+    )
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"API key {self.prefix}… for {self.user_id}"
+
+
+def issue_user_api_key(user, *, created_by, label=''):
+    """
+    Create a new API key for ``user``. Returns ``(UserAPIKey instance, raw_secret_string)``.
+    The raw secret is shown once to staff; only ``key_digest`` is persisted.
+    """
+    raw = 'gso_' + secrets.token_urlsafe(32)
+    digest = _api_key_hmac_digest(raw)
+    prefix = raw[:14]
+    obj = UserAPIKey.objects.create(
+        user=user,
+        label=(label or '')[:120],
+        prefix=prefix,
+        key_digest=digest,
+        created_by=created_by,
+    )
+    return obj, raw
+
+
+def resolve_user_api_key_from_raw(raw_key: str):
+    """
+    Return ``UserAPIKey`` if ``raw_key`` matches an active (non-revoked) key, else ``None``.
+    """
+    if not raw_key or not isinstance(raw_key, str):
+        return None
+    raw_key = raw_key.strip()
+    if len(raw_key) < 20:
+        return None
+    digest = _api_key_hmac_digest(raw_key)
+    try:
+        obj = UserAPIKey.objects.select_related('user').get(key_digest=digest, revoked_at__isnull=True)
+    except UserAPIKey.DoesNotExist:
+        return None
+    return obj

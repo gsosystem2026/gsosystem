@@ -1,6 +1,6 @@
 # GSO Request Management — REST API
 
-External systems can integrate with the GSO system via the REST API (JSON). All endpoints (except auth and unit list) require authentication using **JWT (JSON Web Tokens)**.
+External systems can integrate with the GSO system via the REST API (JSON). Most endpoints require authentication using **JWT (JSON Web Tokens)** or an **integration API key** issued by the Director or GSO Office in Account Management (long-lived, for automated clients). Public endpoints (API root, unit list) stay open as documented below.
 
 ## Base URL
 
@@ -55,6 +55,17 @@ Response:
 ```
 
 Use the new `access` token in subsequent requests.
+
+### 3. Integration API key (automated / server-to-server)
+
+Staff can generate a key bound to a specific **user account** (prefer a dedicated integration user with minimal role). The full secret is shown **once** when created.
+
+Send the key on each request using either:
+
+- `Authorization: Api-Key <full_secret>`
+- or header `X-Api-Key: <full_secret>`
+
+Access is the same as authenticating as that user with JWT (roles and row-level rules apply). Revoke keys from **Account Management → Integration API keys** for that user if leaked.
 
 ---
 

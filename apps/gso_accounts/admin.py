@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from .models import User, AuditLog
+from .models import User, AuditLog, UserAPIKey
 
 
 @admin.register(User)
@@ -18,6 +18,15 @@ class UserAdmin(BaseUserAdmin):
     add_fieldsets = BaseUserAdmin.add_fieldsets + (
         ('GSO', {'fields': ('role', 'unit', 'office_department', 'position_title', 'employment_status')}),
     )
+
+
+@admin.register(UserAPIKey)
+class UserAPIKeyAdmin(admin.ModelAdmin):
+    list_display = ('prefix', 'user', 'label', 'created_at', 'revoked_at', 'last_used_at', 'created_by')
+    list_filter = ('revoked_at',)
+    search_fields = ('prefix', 'label', 'user__username')
+    readonly_fields = ('prefix', 'key_digest', 'created_at', 'last_used_at', 'revoked_at')
+    raw_id_fields = ('user', 'created_by')
 
 
 @admin.register(AuditLog)

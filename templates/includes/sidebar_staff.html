@@ -79,11 +79,13 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
                 </div>
             </div>
         </div>
-        {% if request.user.is_director %}
+        {% if request.user.is_director or request.user.is_gso_office %}
         <a href="{% url 'gso_accounts:staff_account_management' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_account_management' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Account Management">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">group</span>
             <span class="sidebar-label text-sm truncate">Account Management</span>
         </a>
+        {% endif %}
+        {% if request.user.is_director %}
         <a href="{% url 'gso_accounts:staff_activity_log' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_activity_log' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Activity Log">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">history</span>
             <span class="sidebar-label text-sm truncate">Activity Log</span>

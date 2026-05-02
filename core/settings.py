@@ -298,6 +298,7 @@ if not DEBUG:
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.gso_api.authentication.IntegrationAPIKeyAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -306,6 +307,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
+        'apps.gso_api.throttling.IntegrationApiKeyThrottle',
         'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
@@ -314,6 +316,7 @@ REST_FRAMEWORK = {
         'auth_token': os.environ.get('DRF_THROTTLE_AUTH_TOKEN', '10/minute'),
         'auth_refresh': os.environ.get('DRF_THROTTLE_AUTH_REFRESH', '30/minute'),
         'notification_write': os.environ.get('DRF_THROTTLE_NOTIFICATION_WRITE', '60/minute'),
+        'api_key': os.environ.get('DRF_THROTTLE_API_KEY', '120/minute'),
     },
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',

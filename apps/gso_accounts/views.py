@@ -9,7 +9,7 @@ from django.contrib.auth.views import (
     LogoutView,
 )
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from django.urls import reverse, reverse_lazy
 from django.views.generic import TemplateView, UpdateView, View, ListView, CreateView, FormView
 from django.db.models import Q, Count
@@ -29,7 +29,8 @@ from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 from core.emailing import send_gso_email
 from .forms import GsoAuthenticationForm, GsoPasswordResetForm, GsoPasswordResetOTPForm, GsoSetPasswordForm, RequestorProfileForm, DirectorUserCreateForm, DirectorUserEditForm
-from .models import User, PasswordResetOTP
+from .models import User, PasswordResetOTP, UserAPIKey, issue_user_api_key, log_audit
+from .permissions import can_manage_integration_api_keys, is_account_management_director_ui
 from apps.gso_requests.models import Request
 
 logger = logging.getLogger(__name__)
@@ -821,7 +822,7 @@ class StaffWorkReportsView(StaffPlaceholderView):
 
 
 class StaffAccountManagementView(StaffRequiredMixin, ListView):
-    """Director only: List all users with filter/search, OIC section, and add/edit user."""
+    """Director or GSO Office: user list and integration API keys; Director-only UI for OIC, add user, edit, lifecycle."""
     template_name = 'staff/account_management.html'
     model = User
     context_object_name = 'user_list'
@@ -832,8 +833,8 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
             return redirect('gso_accounts:login')
         if hasattr(request.user, 'is_requestor') and request.user.is_requestor:
             return redirect('gso_accounts:requestor_dashboard')
-        if not getattr(request.user, 'is_director', False):
-            messages.info(request, 'Account Management is for the Director only.')
+        if not can_manage_integration_api_keys(request.user):
+            messages.info(request, 'Account Management is only for the Director or GSO Office.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
@@ -900,7 +901,77 @@ class StaffAccountManagementView(StaffRequiredMixin, ListView):
             ('OTHER', 'Other'),
         ]
         context['create_user_form'] = DirectorUserCreateForm()
+        context['account_mgmt_is_director'] = is_account_management_director_ui(self.request.user)
         return context
+
+
+class UserApiKeysPanelView(LoginRequiredMixin, View):
+    """Director / GSO Office: list, generate, revoke integration API keys for a target user."""
+
+    http_method_names = ['get', 'post', 'head', 'options']
+
+    def get(self, request, pk):
+        if not can_manage_integration_api_keys(request.user):
+            return HttpResponse('Forbidden', status=403)
+        target = get_object_or_404(User, pk=pk)
+        block_director = target.role == User.Role.DIRECTOR
+        keys = [] if block_director else list(target.api_keys.order_by('-created_at'))
+        return render(
+            request,
+            'staff/_user_api_keys_panel.html',
+            {
+                'target_user': target,
+                'block_director': block_director,
+                'keys': keys,
+            },
+        )
+
+    def post(self, request, pk):
+        if not can_manage_integration_api_keys(request.user):
+            return JsonResponse({'ok': False, 'error': 'Forbidden.'}, status=403)
+        target = get_object_or_404(User, pk=pk)
+        if target.role == User.Role.DIRECTOR:
+            return JsonResponse(
+                {'ok': False, 'error': 'API keys cannot be issued for Director accounts.'},
+                status=400,
+            )
+        action = (request.POST.get('action') or '').strip().lower()
+        if action == 'generate':
+            label = (request.POST.get('label') or '').strip()[:120]
+            obj, raw = issue_user_api_key(target, created_by=request.user, label=label)
+            log_audit(
+                'api_key_create',
+                request.user,
+                f'Created API key {obj.prefix}… for user {target.username} (id={target.pk})',
+                target_model='gso_accounts.UserAPIKey',
+                target_id=str(obj.pk),
+            )
+            return JsonResponse({
+                'ok': True,
+                'raw_key': raw,
+                'prefix': obj.prefix,
+                'key_id': obj.pk,
+                'label': obj.label or '',
+            })
+        if action == 'revoke':
+            try:
+                key_id = int(request.POST.get('key_id') or '0')
+            except ValueError:
+                return JsonResponse({'ok': False, 'error': 'Invalid key.'}, status=400)
+            key_obj = get_object_or_404(UserAPIKey, pk=key_id, user=target)
+            if key_obj.revoked_at is not None:
+                return JsonResponse({'ok': True, 'message': 'Key was already revoked.'})
+            key_obj.revoked_at = timezone.now()
+            key_obj.save(update_fields=['revoked_at'])
+            log_audit(
+                'api_key_revoke',
+                request.user,
+                f'Revoked API key {key_obj.prefix}… for user {target.username} (id={target.pk})',
+                target_model='gso_accounts.UserAPIKey',
+                target_id=str(key_obj.pk),
+            )
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'Unknown action.'}, status=400)
 
 
 class AssignOICView(LoginRequiredMixin, View):

@@ -1,0 +1,62 @@
+{% comment %}Loaded in modal — Director / GSO Office only.{% endcomment %}
+<div class="space-y-4 text-left" id="userApiKeysPanelRoot" data-post-url="{% url 'gso_accounts:staff_user_api_keys' target_user.pk %}">
+    {% csrf_token %}
+    <p class="text-sm text-slate-600 dark:text-slate-300">
+        Integration keys authenticate as <span class="font-semibold text-slate-900 dark:text-slate-100">{{ target_user.get_full_name|default:target_user.username }}</span>
+        (<span class="font-mono text-xs">{{ target_user.username }}</span>) on the REST API. Treat each key like a password.
+    </p>
+
+    {% if block_director %}
+    <div class="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+        API keys cannot be created for Director accounts. Use a dedicated integration user with the minimum role required.
+    </div>
+    {% else %}
+    <div id="userApiKeysNewKeyBanner" class="hidden rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-3 space-y-2">
+        <p class="text-xs font-semibold text-emerald-800 dark:text-emerald-200 uppercase tracking-wide">Copy this key now</p>
+        <p class="text-xs text-emerald-700 dark:text-emerald-300">It will not be shown again. Store it in a secret manager or secure environment variable.</p>
+        <div class="flex flex-wrap items-center gap-2">
+            <code id="userApiKeysRawSecret" class="flex-1 min-w-0 break-all text-xs font-mono bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800 rounded px-2 py-1.5"></code>
+            <button type="button" id="userApiKeysCopyBtn" class="shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white">Copy</button>
+        </div>
+    </div>
+
+    <div class="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Generate new key</p>
+        <div>
+            <label for="id_api_key_label" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Label (optional)</label>
+            <input type="text" id="id_api_key_label" name="label" maxlength="120" placeholder="e.g. Partner export script" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm"/>
+        </div>
+        <button type="button" id="userApiKeysGenerateBtn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+            <span class="material-symbols-outlined text-base">key</span>
+            Generate API key
+        </button>
+        <p id="userApiKeysError" class="hidden text-sm text-red-600 dark:text-red-400"></p>
+    </div>
+
+    <div>
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Existing keys</p>
+        {% if keys %}
+        <ul class="divide-y divide-slate-200 dark:divide-slate-700 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
+            {% for k in keys %}
+            <li class="px-4 py-3 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900">
+                <div>
+                    <p class="text-sm font-mono text-slate-800 dark:text-slate-200">{{ k.prefix }}…</p>
+                    {% if k.label %}<p class="text-xs text-slate-500 dark:text-slate-400">{{ k.label }}</p>{% endif %}
+                    <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                        Created {{ k.created_at|date:"Y-m-d H:i" }}
+                        {% if k.revoked_at %}· <span class="text-red-600 dark:text-red-400 font-medium">Revoked</span>{% endif %}
+                        {% if k.last_used_at %}· Last used {{ k.last_used_at|date:"Y-m-d H:i" }}{% endif %}
+                    </p>
+                </div>
+                {% if not k.revoked_at %}
+                <button type="button" class="user-api-keys-revoke-btn shrink-0 px-3 py-1.5 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20" data-key-id="{{ k.pk }}">Revoke</button>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-sm text-slate-500 dark:text-slate-400">No keys yet. Generate one above.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

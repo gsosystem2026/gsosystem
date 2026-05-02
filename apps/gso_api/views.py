@@ -1,6 +1,6 @@
 """
 REST API views for external system integration.
-All endpoints require authentication (JWT or session).
+Endpoints require authentication via JWT, session, or integration API key (except where AllowAny).
 """
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -593,7 +593,12 @@ class APIRootView(APIView):
         return Response({
             'name': 'GSO Request Management API',
             'version': '1.0',
-            'auth': 'Use POST /api/v1/auth/token/ with username and password to get access and refresh tokens.',
+            'auth': (
+                'JWT: POST /api/v1/auth/token/ with username and password; send '
+                'Authorization: Bearer <access> on requests. '
+                'Integration API key: Authorization: Api-Key <key> or X-Api-Key '
+                '(keys issued in staff Account Management → Integration API keys).'
+            ),
             'endpoints': {
                 'auth_token': f'{base}/auth/token/',
                 'auth_refresh': f'{base}/auth/token/refresh/',
