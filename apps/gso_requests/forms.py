@@ -102,6 +102,7 @@ class RequestForm(forms.ModelForm):
             'custom_full_name',
             'custom_email',
             'custom_contact_number',
+            'requesting_sub_office',
             'attachment',
         ]
         widgets = {
@@ -114,6 +115,7 @@ class RequestForm(forms.ModelForm):
             'custom_full_name': forms.TextInput(attrs={'placeholder': 'John Doe'}),
             'custom_email': forms.EmailInput(attrs={'placeholder': 'name@psu.palawan.edu.ph'}),
             'custom_contact_number': forms.TextInput(attrs={'placeholder': '09XX XXX XXXX', 'type': 'tel'}),
+            'requesting_sub_office': forms.TextInput(attrs={'placeholder': 'e.g., IT / Marine Bio'}),
             'attachment': forms.FileInput(attrs={'accept': 'image/*'}),
         }
         labels = {
@@ -123,6 +125,7 @@ class RequestForm(forms.ModelForm):
             'custom_full_name': 'Full Name',
             'custom_email': 'Email (optional)',
             'custom_contact_number': 'Contact Number',
+            'requesting_sub_office': 'Requesting Office/Department',
             'attachment': 'Attachments',
         }
 
@@ -137,6 +140,7 @@ class RequestForm(forms.ModelForm):
         self.fields['custom_full_name'].required = True
         self.fields['custom_contact_number'].required = True
         self.fields['custom_email'].required = False
+        self.fields['requesting_sub_office'].required = True
         if self._for_motorpool:
             self.fields['motorpool_places_to_be_visited'].required = True
             self.fields['motorpool_itinerary_of_travel'].required = True
@@ -159,6 +163,12 @@ class RequestForm(forms.ModelForm):
     def clean_custom_email(self):
         email = (self.cleaned_data.get('custom_email') or '').strip()
         return email if email else ''
+
+    def clean_requesting_sub_office(self):
+        val = (self.cleaned_data.get('requesting_sub_office') or '').strip()
+        if not val:
+            raise ValidationError('Requesting office/department is required.')
+        return val
 
     def clean(self):
         cleaned = super().clean()

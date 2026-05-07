@@ -303,14 +303,26 @@ class FeedbackExportForm(forms.Form):
 
 
 def _distinct_requesting_offices():
-    from apps.gso_accounts.models import User
+    from django.db.models import Case, CharField, F, Value, When
+    from django.db.models.functions import Concat
+    from apps.gso_requests.models import Request
 
     return (
-        User.objects.filter(role=User.Role.REQUESTOR)
-        .exclude(office_department='')
-        .values_list('office_department', flat=True)
+        Request.objects.select_related('requestor')
+        .exclude(requestor__office_department='')
+        .annotate(
+            requesting_office_full=Case(
+                When(
+                    requesting_sub_office__gt='',
+                    then=Concat(F('requestor__office_department'), Value(' - '), F('requesting_sub_office')),
+                ),
+                default=F('requestor__office_department'),
+                output_field=CharField(),
+            )
+        )
+        .values_list('requesting_office_full', flat=True)
         .distinct()
-        .order_by('office_department')
+        .order_by('requesting_office_full')
     )
 
 

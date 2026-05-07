@@ -83,11 +83,7 @@
                                 <td class="px-4 py-3 max-w-md">{{ war.accomplishments|default:"—"|truncatewords:25 }}</td>
                             {% elif header_key == 'requesting_office' %}
                                 <td class="px-4 py-3 whitespace-nowrap">
-                                    {% if war.request.requestor and war.request.requestor.office_department %}
-                                        {{ war.request.requestor.office_department }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
+                                    {{ war.request.requesting_office_display }}
                                 </td>
                             {% elif header_key == 'personnel' %}
                                 <td class="px-4 py-3 whitespace-nowrap">{{ war.personnel.get_full_name|default:war.personnel.username }}</td>

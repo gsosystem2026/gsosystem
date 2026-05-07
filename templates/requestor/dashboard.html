@@ -369,9 +369,9 @@
                             <span class="material-symbols-outlined text-slate-400 text-xl">person</span>
                             <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Requestor Information</h3>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 pl-8">Full name and contact number are required. Email is optional.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 pl-8">Full name, contact number, and requesting office/department are required. Email is optional.</p>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                         <div class="flex flex-col gap-2">
                             <label for="{{ request_form.custom_full_name.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.custom_full_name.label }} <span class="text-red-500">*</span></label>
                             {{ request_form.custom_full_name }}
@@ -384,7 +384,11 @@
                             <label for="{{ request_form.custom_contact_number.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.custom_contact_number.label }} <span class="text-red-500">*</span></label>
                             {{ request_form.custom_contact_number }}
                         </div>
-                        <div class="flex flex-col gap-2 md:col-span-3">
+                        <div class="flex flex-col gap-2">
+                            <label for="{{ request_form.requesting_sub_office.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.requesting_sub_office.label }} <span class="text-red-500">*</span></label>
+                            {{ request_form.requesting_sub_office }}
+                        </div>
+                        <div class="flex flex-col gap-2 md:col-span-4">
                             <label id="request-form-attachment-label" for="id_attachment" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Upload Attachment <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span></label>
                             <div class="relative flex items-center">
                                 {{ request_form.attachment }}
@@ -707,6 +711,7 @@
             // and the popup stays open, which looks like the UI broke.
             var desc = requestForm.querySelector('#id_description');
             var loc = requestForm.querySelector('#id_location');
+            var reqSubOffice = requestForm.querySelector('#id_requesting_sub_office');
             var mpPlaces = requestForm.querySelector('#id_motorpool_places_to_be_visited');
             var mpItinerary = requestForm.querySelector('#id_motorpool_itinerary_of_travel');
             var mpDatetime = requestForm.querySelector('#id_motorpool_trip_datetime');
@@ -717,6 +722,7 @@
 
             var descVal = desc ? (desc.value || '').trim() : '';
             var locVal = loc ? (loc.value || '').trim() : '';
+            var reqSubOfficeVal = reqSubOffice ? (reqSubOffice.value || '').trim() : '';
             var mpPlacesVal = mpPlaces ? (mpPlaces.value || '').trim() : '';
             var mpItineraryVal = mpItinerary ? (mpItinerary.value || '').trim() : '';
             var mpDatetimeVal = mpDatetime ? (mpDatetime.value || '').trim() : '';
@@ -732,6 +738,7 @@
             if (!unitsVal) missing.push('unit');
             if (!descVal) missing.push('Purpose/s');
             if (!isMotorpoolOnly && !locVal) missing.push('Location');
+            if (!reqSubOfficeVal) missing.push('Requesting Office/Department');
             if (isMotorpoolOnly && !mpPlacesVal) missing.push('Place(s) to be visited');
             if (isMotorpoolOnly && !mpItineraryVal) missing.push('Itinerary of Travel');
             if (isMotorpoolOnly && !mpDatetimeVal) missing.push('Date and Time of Trip');

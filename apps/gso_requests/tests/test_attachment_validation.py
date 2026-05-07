@@ -26,6 +26,7 @@ class RequestAttachmentValidationTests(TestCase):
             'custom_full_name': 'Test Requestor',
             'custom_email': 'requestor@example.com',
             'custom_contact_number': '09123456789',
+            'requesting_sub_office': 'IT',
         }
 
     def test_accepts_valid_png_attachment(self):

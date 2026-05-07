@@ -372,15 +372,16 @@ def _resolve_logo_paths():
 
 
 def _get_requesting_office_name(req):
-    """Resolve requesting office/department from requestor profile."""
+    """Resolve request-level requesting office display (base office + sub-office)."""
+    if req is None:
+        return ""
+    display = (getattr(req, "requesting_office_display", "") or "").strip()
+    if display and display != "—":
+        return display
     requestor = getattr(req, "requestor", None)
     if not requestor:
         return ""
-    office = (getattr(requestor, "office_department", "") or "").strip()
-    if office:
-        return office
-    # Export should represent office source, not personal identity.
-    return ""
+    return (getattr(requestor, "office_department", "") or "").strip()
 
 
 def _apply_standard_header(ws, total_columns, period_label="", report_label="WORK ACCOMPLISHMENT REPORT", unit_label="ALL UNITS"):
@@ -967,6 +968,7 @@ def _completed_requests_search_q(search_q):
         | Q(requestor__username__icontains=raw)
         | Q(requestor__email__icontains=raw)
         | Q(requestor__office_department__icontains=raw)
+        | Q(requesting_sub_office__icontains=raw)
     )
     m = re.match(r'(?i)^\s*GSO\s*-\s*(\d{4})\s*-\s*(\d+)\s*$', raw)
     if m:
@@ -987,16 +989,28 @@ def _completed_requests_search_q(search_q):
 def get_completed_requests_queryset(*, unit=None, requesting_office=None, date_from=None, date_to=None, search_q=None):
     """Completed requests only; optional filters. Ordered by completion (updated_at) descending."""
     from apps.gso_requests.models import Request
+    from django.db.models import Case, CharField, F, Q, Value, When
+    from django.db.models.functions import Concat
 
     qs = (
         Request.objects.filter(status=Request.Status.COMPLETED)
         .select_related('unit', 'requestor')
+        .annotate(
+            requesting_office_full=Case(
+                When(
+                    requesting_sub_office__gt='',
+                    then=Concat(F('requestor__office_department'), Value(' - '), F('requesting_sub_office')),
+                ),
+                default=F('requestor__office_department'),
+                output_field=CharField(),
+            )
+        )
         .order_by('-updated_at')
     )
     if unit:
         qs = qs.filter(unit=unit)
     if requesting_office:
-        qs = qs.filter(requestor__office_department__iexact=requesting_office.strip())
+        qs = qs.filter(requesting_office_full__iexact=requesting_office.strip())
     if date_from:
         qs = qs.filter(updated_at__date__gte=date_from)
     if date_to:
@@ -1004,7 +1018,7 @@ def get_completed_requests_queryset(*, unit=None, requesting_office=None, date_f
     if search_q:
         s = search_q.strip()
         if s:
-            qs = qs.filter(_completed_requests_search_q(s))
+            qs = qs.filter(_completed_requests_search_q(s) | Q(requesting_office_full__icontains=s))
     return qs
 
 
@@ -1052,7 +1066,7 @@ def build_request_report_excel(queryset, *, period_label='COMPLETED REQUESTS', u
         cell.fill = PatternFill(start_color='FFA500', end_color='FFA500', fill_type='solid')
     row = table_header_row + 1
     for req in queryset.iterator():
-        ro = getattr(req.requestor, 'office_department', '') or ''
+        ro = _get_requesting_office_name(req)
         name = ''
         email = ''
         if req.requestor_id:

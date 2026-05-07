@@ -34,6 +34,7 @@ class MultiUnitSubmissionRuleTests(TestCase):
             "labor": "on",
             "custom_full_name": "Requestor Test",
             "custom_contact_number": "09123456789",
+            "requesting_sub_office": "IT",
         }
 
     def test_allows_multiple_non_motorpool_units(self):
@@ -66,6 +67,7 @@ class MultiUnitSubmissionRuleTests(TestCase):
             "units": "motorpool",
             "custom_full_name": "Requestor Test",
             "custom_contact_number": "09123456789",
+            "requesting_sub_office": "IT",
             "motorpool_places_to_be_visited": "PSU Main Campus",
             "motorpool_itinerary_of_travel": "Campus visit and return",
             "motorpool_trip_datetime": "2030-06-01T09:30",
@@ -93,6 +95,7 @@ class MultiUnitSubmissionRuleTests(TestCase):
             "units": "motorpool",
             "custom_full_name": "Requestor Test",
             "custom_contact_number": "09123456789",
+            "requesting_sub_office": "IT",
         }
         response = self.client.post(reverse("gso_requests:requestor_request_new"), data=payload)
         self.assertEqual(response.status_code, 200)
@@ -105,6 +108,7 @@ class MultiUnitSubmissionRuleTests(TestCase):
             "units": "motorpool",
             "custom_full_name": "Requestor Test",
             "custom_contact_number": "09123456789",
+            "requesting_sub_office": "IT",
             "motorpool_places_to_be_visited": "PSU Main Campus",
             "motorpool_itinerary_of_travel": "Field work and return",
             "motorpool_trip_datetime": "2030-06-01T09:30",

@@ -150,7 +150,7 @@ class RequestCreateView(LoginRequiredMixin, FormView):
                     from .models import MotorpoolTripData
                     MotorpoolTripData.objects.create(
                         request=req,
-                        requesting_office=(self.request.user.office_department or '').strip(),
+                        requesting_office=req.requesting_office_display if req.requesting_office_display != '—' else '',
                         places_to_be_visited=motorpool_fields.get('motorpool_places_to_be_visited', '') or '',
                         itinerary_of_travel=motorpool_fields.get('motorpool_itinerary_of_travel', '') or '',
                         trip_datetime=motorpool_fields.get('motorpool_trip_datetime'),
@@ -255,8 +255,8 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
             # Keep motorpool contact aligned with requestor contact fields on this edit form.
             mp.contact_person = form.cleaned_data.get('custom_full_name') or ''
             mp.contact_number = form.cleaned_data.get('custom_contact_number') or ''
-            # Requesting office is derived from the requestor account.
-            mp.requesting_office = (self.request.user.office_department or '').strip()
+            # Requesting office is composed from requestor account + per-request sub-office.
+            mp.requesting_office = self.object.requesting_office_display if self.object.requesting_office_display != '—' else ''
             mp.save()
 
         from apps.gso_accounts.models import log_audit

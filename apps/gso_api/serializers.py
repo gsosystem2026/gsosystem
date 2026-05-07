@@ -116,7 +116,7 @@ class RequestListSerializer(serializers.ModelSerializer):
             'unit', 'unit_name', 'unit_code', 'requestor', 'requestor_name',
             'status', 'status_display', 'is_emergency',
             'labor', 'materials', 'others',
-            'custom_full_name', 'custom_email', 'custom_contact_number',
+            'custom_full_name', 'custom_email', 'custom_contact_number', 'requesting_sub_office',
             'created_at', 'updated_at',
         ]
 
@@ -165,7 +165,7 @@ class RequestCreateSerializer(serializers.ModelSerializer):
         fields = [
             'unit', 'title', 'description', 'location',
             'labor', 'materials', 'others',
-            'custom_full_name', 'custom_email', 'custom_contact_number',
+            'custom_full_name', 'custom_email', 'custom_contact_number', 'requesting_sub_office',
         ]
 
     def create(self, validated_data):

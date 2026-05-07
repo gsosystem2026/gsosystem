@@ -40,6 +40,11 @@ class Request(models.Model):
     custom_full_name = models.CharField(max_length=255, blank=True)
     custom_email = models.EmailField(blank=True)
     custom_contact_number = models.CharField(max_length=32, blank=True)
+    requesting_sub_office = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Per-request sub office/department (e.g., IT, Marine Bio).',
+    )
     attachment = models.FileField(
         upload_to='gso_requests/%Y/%m/',
         storage=get_request_attachment_storage(),
@@ -116,6 +121,16 @@ class Request(models.Model):
     @property
     def status_display(self):
         return self.get_status_display()
+
+    @property
+    def requesting_office_display(self):
+        base_office = ''
+        if self.requestor_id:
+            base_office = (getattr(self.requestor, 'office_department', '') or '').strip()
+        sub_office = (self.requesting_sub_office or '').strip()
+        if base_office and sub_office:
+            return f'{base_office} - {sub_office}'
+        return base_office or sub_office or '—'
 
     @property
     def show_urgent_indicator(self):

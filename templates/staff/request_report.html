@@ -90,7 +90,7 @@
                             <td class="px-4 py-3">{{ r.title|truncatewords:12 }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.unit.name|default:"—" }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">
-                                {% if r.requestor.office_department %}{{ r.requestor.office_department }}{% else %}—{% endif %}
+                                {{ r.requesting_office_display }}
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.requestor.get_full_name|default:r.requestor.username }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.updated_at|date:"M j, Y" }}</td>
