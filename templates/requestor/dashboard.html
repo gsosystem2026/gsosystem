@@ -173,7 +173,7 @@
 
 <!-- Select Service Unit modal (multi-select, blurred backdrop) -->
 <div id="requestor-unit-modal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4" aria-modal="true" role="dialog" aria-labelledby="requestor-unit-modal-title">
-    <div id="requestor-unit-modal-backdrop" class="absolute inset-0 bg-slate-900/45"></div>
+    <div id="requestor-unit-modal-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-md"></div>
     <div id="requestor-unit-modal-inner" class="relative w-full sm:w-auto h-[100svh] sm:h-auto sm:max-h-[90vh] sm:max-w-lg bg-white dark:bg-slate-900 sm:rounded-xl shadow-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 flex flex-col">
         <div class="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200 dark:border-slate-800">
             <h3 id="requestor-unit-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Select Service Unit</h3>
@@ -245,7 +245,7 @@
 <!-- Request detail popup (loads content via fetch) -->
 <div id="request-detail-modal" class="hidden fixed inset-0 z-[105] overflow-y-auto" aria-modal="true" role="dialog" aria-labelledby="request-detail-modal-title">
     <div class="flex min-h-full items-stretch sm:items-center justify-center p-0 sm:p-4">
-        <div id="request-detail-modal-backdrop" class="fixed inset-0 bg-black/50 transition-opacity"></div>
+        <div id="request-detail-modal-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-md transition-opacity"></div>
         <div id="request-detail-modal-card" class="relative bg-white dark:bg-slate-900 sm:rounded-xl shadow-xl max-w-2xl w-full flex flex-col overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800">
             <div class="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
                 <h2 id="request-detail-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Request details</h2>
@@ -262,7 +262,7 @@
 
 <!-- Request form popup (single or multiple units) -->
 <div id="request-form-modal" class="hidden fixed inset-0 z-[110] flex items-start justify-center p-0 sm:p-4 sm:items-center" aria-modal="true" role="dialog" aria-labelledby="request-form-modal-title">
-    <div id="request-form-modal-backdrop" class="absolute inset-0 bg-slate-900/45"></div>
+    <div id="request-form-modal-backdrop" class="absolute inset-0 bg-slate-900/45 backdrop-blur-md"></div>
     <div id="request-form-modal-inner" class="relative w-full sm:max-w-2xl rounded-xl shadow-2xl overflow-hidden border-0 sm:border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div id="request-form-success-popup" class="hidden absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/30">
             <div class="h-28 w-28 rounded-full border-4 border-green-200 dark:border-green-700 bg-white dark:bg-slate-900 shadow-2xl flex items-center justify-center">
@@ -271,7 +271,7 @@
                 </svg>
             </div>
         </div>
-        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" data-no-loading="1" class="flex flex-col flex-1 min-h-0">
+        <form method="post" action="{% url 'gso_requests:requestor_request_new' %}" enctype="multipart/form-data" id="request-form-modal-form" data-no-loading="1" novalidate class="flex flex-col flex-1 min-h-0">
             {% csrf_token %}
             <input type="hidden" name="units" id="request-form-units" value="">
             <!-- Header -->
@@ -290,8 +290,8 @@
                 </button>
             </header>
             <div class="p-4 sm:p-6 md:p-8 space-y-5 sm:space-y-6 flex-1 overflow-y-auto min-h-0 bg-slate-100/70 dark:bg-slate-900">
-                <!-- Request Type -->
-                <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
+                <!-- Request Type (hidden for Motorpool-only submission) -->
+                <section id="request-form-nonmotorpool-request-type" class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-symbols-outlined text-slate-400 text-xl">category</span>
                         <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Request Type</h3>
@@ -319,12 +319,12 @@
                     </div>
                     <div class="space-y-6">
                         <div class="flex flex-col gap-2">
-                            <label for="id_description" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Purpose/s <span class="text-primary">*</span></label>
+                            <label for="id_description" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Purpose/s <span class="text-red-500">*</span></label>
                             {{ request_form.description }}
                             {% if request_form.description.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ request_form.description.errors.0 }}</p>{% endif %}
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label for="id_location" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Location <span class="text-primary">*</span></label>
+                        <div id="request-form-nonmotorpool-location" class="flex flex-col gap-2">
+                            <label for="id_location" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Location <span class="text-red-500">*</span></label>
                             {{ request_form.location }}
                             {% if request_form.location.errors %}<p class="text-sm text-red-600 dark:text-red-400">{{ request_form.location.errors.0 }}</p>{% endif %}
                         </div>
@@ -339,24 +339,24 @@
                     </div>
                     <div class="space-y-6">
                         <div class="flex flex-col gap-2">
-                            <label for="id_motorpool_places_to_be_visited" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Place(s) to be visited</label>
+                            <label for="id_motorpool_places_to_be_visited" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Place(s) to be visited <span class="text-red-500">*</span></label>
                             {{ request_form.motorpool_places_to_be_visited }}
                         </div>
                         <div class="flex flex-col gap-2">
-                            <label for="id_motorpool_itinerary_of_travel" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Itinerary of Travel</label>
+                            <label for="id_motorpool_itinerary_of_travel" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Itinerary of Travel <span class="text-red-500">*</span></label>
                             {{ request_form.motorpool_itinerary_of_travel }}
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div class="flex flex-col gap-2">
-                                <label for="id_motorpool_trip_datetime" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Date and Time of Trip</label>
+                                <label for="id_motorpool_trip_datetime" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Date and Time of Trip <span class="text-red-500">*</span></label>
                                 {{ request_form.motorpool_trip_datetime }}
                             </div>
                             <div class="flex flex-col gap-2">
-                                <label for="id_motorpool_number_of_days" class="text-sm font-semibold text-slate-700 dark:text-slate-300">No. of Days</label>
+                                <label for="id_motorpool_number_of_days" class="text-sm font-semibold text-slate-700 dark:text-slate-300">No. of Days <span class="text-red-500">*</span></label>
                                 {{ request_form.motorpool_number_of_days }}
                             </div>
                             <div class="flex flex-col gap-2 sm:col-span-2">
-                                <label for="id_motorpool_number_of_passengers" class="text-sm font-semibold text-slate-700 dark:text-slate-300">No. of Passengers</label>
+                                <label for="id_motorpool_number_of_passengers" class="text-sm font-semibold text-slate-700 dark:text-slate-300">No. of Passengers <span class="text-red-500">*</span></label>
                                 {{ request_form.motorpool_number_of_passengers }}
                             </div>
                         </div>
@@ -364,25 +364,28 @@
                 </section>
                 <!-- Requestor Information -->
                 <section class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5">
-                    <div class="flex items-center gap-2 mb-4">
-                        <span class="material-symbols-outlined text-slate-400 text-xl">person</span>
-                        <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Requestor Information <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span></h3>
+                    <div class="flex flex-col gap-1 mb-4">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-slate-400 text-xl">person</span>
+                            <h3 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Requestor Information</h3>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 pl-8">Full name and contact number are required. Email is optional.</p>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div class="flex flex-col gap-2">
-                            <label for="id_custom_full_name" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Full Name</label>
+                            <label for="{{ request_form.custom_full_name.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.custom_full_name.label }} <span class="text-red-500">*</span></label>
                             {{ request_form.custom_full_name }}
                         </div>
                         <div class="flex flex-col gap-2">
-                            <label for="id_custom_email" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Email</label>
+                            <label for="{{ request_form.custom_email.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.custom_email.label }}</label>
                             {{ request_form.custom_email }}
                         </div>
                         <div class="flex flex-col gap-2">
-                            <label for="id_custom_contact_number" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Contact Number</label>
+                            <label for="{{ request_form.custom_contact_number.id_for_label }}" class="text-sm font-semibold text-slate-700 dark:text-slate-300">{{ request_form.custom_contact_number.label }} <span class="text-red-500">*</span></label>
                             {{ request_form.custom_contact_number }}
                         </div>
                         <div class="flex flex-col gap-2 md:col-span-3">
-                            <label for="id_attachment" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Upload Attachment <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span></label>
+                            <label id="request-form-attachment-label" for="id_attachment" class="text-sm font-semibold text-slate-700 dark:text-slate-300">Upload Attachment <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span></label>
                             <div class="relative flex items-center">
                                 {{ request_form.attachment }}
                             </div>
@@ -405,6 +408,54 @@
         </form>
     </div>
 </div>
+
+<!-- Motorpool: prompt to print forms after successful submit -->
+<div id="motorpool-print-after-submit-modal"
+     class="hidden fixed inset-0 z-[115] flex items-center justify-center p-4"
+     aria-modal="true"
+     role="dialog"
+     aria-labelledby="motorpool-print-after-submit-title"
+     data-print-request-tpl="{% url 'gso_requests:motorpool_print_request' 888888888 %}"
+     data-print-trip-tpl="{% url 'gso_requests:motorpool_print_trip_ticket' 888888888 %}"
+>
+    <div id="motorpool-print-after-submit-backdrop" class="absolute inset-0 bg-slate-900/55 backdrop-blur-md"></div>
+    <div class="relative w-full max-w-md rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl p-6 sm:p-7">
+        <div class="flex items-start gap-3">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300">
+                <span class="material-symbols-outlined text-2xl">print</span>
+            </div>
+            <div class="min-w-0 flex-1">
+                <h2 id="motorpool-print-after-submit-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Print your Motorpool forms</h2>
+                <p class="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Next, open each document in a new tab and print (or Save as PDF). Any empty fields reflect what still needs completing—your office can finish those on paper.
+                </p>
+                <div class="mt-5 flex flex-col gap-2.5">
+                    <a href="#" target="_blank" rel="noopener" id="motorpool-print-after-submit-link-request"
+                       class="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-800 dark:text-slate-100 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                        <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+                        Motorpool Request
+                    </a>
+                    <a href="#" target="_blank" rel="noopener" id="motorpool-print-after-submit-link-trip"
+                       class="inline-flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg text-sm font-semibold text-white bg-primary hover:brightness-105 shadow-lg shadow-primary/20 transition-colors">
+                        <span class="material-symbols-outlined text-lg">local_shipping</span>
+                        Driver's Trip Ticket
+                    </a>
+                </div>
+                <div class="mt-6 flex flex-col-reverse sm:flex-row sm:justify-between gap-2 sm:gap-3">
+                    <button type="button" id="motorpool-print-after-submit-go-requests"
+                            class="w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/10 dark:hover:bg-primary/20 rounded-lg transition-colors">
+                        Go to My Requests
+                    </button>
+                    <button type="button" id="motorpool-print-after-submit-done"
+                            class="w-full sm:w-auto px-4 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     #request-form-modal input[type="text"], #request-form-modal input[type="email"], #request-form-modal input[type="tel"], #request-form-modal input[type="number"], #request-form-modal input[type="datetime-local"], #request-form-modal textarea {
         @apply w-full h-12 px-4 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all;
@@ -509,10 +560,19 @@
     var formModalCancel = document.getElementById('request-form-modal-cancel-btn');
     var requestForm = document.getElementById('request-form-modal-form');
     var motorpoolPlannedFields = document.getElementById('motorpool-planned-fields');
+    var nonMotorpoolRequestType = document.getElementById('request-form-nonmotorpool-request-type');
+    var nonMotorpoolLocation = document.getElementById('request-form-nonmotorpool-location');
+    var attachmentLabel = document.getElementById('request-form-attachment-label');
     var submitBtn = document.getElementById('request-form-submit-btn');
     var submitFeedback = document.getElementById('request-form-submit-feedback');
     var successPopup = document.getElementById('request-form-success-popup');
     var requestSubmitting = false;
+
+    /** Match Django Unit.is_motorpool slug rule: lowercase, underscores → hyphens, prefix "motorpool". */
+    function isMotorpoolSlug(code) {
+        var s = String(code || '').trim().toLowerCase().replace(/_/g, '-');
+        return s.indexOf('motorpool') === 0;
+    }
     var bodyScrollLocked = false;
     var bodyPaddingRightOriginal = '';
 
@@ -571,10 +631,17 @@
     function openFormModal(unitsParam, namesText) {
         if (unitsInput) unitsInput.value = unitsParam || '';
         if (unitNamesEl) unitNamesEl.textContent = namesText || '';
-        if (motorpoolPlannedFields) {
+        if (motorpoolPlannedFields || nonMotorpoolRequestType || nonMotorpoolLocation || attachmentLabel) {
             var codes = (unitsParam || '').split(',');
-            var hasMotorpool = codes.some(function(code) { return (code || '').trim().toLowerCase() === 'motorpool'; });
-            motorpoolPlannedFields.classList.toggle('hidden', !hasMotorpool);
+            var hasMotorpool = codes.some(isMotorpoolSlug);
+            if (motorpoolPlannedFields) motorpoolPlannedFields.classList.toggle('hidden', !hasMotorpool);
+            if (nonMotorpoolRequestType) nonMotorpoolRequestType.classList.toggle('hidden', hasMotorpool);
+            if (nonMotorpoolLocation) nonMotorpoolLocation.classList.toggle('hidden', hasMotorpool);
+            if (attachmentLabel) {
+                attachmentLabel.innerHTML = hasMotorpool
+                    ? 'Upload Travel Order or any files <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span>'
+                    : 'Upload Attachment <span class="text-xs normal-case opacity-60 font-normal">(Optional)</span>';
+            }
         }
         // Reset scroll so the modal always opens from the top.
         if (formModal) {
@@ -610,7 +677,7 @@
         nextBtn.addEventListener('click', function() {
             var checked = document.querySelectorAll('#requestor-unit-modal input[name="service_unit"]:checked');
             var codes = Array.from(checked).map(function(el) { return el.value; });
-            var hasMotorpool = codes.some(function(code) { return (code || '').toLowerCase() === 'motorpool'; });
+            var hasMotorpool = codes.some(isMotorpoolSlug);
             if (hasMotorpool && codes.length > 1) {
                 if (unitModalFeedback) unitModalFeedback.classList.remove('hidden');
                 return;
@@ -640,16 +707,36 @@
             // and the popup stays open, which looks like the UI broke.
             var desc = requestForm.querySelector('#id_description');
             var loc = requestForm.querySelector('#id_location');
+            var mpPlaces = requestForm.querySelector('#id_motorpool_places_to_be_visited');
+            var mpItinerary = requestForm.querySelector('#id_motorpool_itinerary_of_travel');
+            var mpDatetime = requestForm.querySelector('#id_motorpool_trip_datetime');
+            var mpDays = requestForm.querySelector('#id_motorpool_number_of_days');
+            var mpPassengers = requestForm.querySelector('#id_motorpool_number_of_passengers');
             var unitsValEl = requestForm.querySelector('#request-form-units');
             var unitsVal = unitsValEl ? (unitsValEl.value || '').trim() : '';
 
             var descVal = desc ? (desc.value || '').trim() : '';
             var locVal = loc ? (loc.value || '').trim() : '';
+            var mpPlacesVal = mpPlaces ? (mpPlaces.value || '').trim() : '';
+            var mpItineraryVal = mpItinerary ? (mpItinerary.value || '').trim() : '';
+            var mpDatetimeVal = mpDatetime ? (mpDatetime.value || '').trim() : '';
+            var mpDaysVal = mpDays ? (mpDays.value || '').trim() : '';
+            var mpPassengersVal = mpPassengers ? (mpPassengers.value || '').trim() : '';
+
+            var unitCodes = unitsVal.split(',').map(function(s) {
+                return (s || '').trim().toLowerCase();
+            }).filter(Boolean);
+            var isMotorpoolOnly = unitCodes.length === 1 && isMotorpoolSlug(unitCodes[0]);
 
             var missing = [];
             if (!unitsVal) missing.push('unit');
             if (!descVal) missing.push('Purpose/s');
-            if (!locVal) missing.push('Location');
+            if (!isMotorpoolOnly && !locVal) missing.push('Location');
+            if (isMotorpoolOnly && !mpPlacesVal) missing.push('Place(s) to be visited');
+            if (isMotorpoolOnly && !mpItineraryVal) missing.push('Itinerary of Travel');
+            if (isMotorpoolOnly && !mpDatetimeVal) missing.push('Date and Time of Trip');
+            if (isMotorpoolOnly && !mpDaysVal) missing.push('No. of Days');
+            if (isMotorpoolOnly && !mpPassengersVal) missing.push('No. of Passengers');
 
             if (missing.length) {
                 e.preventDefault();
@@ -764,6 +851,79 @@
     if (detailModalClose) detailModalClose.addEventListener('click', closeDetailModal);
     if (detailModalBackdrop) detailModalBackdrop.addEventListener('click', closeDetailModal);
     if (detailModal) detailModal.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeDetailModal(); });
+
+    /* Motorpool: after submit, prompt to print (URL ?motorpool_print=1&request_pk=…) */
+    var motorpoolAfterSubmitModal = document.getElementById('motorpool-print-after-submit-modal');
+    var mpPrintBackdrop = document.getElementById('motorpool-print-after-submit-backdrop');
+    var mpPrintLinkReq = document.getElementById('motorpool-print-after-submit-link-request');
+    var mpPrintLinkTrip = document.getElementById('motorpool-print-after-submit-link-trip');
+    var mpPrintBtnDone = document.getElementById('motorpool-print-after-submit-done');
+    var mpPrintBtnMyReq = document.getElementById('motorpool-print-after-submit-go-requests');
+
+    function stripMotorpoolDashboardParams() {
+        try {
+            var u = new URL(window.location.href);
+            if (u.searchParams.get('motorpool_print') !== '1') return;
+            u.searchParams.delete('motorpool_print');
+            u.searchParams.delete('request_pk');
+            var q = u.searchParams.toString();
+            window.history.replaceState({}, '', u.pathname + (q ? '?' + q : '') + u.hash);
+        } catch (eMq) {}
+    }
+
+    function applyMotorpoolPrintLinks(pk) {
+        if (!motorpoolAfterSubmitModal || !mpPrintLinkReq || !mpPrintLinkTrip) return;
+        var reqTpl = motorpoolAfterSubmitModal.getAttribute('data-print-request-tpl') || '';
+        var tripTpl = motorpoolAfterSubmitModal.getAttribute('data-print-trip-tpl') || '';
+        var s = String(pk);
+        mpPrintLinkReq.href = reqTpl.split('888888888').join(s);
+        mpPrintLinkTrip.href = tripTpl.split('888888888').join(s);
+    }
+
+    function openMotorpoolAfterSubmitModal(pk) {
+        applyMotorpoolPrintLinks(pk);
+        if (motorpoolAfterSubmitModal) {
+            motorpoolAfterSubmitModal.classList.remove('hidden');
+            lockBodyScroll();
+        }
+    }
+
+    function closeMotorpoolAfterSubmitModal() {
+        if (motorpoolAfterSubmitModal) motorpoolAfterSubmitModal.classList.add('hidden');
+        stripMotorpoolDashboardParams();
+        unlockBodyScroll();
+    }
+
+    (function initMotorpoolPrintFromQuery() {
+        var params = new URLSearchParams(window.location.search);
+        if (params.get('motorpool_print') !== '1') return;
+        var rawPk = params.get('request_pk');
+        if (!rawPk || !/^\d+$/.test(String(rawPk).trim())) {
+            stripMotorpoolDashboardParams();
+            return;
+        }
+        openMotorpoolAfterSubmitModal(String(rawPk).trim());
+    })();
+
+    if (mpPrintBtnDone) mpPrintBtnDone.addEventListener('click', closeMotorpoolAfterSubmitModal);
+    if (mpPrintBackdrop) mpPrintBackdrop.addEventListener('click', closeMotorpoolAfterSubmitModal);
+    if (mpPrintBtnMyReq) {
+        mpPrintBtnMyReq.addEventListener('click', function() {
+            closeMotorpoolAfterSubmitModal();
+            var sec = document.getElementById('my-requests');
+            if (!sec) return;
+            try {
+                sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (eScroll) {
+                sec.scrollIntoView(true);
+            }
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        if (!motorpoolAfterSubmitModal || motorpoolAfterSubmitModal.classList.contains('hidden')) return;
+        closeMotorpoolAfterSubmitModal();
+    }, true);
 })();
 </script>
 {% endblock %}

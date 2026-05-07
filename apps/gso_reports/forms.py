@@ -300,3 +300,83 @@ class FeedbackExportForm(forms.Form):
         super().__init__(*args, **kwargs)
         from apps.gso_units.models import Unit
         self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
+
+
+def _distinct_requesting_offices():
+    from apps.gso_accounts.models import User
+
+    return (
+        User.objects.filter(role=User.Role.REQUESTOR)
+        .exclude(office_department='')
+        .values_list('office_department', flat=True)
+        .distinct()
+        .order_by('office_department')
+    )
+
+
+class RequestReportForm(forms.Form):
+    """Filter completed requests for Request Report (Work Reports submenu)."""
+
+    date_from = forms.DateField(
+        label='Completed from',
+        required=False,
+        widget=forms.DateInput(
+            attrs={
+                'type': 'date',
+                'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100',
+            }
+        ),
+    )
+    date_to = forms.DateField(
+        label='Completed to',
+        required=False,
+        widget=forms.DateInput(
+            attrs={
+                'type': 'date',
+                'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100',
+            }
+        ),
+    )
+    unit = forms.ModelChoiceField(
+        queryset=None,
+        label='Unit (optional)',
+        required=False,
+        empty_label='All units',
+        widget=forms.Select(
+            attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}
+        ),
+    )
+    requesting_office = forms.ChoiceField(
+        label='Requesting office (optional)',
+        required=False,
+        choices=(('', 'All requesting offices'),),
+        widget=forms.Select(
+            attrs={'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100'}
+        ),
+    )
+    q = forms.CharField(
+        label='Search',
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                'placeholder': 'Title, request ID (e.g. GSO-2026-0001), office, contact…',
+                'class': 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100 min-w-[220px]',
+            }
+        ),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.gso_units.models import Unit
+
+        self.fields['unit'].queryset = Unit.objects.filter(is_active=True).order_by('name')
+        offices = list(_distinct_requesting_offices())
+        self.fields['requesting_office'].choices = [('', 'All requesting offices')] + [(o, o) for o in offices]
+
+    def clean(self):
+        cleaned = super().clean()
+        start = cleaned.get('date_from')
+        end = cleaned.get('date_to')
+        if start and end and start > end:
+            raise forms.ValidationError('Completed-from date cannot be after completed-to date.')
+        return cleaned

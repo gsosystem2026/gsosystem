@@ -20,6 +20,7 @@ from apps.gso_requests.views import (
     ToggleEmergencyView,
     StaffRequestRemindView,
     ApproveRequestView,
+    NotApplicableRequestView,
     UpdateWorkStatusView,
     CompleteRequestView,
     ReturnForReworkView,
@@ -40,6 +41,7 @@ from apps.gso_reports.views import (
     SuccessIndicatorUpdateView,
     WARExportView,
     FeedbackReportsView,
+    RequestReportView,
 )
 
 app_name = 'gso_accounts'
@@ -56,6 +58,7 @@ urlpatterns = [
     path('staff/request-management/<int:pk>/toggle-emergency/', ToggleEmergencyView.as_view(), name='staff_request_toggle_emergency'),
     path('staff/request-management/<int:pk>/remind/', StaffRequestRemindView.as_view(), name='staff_request_remind'),
     path('staff/request-management/<int:pk>/approve/', ApproveRequestView.as_view(), name='staff_request_approve'),
+    path('staff/request-management/<int:pk>/not-applicable/', NotApplicableRequestView.as_view(), name='staff_request_not_applicable'),
     path('staff/request-management/<int:pk>/status/', UpdateWorkStatusView.as_view(), name='staff_request_update_status'),
     path('staff/request-management/<int:pk>/complete/', CompleteRequestView.as_view(), name='staff_request_complete'),
     path('staff/request-management/<int:pk>/return-rework/', ReturnForReworkView.as_view(), name='staff_request_return_rework'),
@@ -90,6 +93,7 @@ urlpatterns = [
     path('staff/work-reports/success-indicators/', SuccessIndicatorManageView.as_view(), name='staff_work_reports_success_indicators'),
     path('staff/work-reports/success-indicators/<int:pk>/edit/', SuccessIndicatorUpdateView.as_view(), name='staff_work_reports_success_indicator_edit'),
     path('staff/work-reports/war-export/', WARExportView.as_view(), name='staff_work_reports_war_export'),
+    path('staff/work-reports/request-report/', RequestReportView.as_view(), name='staff_work_reports_request_report'),
     path('staff/work-reports/feedback/', FeedbackReportsView.as_view(), name='staff_work_reports_feedback'),
     path('staff/account-management/', views.StaffAccountManagementView.as_view(), name='staff_account_management'),
     path('staff/account-management/user/add/', views.DirectorUserCreateView.as_view(), name='staff_account_user_add'),

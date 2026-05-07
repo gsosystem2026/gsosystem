@@ -21,6 +21,7 @@
         <div class="hidden">{{ form.unit }}</div>
         {% endif %}
 
+        {% if not req.unit.is_motorpool %}
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
             <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Request type</h2>
             <div class="flex flex-wrap gap-6">
@@ -38,6 +39,7 @@
                 </label>
             </div>
         </div>
+        {% endif %}
 
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
             <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Request details</h2>
@@ -46,11 +48,13 @@
                 {{ form.description }}
                 {% if form.description.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.description.errors.0 }}</p>{% endif %}
             </div>
+            {% if not req.unit.is_motorpool %}
             <div>
                 <label for="id_location" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Location <span class="text-red-500">*</span></label>
                 {{ form.location }}
                 {% if form.location.errors %}<p class="mt-1 text-sm text-red-600 dark:text-red-400">{{ form.location.errors.0 }}</p>{% endif %}
             </div>
+            {% endif %}
         </div>
 
         {% if req.unit and req.unit.code|lower == 'motorpool' %}
@@ -58,23 +62,23 @@
             <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Motorpool Trip Plan</h2>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label for="id_motorpool_trip_datetime" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date and Time of Trip</label>
+                    <label for="id_motorpool_trip_datetime" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date and Time of Trip <span class="text-red-500">*</span></label>
                     {{ form.motorpool_trip_datetime }}
                 </div>
                 <div>
-                    <label for="id_motorpool_number_of_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Days</label>
+                    <label for="id_motorpool_number_of_days" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Days <span class="text-red-500">*</span></label>
                     {{ form.motorpool_number_of_days }}
                 </div>
                 <div>
-                    <label for="id_motorpool_number_of_passengers" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Passengers</label>
+                    <label for="id_motorpool_number_of_passengers" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">No. of Passengers <span class="text-red-500">*</span></label>
                     {{ form.motorpool_number_of_passengers }}
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="id_motorpool_places_to_be_visited" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Place(s) to be visited</label>
+                    <label for="id_motorpool_places_to_be_visited" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Place(s) to be visited <span class="text-red-500">*</span></label>
                     {{ form.motorpool_places_to_be_visited }}
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="id_motorpool_itinerary_of_travel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Itinerary of Travel</label>
+                    <label for="id_motorpool_itinerary_of_travel" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Itinerary of Travel <span class="text-red-500">*</span></label>
                     {{ form.motorpool_itinerary_of_travel }}
                 </div>
             </div>
@@ -82,10 +86,10 @@
         {% endif %}
 
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
-            <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Requestor information (optional)</h2>
+            <h2 class="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Requestor information</h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                    <label for="id_custom_full_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.custom_full_name.label }}</label>
+                    <label for="id_custom_full_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.custom_full_name.label }} <span class="text-red-500">*</span></label>
                     {{ form.custom_full_name }}
                 </div>
                 <div>
@@ -93,14 +97,14 @@
                     {{ form.custom_email }}
                 </div>
                 <div>
-                    <label for="id_custom_contact_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.custom_contact_number.label }}</label>
+                    <label for="id_custom_contact_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{{ form.custom_contact_number.label }} <span class="text-red-500">*</span></label>
                     {{ form.custom_contact_number }}
                 </div>
             </div>
         </div>
 
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-            <label for="id_attachment" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{{ form.attachment.label }}</label>
+            <label for="id_attachment" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{% if req.unit.is_motorpool %}Upload Travel Order or any files{% else %}{{ form.attachment.label }}{% endif %}</label>
             {{ form.attachment }}
             {% if req.attachment %}
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">Current file: <a href="{% url 'gso_requests:request_attachment' req.pk %}?download=1" target="_blank" rel="noopener" class="text-primary hover:underline">Download</a>. Upload a new file to replace.</p>

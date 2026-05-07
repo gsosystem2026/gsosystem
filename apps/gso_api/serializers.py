@@ -61,6 +61,7 @@ def motorpool_capabilities_for_api(request_obj, user):
     can_vehicle = is_unit_head and request_obj.status not in (
         Request.Status.COMPLETED,
         Request.Status.CANCELLED,
+        Request.Status.NOT_APPLICABLE,
     )
     can_actuals = (
         (is_unit_head or is_assigned_personnel)

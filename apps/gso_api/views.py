@@ -191,6 +191,40 @@ class RequestViewSet(viewsets.ModelViewSet):
         serializer = RequestDetailSerializer(req, context=self.get_serializer_context())
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], url_path='not-applicable')
+    def not_applicable(self, request, pk=None):
+        """Director/OIC marks request not applicable (status ASSIGNED → NOT_APPLICABLE)."""
+        req = self.get_object()
+        user = request.user
+        if not getattr(user, 'can_approve_requests', False):
+            return Response(
+                {'detail': 'Only the Director or designated OIC can mark requests not applicable.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if req.status != Request.Status.ASSIGNED:
+            return Response(
+                {'detail': 'Only Assigned requests can be marked not applicable.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return Response({'detail': 'Reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        req.status = Request.Status.NOT_APPLICABLE
+        req.not_applicable_reason = reason
+        req.save(update_fields=['status', 'not_applicable_reason', 'updated_at'])
+        from apps.gso_accounts.models import log_audit
+        log_audit(
+            'director_not_applicable',
+            user,
+            f'Request {req.display_id} marked not applicable.',
+            target_model='gso_requests.Request',
+            target_id=str(req.pk),
+        )
+        from apps.gso_notifications.utils import notify_director_not_applicable
+        notify_director_not_applicable(req)
+        serializer = RequestDetailSerializer(req, context=self.get_serializer_context())
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def status(self, request, pk=None):
         """Personnel update work status. POST { status: INSPECTION | IN_PROGRESS | ON_HOLD | DONE_WORKING }."""
@@ -448,14 +482,18 @@ class RequestViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='my-task-history')
     def my_task_history(self, request):
-        """Personnel: assigned requests completed or cancelled."""
+        """Personnel: assigned requests completed, cancelled, or not applicable."""
         user = request.user
         if not getattr(user, 'is_personnel', False):
             return Response({'detail': 'Only personnel can use this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
         qs = (
             Request.objects.filter(
                 assignments__personnel=user,
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                ),
             )
             .select_related('unit', 'requestor')
             .prefetch_related('assignments__personnel')

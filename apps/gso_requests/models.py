@@ -11,6 +11,7 @@ class Request(models.Model):
         SUBMITTED = 'SUBMITTED', 'Submitted'
         ASSIGNED = 'ASSIGNED', 'Assigned'
         DIRECTOR_APPROVED = 'DIRECTOR_APPROVED', 'Approved'
+        NOT_APPLICABLE = 'NOT_APPLICABLE', 'Not Applicable'
         INSPECTION = 'INSPECTION', 'Inspection'
         IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
         ON_HOLD = 'ON_HOLD', 'On Hold'
@@ -57,6 +58,10 @@ class Request(models.Model):
     requestor_cancel_reason = models.TextField(
         blank=True,
         help_text='Reason given by requestor when they cancelled (before work started).',
+    )
+    not_applicable_reason = models.TextField(
+        blank=True,
+        help_text='Reason/remarks when Director or OIC marks request as not applicable.',
     )
     requestor_cancelled_at = models.DateTimeField(null=True, blank=True)
     # First moment work actually started; used for ON_HOLD button label logic.
@@ -151,6 +156,7 @@ class Request(models.Model):
             self.Status.SUBMITTED: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
             self.Status.ASSIGNED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
             self.Status.DIRECTOR_APPROVED: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400',
+            self.Status.NOT_APPLICABLE: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
             self.Status.INSPECTION: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300',
             self.Status.IN_PROGRESS: 'bg-primary/10 text-primary',
             self.Status.ON_HOLD: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',

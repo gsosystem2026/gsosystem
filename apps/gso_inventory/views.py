@@ -399,8 +399,8 @@ class IssueMaterialToRequestView(StaffRequiredMixin, View):
         if not getattr(user, 'is_unit_head', False) or user.unit_id != req.unit_id:
             messages.error(request, 'Only the Unit Head for this request\'s unit can issue materials.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
-        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED):
-            messages.warning(request, 'Cannot issue materials for a completed or cancelled request.')
+        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE):
+            messages.warning(request, 'Cannot issue materials for a completed, cancelled, or not applicable request.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         form = IssueMaterialForm(request.POST, unit_id=req.unit_id, prefix='issue')
         if not form.is_valid():
@@ -443,8 +443,8 @@ class SubmitMaterialRequestView(StaffRequiredMixin, View):
         if not req.assignments.filter(personnel=user).exists():
             messages.error(request, 'You are not assigned to this request.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
-        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED):
-            messages.warning(request, 'Cannot request materials for a completed or cancelled request.')
+        if req.status in (Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE):
+            messages.warning(request, 'Cannot request materials for a completed, cancelled, or not applicable request.')
             return redirect('gso_accounts:staff_request_detail', pk=pk)
         form = RequestMaterialForm(request.POST, unit_id=req.unit_id, prefix='request')
         if not form.is_valid():

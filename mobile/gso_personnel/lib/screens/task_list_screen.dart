@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 
 import '../data/outbox_database.dart';
 import '../models/request_task.dart';
 import '../services/api_client.dart';
 import '../services/auth_repository.dart';
+import '../services/network_reachability_service.dart';
 import '../services/offline_sync_service.dart';
 import '../theme/app_colors.dart';
 import 'notifications_screen.dart';
@@ -30,10 +30,9 @@ class TaskListScreen extends StatefulWidget {
 }
 
 class _TaskListScreenState extends State<TaskListScreen> with WidgetsBindingObserver {
-  final Connectivity _connectivity = Connectivity();
   late final ApiClient _api;
-  ConnectivityResult _connectivityResult = ConnectivityResult.none;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+  StreamSubscription<bool>? _reachabilitySub;
+  bool _networkOnline = false;
   Timer? _autoRefreshTimer;
 
   List<RequestTask> _tasks = [];
@@ -55,23 +54,20 @@ class _TaskListScreenState extends State<TaskListScreen> with WidgetsBindingObse
       accessToken: widget.auth.readAccessToken,
       refreshAccessToken: widget.auth.refreshAccessToken,
     );
-    _initConnectivity();
+    final reachability = NetworkReachabilityService.instance;
+    reachability.start();
+    _networkOnline = reachability.isOnline;
+    _reachabilitySub = reachability.stream.listen(_applyReachability);
     _refreshQueued();
     _refreshUnreadNotifications();
     _loadTasks();
     _startAutoRefresh();
   }
 
-  Future<void> _initConnectivity() async {
-    final initial = await _connectivity.checkConnectivity();
-    _applyConnectivity(initial);
-    _connectivitySub = _connectivity.onConnectivityChanged.listen(_applyConnectivity);
-  }
-
-  void _applyConnectivity(List<ConnectivityResult> results) {
-    if (!mounted || results.isEmpty) return;
+  void _applyReachability(bool nowOnline) {
+    if (!mounted) return;
     final wasOnline = _online;
-    setState(() => _connectivityResult = results.first);
+    setState(() => _networkOnline = nowOnline);
     if (!wasOnline && _online) {
       _syncNow(showToast: false);
       _autoRefreshTick();
@@ -140,6 +136,7 @@ class _TaskListScreenState extends State<TaskListScreen> with WidgetsBindingObse
   }
 
   Future<void> _refreshUnreadNotifications() async {
+    if (!_online) return;
     try {
       final count = await _api.fetchUnreadNotificationCount();
       if (mounted) setState(() => _unreadNotifications = count);
@@ -149,12 +146,11 @@ class _TaskListScreenState extends State<TaskListScreen> with WidgetsBindingObse
   }
 
   bool get _online =>
-      _connectivityResult != ConnectivityResult.none &&
-      _connectivityResult != ConnectivityResult.bluetooth;
+      _networkOnline;
 
   @override
   void dispose() {
-    _connectivitySub?.cancel();
+    _reachabilitySub?.cancel();
     _autoRefreshTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -166,6 +162,20 @@ class _TaskListScreenState extends State<TaskListScreen> with WidgetsBindingObse
         _loading = true;
         _error = null;
       });
+    }
+    await NetworkReachabilityService.instance.refresh();
+    if (mounted) {
+      setState(() => _networkOnline = NetworkReachabilityService.instance.isOnline);
+    }
+    if (!_online) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        if (_tasks.isEmpty) {
+          _error = 'No internet connection.';
+        }
+      });
+      return;
     }
     if (_online) {
       await OfflineSyncService.instance.syncOnce();

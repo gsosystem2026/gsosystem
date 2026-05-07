@@ -944,3 +944,157 @@ def build_feedback_export_excel(queryset):
     wb.save(buf)
     buf.seek(0)
     return buf, "feedback"
+
+
+def _completed_requests_search_q(search_q):
+    """OR filter across title, description, IDs, contacts, office, requestor."""
+    import re
+
+    from django.db.models import Q
+
+    raw = (search_q or '').strip()
+    if not raw:
+        return Q()
+    combined = (
+        Q(title__icontains=raw)
+        | Q(description__icontains=raw)
+        | Q(location__icontains=raw)
+        | Q(custom_full_name__icontains=raw)
+        | Q(custom_email__icontains=raw)
+        | Q(custom_contact_number__icontains=raw)
+        | Q(requestor__first_name__icontains=raw)
+        | Q(requestor__last_name__icontains=raw)
+        | Q(requestor__username__icontains=raw)
+        | Q(requestor__email__icontains=raw)
+        | Q(requestor__office_department__icontains=raw)
+    )
+    m = re.match(r'(?i)^\s*GSO\s*-\s*(\d{4})\s*-\s*(\d+)\s*$', raw)
+    if m:
+        try:
+            year_val = int(m.group(1))
+            pk_val = int(m.group(2))
+            combined = combined | Q(pk=pk_val, created_at__year=year_val)
+        except (ValueError, TypeError):
+            pass
+    if raw.isdigit():
+        try:
+            combined = combined | Q(pk=int(raw))
+        except ValueError:
+            pass
+    return combined
+
+
+def get_completed_requests_queryset(*, unit=None, requesting_office=None, date_from=None, date_to=None, search_q=None):
+    """Completed requests only; optional filters. Ordered by completion (updated_at) descending."""
+    from apps.gso_requests.models import Request
+
+    qs = (
+        Request.objects.filter(status=Request.Status.COMPLETED)
+        .select_related('unit', 'requestor')
+        .order_by('-updated_at')
+    )
+    if unit:
+        qs = qs.filter(unit=unit)
+    if requesting_office:
+        qs = qs.filter(requestor__office_department__iexact=requesting_office.strip())
+    if date_from:
+        qs = qs.filter(updated_at__date__gte=date_from)
+    if date_to:
+        qs = qs.filter(updated_at__date__lte=date_to)
+    if search_q:
+        s = search_q.strip()
+        if s:
+            qs = qs.filter(_completed_requests_search_q(s))
+    return qs
+
+
+def build_request_report_excel(queryset, *, period_label='COMPLETED REQUESTS', unit_label='ALL UNITS'):
+    """Excel export for Request Report — completed service requests."""
+    from django.utils import timezone
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "RequestReport"[:31]
+    headers = [
+        'Request ID',
+        'Title',
+        'Unit',
+        'Requesting office',
+        'Requestor',
+        'Requestor email',
+        'Contact',
+        'Location',
+        'Created',
+        'Completed',
+        'Labor',
+        'Materials',
+        'Others',
+        'Description',
+    ]
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin'),
+    )
+    table_header_row = _apply_standard_header(
+        ws,
+        total_columns=len(headers),
+        period_label=period_label,
+        report_label='REQUEST REPORT (COMPLETED)',
+        unit_label=unit_label,
+    )
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=table_header_row, column=col, value=h)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = thin_border
+        cell.fill = PatternFill(start_color='FFA500', end_color='FFA500', fill_type='solid')
+    row = table_header_row + 1
+    for req in queryset.iterator():
+        ro = getattr(req.requestor, 'office_department', '') or ''
+        name = ''
+        email = ''
+        if req.requestor_id:
+            name = req.requestor.get_full_name() or req.requestor.username or ''
+            email = (req.requestor.email or '').strip()
+        contact = ' '.join(
+            x
+            for x in (
+                (req.custom_contact_number or '').strip(),
+                (req.custom_email or '').strip(),
+            )
+            if x
+        )
+        desc = getattr(req, 'description_for_display', None) or (req.description or '')
+        created_at = req.created_at
+        updated_at = req.updated_at
+        if timezone.is_aware(created_at):
+            created_at = timezone.make_naive(created_at, timezone.get_current_timezone())
+        if timezone.is_aware(updated_at):
+            updated_at = timezone.make_naive(updated_at, timezone.get_current_timezone())
+        ws.cell(row=row, column=1, value=req.display_id)
+        ws.cell(row=row, column=2, value=req.title or '')
+        ws.cell(row=row, column=3, value=req.unit.name if req.unit_id else '')
+        ws.cell(row=row, column=4, value=ro)
+        ws.cell(row=row, column=5, value=name or (req.custom_full_name or '').strip())
+        ws.cell(row=row, column=6, value=email or (req.custom_email or '').strip())
+        ws.cell(row=row, column=7, value=contact)
+        ws.cell(row=row, column=8, value=(req.location or '').strip())
+        ws.cell(row=row, column=9, value=created_at)
+        ws.cell(row=row, column=10, value=updated_at)
+        ws.cell(row=row, column=11, value='Yes' if req.labor else 'No')
+        ws.cell(row=row, column=12, value='Yes' if req.materials else 'No')
+        ws.cell(row=row, column=13, value='Yes' if req.others else 'No')
+        ws.cell(row=row, column=14, value=desc.strip())
+        for c in range(1, len(headers) + 1):
+            ws.cell(row=row, column=c).border = thin_border
+        row += 1
+    widths = [14, 28, 18, 22, 22, 24, 16, 20, 18, 18, 8, 8, 8, 40]
+    for col in range(1, len(headers) + 1):
+        w = widths[col - 1] if col - 1 < len(widths) else 18
+        ws.column_dimensions[get_column_letter(col)].width = w
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf, 'request_report'

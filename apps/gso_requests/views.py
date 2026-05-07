@@ -28,7 +28,17 @@ from .models import Request, RequestAssignment, RequestMessage, RequestFeedback,
 from apps.gso_reports.models import ensure_war_for_request
 
 INSPECTION_REQUIRED_UNIT_CODES = {'repair', 'electrical'}
-SINGLE_SUBMISSION_UNIT_CODES = {'motorpool'}
+
+
+def _user_can_access_motorpool_print(user, req):
+    """Unit Head / Director can print tickets; owning requestors can print their own Motorpool submissions."""
+    if not req.unit.is_motorpool:
+        return False
+    if getattr(user, 'is_requestor', False) and req.requestor_id == user.id:
+        return True
+    is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
+    is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
+    return bool(is_unit_head or is_director)
 
 
 def _requires_inspection(request_obj):
@@ -50,7 +60,8 @@ class RequestCreateView(LoginRequiredMixin, FormView):
 
     def get_initial(self):
         initial = super().get_initial()
-        units_param = self.request.GET.get('units', '')
+        # Dashboard modal submits via POST (hidden "units"); invalid forms must still resolve units here.
+        units_param = self.request.POST.get('units') or self.request.GET.get('units', '')
         codes = [c.strip() for c in units_param.split(',') if c.strip()]
         units = list(Unit.objects.filter(code__in=codes, is_active=True).order_by('name'))
         if len(units) == 1:
@@ -66,11 +77,19 @@ class RequestCreateView(LoginRequiredMixin, FormView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        units_param = self.request.GET.get('units', '')
+        units_param = self.request.POST.get('units') or self.request.GET.get('units', '')
         codes = [c.strip() for c in units_param.split(',') if c.strip()]
         context['selected_units'] = list(Unit.objects.filter(code__in=codes, is_active=True).order_by('name'))
         context['units_param'] = units_param
         return context
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        units_param = self.request.GET.get('units') or self.request.POST.get('units', '')
+        codes = [c.strip() for c in units_param.split(',') if c.strip()]
+        units = list(Unit.objects.filter(code__in=codes, is_active=True))
+        kwargs['for_motorpool'] = len(units) == 1 and bool(units) and units[0].is_motorpool
+        return kwargs
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
@@ -85,14 +104,16 @@ class RequestCreateView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         units_param = self.request.POST.get('units') or self.request.GET.get('units', '')
         codes = [c.strip() for c in units_param.split(',') if c.strip()]
-        selected_codes = {c.lower() for c in codes}
-        if any(code in selected_codes for code in SINGLE_SUBMISSION_UNIT_CODES) and len(selected_codes) > 1:
+        # Slugs like motorpool-transport match Unit.is_motorpool; disallow mixing those with other units.
+        resolved_units_early = list(Unit.objects.filter(code__in=codes, is_active=True))
+        has_motorpool_unit = any(u.is_motorpool for u in resolved_units_early)
+        if len(resolved_units_early) > 1 and has_motorpool_unit:
             form.add_error(
                 None,
                 'Motorpool requests must be submitted separately because they use a different request form.'
             )
             return self.form_invalid(form)
-        units = list(Unit.objects.filter(code__in=codes, is_active=True))
+        units = resolved_units_early
         if not units:
             form.add_error(None, 'No valid unit selected. Please go back and select at least one unit.')
             return self.form_invalid(form)
@@ -115,11 +136,13 @@ class RequestCreateView(LoginRequiredMixin, FormView):
 
         from apps.gso_notifications.utils import notify_request_submitted
 
+        last_created = None
         with transaction.atomic():
             for i, unit in enumerate(units):
                 data['unit'] = unit
                 data['attachment'] = attachment if i == 0 else None
                 req = Request.objects.create(**data)
+                last_created = req
 
                 if unit.is_motorpool:
                     # Create motorpool trip data record even if some optional fields are empty,
@@ -138,7 +161,17 @@ class RequestCreateView(LoginRequiredMixin, FormView):
                     )
                 notify_request_submitted(req)
 
-        return redirect(reverse('gso_accounts:requestor_dashboard') + '?submitted=1')
+        dashboard_url = reverse('gso_accounts:requestor_dashboard')
+        if (
+            len(units) == 1
+            and last_created is not None
+            and units[0].is_motorpool
+        ):
+            params = (
+                '?submitted=1&motorpool_print=1&request_pk={}'.format(last_created.pk)
+            )
+            return redirect(dashboard_url + params)
+        return redirect(dashboard_url + '?submitted=1')
 
     def form_invalid(self, form):
         return self.render_to_response(self.get_context_data(form=form))
@@ -164,6 +197,12 @@ class RequestEditView(LoginRequiredMixin, UpdateView):
         if getattr(request.user, 'is_staff_role', False):
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if getattr(self, 'object', None) and getattr(self.object, 'pk', None):
+            kwargs['for_motorpool'] = self.object.unit.is_motorpool
+        return kwargs
 
     def get_queryset(self):
         return Request.objects.filter(requestor=self.request.user).select_related('unit')
@@ -314,8 +353,10 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = _staff_request_queryset(self.request)
-        # Request Management: show only active lifecycle (exclude Completed / Cancelled)
-        qs = qs.exclude(status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED))
+        # Request Management: show only active lifecycle (exclude terminal statuses)
+        qs = qs.exclude(
+            status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE)
+        )
         # Optional filter by status within active set
         status = self.request.GET.get('status', '').strip()
         if status:
@@ -401,6 +442,7 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         context['is_requestor_layout'] = getattr(user, 'is_requestor', False)
         context['in_modal'] = self.request.GET.get('modal') == '1'
         req = self.object
+        context['is_motorpool'] = bool(req and req.unit_id and req.unit.is_motorpool)
         # Phase 4.1: assignments and assign form for Unit Head
         context['assignments'] = []
         context['can_assign'] = False
@@ -484,7 +526,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             # GSO Office: Send reminder to Director, Unit Head, or Personnel
             context['can_send_reminder'] = getattr(user, 'is_gso_office', False)
             context['remind_targets'] = []
-            if context['can_send_reminder'] and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED):
+            if context['can_send_reminder'] and req.status not in (
+                Request.Status.COMPLETED,
+                Request.Status.CANCELLED,
+                Request.Status.NOT_APPLICABLE,
+            ):
                 if req.status == Request.Status.ASSIGNED:
                     context['remind_targets'].append(('director', 'Director', 'Request waiting for your approval'))
                 if req.status == Request.Status.SUBMITTED:
@@ -500,7 +546,6 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                     context['remind_targets'].append(('personnel', 'Assigned personnel', 'Request needs your attention'))
 
             # Motorpool-specific context (printable request + trip ticket data)
-            context['is_motorpool'] = req.unit.is_motorpool
             context['hide_materials_sections'] = False
             context['motorpool_trip_form'] = None
             context['motorpool_leg_row_count'] = 6
@@ -516,7 +561,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
                 context['hide_materials_sections'] = True
 
                 is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
-                context['can_edit_motorpool_vehicle'] = is_unit_head and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+                context['can_edit_motorpool_vehicle'] = is_unit_head and req.status not in (
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                )
 
                 is_assigned_personnel = getattr(user, 'is_personnel', False) and req.assignments.filter(personnel=user).exists()
                 allowed_actual_statuses = (
@@ -544,7 +593,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             context['can_add_materials'] = (
                 getattr(user, 'is_unit_head', False)
                 and user.unit_id == req.unit_id
-                and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+                and req.status not in (
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                )
             )
             if context['can_add_materials']:
                 from apps.gso_inventory.forms import IssueMaterialForm
@@ -573,7 +626,11 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
             context['can_approve_reject_materials'] = (
                 getattr(user, 'is_unit_head', False)
                 and user.unit_id == req.unit_id
-                and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+                and req.status not in (
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                )
             )
             # Phase 6.1: Work Accomplishment Reports (completed requests only)
             # Only GSO Office and Director can view/edit WARs; Unit Head/Personnel do not see WAR section.
@@ -667,7 +724,11 @@ class MotorpoolTripUpdateView(LoginRequiredMixin, View):
             Request.Status.ON_HOLD,
             Request.Status.DONE_WORKING,
         )
-        can_edit_vehicle = is_unit_head and req.status not in (Request.Status.COMPLETED, Request.Status.CANCELLED)
+        can_edit_vehicle = is_unit_head and req.status not in (
+            Request.Status.COMPLETED,
+            Request.Status.CANCELLED,
+            Request.Status.NOT_APPLICABLE,
+        )
         can_edit_actuals = (is_unit_head or is_assigned_personnel) and req.status in allowed_actual_statuses
 
         if not (can_edit_vehicle or can_edit_actuals):
@@ -714,12 +775,7 @@ class MotorpoolPrintRequestView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
-        if not req.unit.is_motorpool:
-            raise Http404()
-        user = request.user
-        is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
-        is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
-        if not (is_unit_head or is_director):
+        if not _user_can_access_motorpool_print(request.user, req):
             raise Http404()
 
         mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
@@ -736,12 +792,7 @@ class MotorpoolPrintTripTicketView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
-        if not req.unit.is_motorpool:
-            raise Http404()
-        user = request.user
-        is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
-        is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
-        if not (is_unit_head or is_director):
+        if not _user_can_access_motorpool_print(request.user, req):
             raise Http404()
 
         mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
@@ -867,6 +918,40 @@ class ApproveRequestView(LoginRequiredMixin, View):
         from apps.gso_accounts.models import log_audit
         log_audit('director_approve', user, f'Approved request {req.display_id}: {req.title}', target_model='gso_requests.Request', target_id=str(req.pk))
         messages.success(request, f'Request {req.display_id} approved. Personnel can start work.')
+        return redirect('gso_accounts:staff_request_detail', pk=pk)
+
+
+class NotApplicableRequestView(LoginRequiredMixin, View):
+    """Director/OIC marks request as not applicable with mandatory remarks."""
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit'), pk=pk)
+        user = request.user
+        if not getattr(user, 'can_approve_requests', False):
+            messages.error(request, 'Only the Director or designated OIC can mark requests as not applicable.')
+            return redirect('gso_accounts:staff_request_detail', pk=pk)
+        if req.status != Request.Status.ASSIGNED:
+            messages.warning(request, 'Only Assigned requests can be marked as not applicable.')
+            return redirect('gso_accounts:staff_request_detail', pk=pk)
+        reason = (request.POST.get('reason') or '').strip()
+        if not reason:
+            messages.error(request, 'Reason/remarks is required when marking a request as not applicable.')
+            return redirect('gso_accounts:staff_request_detail', pk=pk)
+        req.status = Request.Status.NOT_APPLICABLE
+        req.not_applicable_reason = reason
+        req.save(update_fields=['status', 'not_applicable_reason', 'updated_at'])
+        from apps.gso_accounts.models import log_audit
+        log_audit(
+            'director_not_applicable',
+            user,
+            f'Request {req.display_id} marked not applicable. Reason: {reason[:200]}{"…" if len(reason) > 200 else ""}',
+            target_model='gso_requests.Request',
+            target_id=str(req.pk),
+        )
+        from apps.gso_notifications.utils import notify_director_not_applicable
+        notify_director_not_applicable(req)
+        messages.success(request, f'Request {req.display_id} marked as not applicable.')
         return redirect('gso_accounts:staff_request_detail', pk=pk)
 
 
@@ -1169,7 +1254,7 @@ class PersonnelTaskListView(StaffRequiredMixin, ListView):
 
 
 class PersonnelTaskHistoryView(StaffRequiredMixin, ListView):
-    """Phase 5: Personnel — completed and cancelled requests (assigned to me)."""
+    """Phase 5: Personnel — historical requests (completed/cancelled/not applicable) assigned to me."""
     model = Request
     template_name = 'staff/task_history.html'
     context_object_name = 'task_list'
@@ -1185,7 +1270,11 @@ class PersonnelTaskHistoryView(StaffRequiredMixin, ListView):
         return (
             Request.objects.filter(
                 assignments__personnel=self.request.user,
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                ),
             )
             .select_related('unit', 'requestor')
             .distinct()
@@ -1195,7 +1284,7 @@ class PersonnelTaskHistoryView(StaffRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Task History'
-        context['page_description'] = 'Your completed and cancelled requests.'
+        context['page_description'] = 'Your completed, cancelled, and not applicable requests.'
         return context
 
 

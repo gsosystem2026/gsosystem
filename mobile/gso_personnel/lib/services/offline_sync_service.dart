@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 
 import '../data/outbox_database.dart';
 import 'api_client.dart';
+import 'network_reachability_service.dart';
 
 class OfflineSyncService {
   OfflineSyncService._();
@@ -13,8 +13,8 @@ class OfflineSyncService {
   AccessTokenProvider? _accessToken;
   RefreshAccessToken? _refreshAccessToken;
   Timer? _timer;
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-  ConnectivityResult _connectivity = ConnectivityResult.none;
+  StreamSubscription<bool>? _reachabilitySub;
+  bool _online = false;
   bool _running = false;
 
   void bind({
@@ -24,30 +24,33 @@ class OfflineSyncService {
     _accessToken = accessToken;
     _refreshAccessToken = refreshAccessToken;
     _timer ??= Timer.periodic(const Duration(seconds: 20), (_) => syncOnce());
-    _connectivitySub ??= Connectivity().onConnectivityChanged.listen(_handleConnectivity);
-    Connectivity().checkConnectivity().then((results) {
-      if (results.isEmpty) return;
-      _connectivity = results.first;
-      if (_isOnline) {
+    final reachability = NetworkReachabilityService.instance;
+    reachability.start();
+    _online = reachability.isOnline;
+    _reachabilitySub ??= reachability.stream.listen((nowOnline) {
+      final previous = _online;
+      _online = nowOnline;
+      if (!previous && _online) {
+        syncOnce();
+      }
+    });
+    reachability.refresh().then((_) {
+      _online = reachability.isOnline;
+      if (_online) {
         syncOnce();
       }
     });
   }
 
-  void _handleConnectivity(List<ConnectivityResult> results) {
-    if (results.isEmpty) return;
-    final previous = _isOnline;
-    _connectivity = results.first;
-    if (!previous && _isOnline) {
+  bool get _isOnline => _online;
+
+  Future<void> triggerSyncNow() async {
+    await NetworkReachabilityService.instance.refresh();
+    _online = NetworkReachabilityService.instance.isOnline;
+    if (_isOnline) {
       syncOnce();
     }
   }
-
-  bool get _isOnline =>
-      _connectivity != ConnectivityResult.none &&
-      _connectivity != ConnectivityResult.bluetooth;
-
-  Future<void> triggerSyncNow() => syncOnce();
 
   Future<void> syncOnce() async {
     if (_running) return;

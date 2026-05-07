@@ -31,10 +31,19 @@ from .excel_export import (
     build_ipmt_excel,
     build_war_export_excel,
     build_feedback_export_excel,
+    build_request_report_excel,
     get_war_queryset,
     get_feedback_queryset,
+    get_completed_requests_queryset,
 )
-from .forms import WARForm, IPMTReportForm, WARExportForm, FeedbackExportForm, SuccessIndicatorForm
+from .forms import (
+    WARForm,
+    IPMTReportForm,
+    WARExportForm,
+    FeedbackExportForm,
+    RequestReportForm,
+    SuccessIndicatorForm,
+)
 from .war_config import get_war_table_config
 from .models import SuccessIndicator, WorkAccomplishmentReport, IPMTDraft
 from .ai_service import generate_ipmt_accomplishment, is_ai_configured
@@ -257,7 +266,7 @@ def build_work_reports_analytics_context(get_params):
     avg_days = round(avg_duration.total_seconds() / 86400, 1) if avg_duration else None
 
     finished_qs = Request.objects.filter(
-        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE),
         updated_at__date__gte=date_from,
         updated_at__date__lte=date_to,
     )
@@ -368,7 +377,7 @@ def build_work_reports_analytics_context(get_params):
     )
     prev_avg_days = round(prev_duration.total_seconds() / 86400, 1) if prev_duration else None
     prev_finished_qs = Request.objects.filter(
-        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+        status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE),
         updated_at__date__gte=prev_from,
         updated_at__date__lte=prev_to,
     )
@@ -1380,4 +1389,90 @@ class FeedbackReportsView(StaffRequiredMixin, FormView):
             )[:100]
         else:
             context['feedback_list'] = get_feedback_queryset()[:100]
+        return context
+
+
+def _request_report_period_label(date_from, date_to):
+    if date_from and date_to:
+        return f'{date_from.strftime("%Y-%m-%d")} — {date_to.strftime("%Y-%m-%d")}'
+    if date_from:
+        return f'From {date_from.strftime("%Y-%m-%d")}'
+    if date_to:
+        return f'Through {date_to.strftime("%Y-%m-%d")}'
+    return 'ALL DATES (COMPLETION)'
+
+
+class RequestReportView(StaffRequiredMixin, FormView):
+    """GSO/Director: completed requests — filter by unit, office, completion dates, search; Excel export."""
+
+    form_class = RequestReportForm
+    template_name = 'staff/request_report.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('gso_accounts:login')
+        if getattr(request.user, 'is_requestor', False):
+            return redirect('gso_accounts:requestor_dashboard')
+        if not _can_access_work_reports(request.user):
+            messages.info(request, 'Request Report is for GSO Office and Director only.')
+            return redirect('gso_accounts:staff_dashboard')
+        return super().dispatch(request, *args, **kwargs)
+
+    @staticmethod
+    def _filtered_qs(form):
+        office = form.cleaned_data.get('requesting_office')
+        office = office.strip() if isinstance(office, str) else ''
+        sq = form.cleaned_data.get('q') or ''
+        return get_completed_requests_queryset(
+            unit=form.cleaned_data.get('unit'),
+            requesting_office=office if office else None,
+            date_from=form.cleaned_data.get('date_from'),
+            date_to=form.cleaned_data.get('date_to'),
+            search_q=(sq.strip() or None),
+        )
+
+    def get(self, request, *args, **kwargs):
+        if request.GET:
+            form = self.get_form()
+            if form.is_valid():
+                qs = self._filtered_qs(form)
+                if request.GET.get('download') == 'excel':
+                    unit = form.cleaned_data.get('unit')
+                    unit_label = unit.name if unit else 'ALL UNITS'
+                    buf, _ = build_request_report_excel(
+                        qs,
+                        period_label=_request_report_period_label(
+                            form.cleaned_data.get('date_from'),
+                            form.cleaned_data.get('date_to'),
+                        ),
+                        unit_label=unit_label.upper(),
+                    )
+                    suffix = timezone.now().strftime('%Y%m%d_%H%M')
+                    filename = f'Request_report_{suffix}.xlsx'
+                    response = HttpResponse(
+                        buf.getvalue(),
+                        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    )
+                    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+                    return response
+        return super().get(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        if self.request.GET:
+            kwargs['data'] = self.request.GET
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['page_title'] = 'Request Report'
+        context['page_description'] = (
+            'Completed requests only. Filter by unit, requesting office, completion date range, and search.'
+            ' Table shows up to 500 rows; Excel includes all matching records.'
+        )
+        form = context.get('form')
+        if form and form.is_valid():
+            context['report_list'] = list(self._filtered_qs(form)[:500])
+        else:
+            context['report_list'] = list(get_completed_requests_queryset()[:500])
         return context

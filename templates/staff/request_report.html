@@ -1,0 +1,281 @@
+{% extends "layouts/base_staff.html" %}
+{% block staff_content %}
+<div class="max-w-6xl space-y-6">
+    <div>
+        <a href="{% url 'gso_accounts:staff_work_reports' %}" class="text-slate-500 dark:text-slate-400 hover:text-primary flex items-center gap-1 text-sm">
+            <span class="material-symbols-outlined text-lg">arrow_back</span> Back to Work Reports
+        </a>
+    </div>
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{{ page_title }}</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">{{ page_description }}</p>
+    </div>
+    <div id="request-report-filter-table-wrapper" class="space-y-6">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <form method="get" action="" id="request-report-filter-form" class="p-5 space-y-4">
+                <div class="flex flex-wrap items-end gap-3 text-sm">
+                    <div class="flex flex-col gap-1 min-w-[170px]">
+                        <label for="{{ form.date_from.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.date_from.label }}</label>
+                        {{ form.date_from }}
+                        {% if form.date_from.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_from.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="flex flex-col gap-1 min-w-[170px]">
+                        <label for="{{ form.date_to.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.date_to.label }}</label>
+                        {{ form.date_to }}
+                        {% if form.date_to.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_to.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="flex flex-col gap-1 min-w-[220px]">
+                        <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
+                        {{ form.unit }}
+                        {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="flex flex-col gap-1 min-w-[220px]">
+                        <label for="{{ form.requesting_office.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.requesting_office.label }}</label>
+                        {{ form.requesting_office }}
+                        {% if form.requesting_office.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.requesting_office.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="flex flex-col gap-1 min-w-[260px] flex-1 basis-full md:basis-[min-content]">
+                        <label for="{{ form.q.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.q.label }}</label>
+                        <div class="flex gap-2 items-stretch">
+                            <div class="flex-1 min-w-0">{{ form.q }}</div>
+                            <button type="button" id="request-report-search-btn" class="inline-flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" title="Run search">
+                                <span class="material-symbols-outlined text-[20px]">search</span>
+                                <span class="hidden sm:inline">Search</span>
+                            </button>
+                        </div>
+                        {% if form.q.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.q.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="flex flex-wrap items-end gap-3">
+                        <button type="submit" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            Apply
+                        </button>
+                        <a href="{% url 'gso_accounts:staff_work_reports_request_report' %}" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                            Clear
+                        </a>
+                        <button type="button" id="request-report-download-open-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">
+                            <span class="material-symbols-outlined text-lg">download</span> Download Excel
+                        </button>
+                    </div>
+                </div>
+                {% if form.non_field_errors %}
+                    <div class="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-2 text-sm text-red-700 dark:text-red-300">
+                        {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
+                    </div>
+                {% endif %}
+                <p class="text-xs text-slate-500 dark:text-slate-400">Dates use the completion timestamp (same as Request status &ldquo;Completed&rdquo;). Changing unit, office, or dates refreshes the table automatically. For the search box, press <strong class="font-medium text-slate-600 dark:text-slate-300">Enter</strong> or click <strong class="font-medium text-slate-600 dark:text-slate-300">Search</strong> when you are ready. <strong class="font-medium text-slate-600 dark:text-slate-300">Apply</strong> submits all filters and updates the page URL.</p>
+            </form>
+        </div>
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+            <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+                <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Completed requests</h2>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Showing up to 500 rows with current filters. Download Excel for the full result set.</p>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-slate-700 dark:text-slate-300">
+                    <thead class="text-xs uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                        <tr>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap">Request</th>
+                            <th scope="col" class="px-4 py-3 min-w-[140px]">Title</th>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap">Unit</th>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap">Requesting office</th>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap">Requestor</th>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap">Completed</th>
+                            <th scope="col" class="px-4 py-3 whitespace-nowrap text-right">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r in report_list %}
+                        <tr class="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td class="px-4 py-3 whitespace-nowrap font-medium">{{ r.display_id }}</td>
+                            <td class="px-4 py-3">{{ r.title|truncatewords:12 }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">{{ r.unit.name|default:"—" }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                {% if r.requestor.office_department %}{{ r.requestor.office_department }}{% else %}—{% endif %}
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">{{ r.requestor.get_full_name|default:r.requestor.username }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">{{ r.updated_at|date:"M j, Y" }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                                <a href="{% url 'gso_accounts:staff_request_detail' r.pk %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                                    <span class="material-symbols-outlined text-sm">open_in_new</span> View
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No completed requests match your filters.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="request-report-download-modal" class="hidden fixed inset-0 z-[120] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="request-report-download-modal-title">
+    <div id="request-report-download-modal-backdrop" class="absolute inset-0 bg-black/60"></div>
+    <div class="relative w-full max-w-2xl rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-xl">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+            <h3 id="request-report-download-modal-title" class="text-lg font-semibold text-slate-900 dark:text-slate-100">Download Request Report (Excel)</h3>
+            <button type="button" id="request-report-download-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined close-icon">close</span>
+            </button>
+        </div>
+        <form method="get" action="" class="p-6 space-y-4" id="request-report-download-form" data-no-loading="1">
+            <input type="hidden" name="download" value="excel">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="rr-download-date-from" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Completed from</label>
+                    <input id="rr-download-date-from" type="date" name="date_from" value="{{ form.date_from.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                </div>
+                <div>
+                    <label for="rr-download-date-to" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Completed to</label>
+                    <input id="rr-download-date-to" type="date" name="date_to" value="{{ form.date_to.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                </div>
+                <div>
+                    <label for="rr-download-unit" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit</label>
+                    <select id="rr-download-unit" name="unit" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        {% for option in form.unit.field.queryset %}
+                        <option value="{{ option.pk }}" {% if form.unit.value|stringformat:'s' == option.pk|stringformat:'s' %}selected{% endif %}>{{ option.name }}</option>
+                        {% endfor %}
+                        <option value="" {% if not form.unit.value %}selected{% endif %}>All units</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="rr-download-office" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Requesting office</label>
+                    <select id="rr-download-office" name="requesting_office" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                        {% for val, lab in form.requesting_office.field.choices %}
+                        <option value="{{ val }}" {% if form.requesting_office.value|stringformat:'s' == val|stringformat:'s' %}selected{% endif %}>{{ lab }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="rr-download-q" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Search</label>
+                    <input id="rr-download-q" type="text" name="q" value="{{ form.q.value|default:'' }}" placeholder="Same as table filters" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                </div>
+            </div>
+            <p id="request-report-download-feedback" class="hidden text-xs text-slate-500 dark:text-slate-400">Preparing your file download...</p>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" id="request-report-download-cancel" class="px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                <button type="submit" id="request-report-download-submit" data-no-loading="1" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg">Download</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+function initRequestReportDownloadModal() {
+    var modal = document.getElementById('request-report-download-modal');
+    var openBtn = document.getElementById('request-report-download-open-btn');
+    var closeBtn = document.getElementById('request-report-download-modal-close');
+    var cancelBtn = document.getElementById('request-report-download-cancel');
+    var backdrop = document.getElementById('request-report-download-modal-backdrop');
+    var filterFrom = document.getElementById('id_date_from');
+    var filterTo = document.getElementById('id_date_to');
+    var filterUnit = document.getElementById('id_unit');
+    var filterOffice = document.getElementById('id_requesting_office');
+    var filterQ = document.getElementById('id_q');
+    var dlFrom = document.getElementById('rr-download-date-from');
+    var dlTo = document.getElementById('rr-download-date-to');
+    var dlUnit = document.getElementById('rr-download-unit');
+    var dlOffice = document.getElementById('rr-download-office');
+    var dlQ = document.getElementById('rr-download-q');
+    var dlForm = document.getElementById('request-report-download-form');
+    var dlSubmit = document.getElementById('request-report-download-submit');
+    var dlFeedback = document.getElementById('request-report-download-feedback');
+    if (!modal || !openBtn) return;
+
+    function openModal() {
+        if (dlFrom && filterFrom) dlFrom.value = filterFrom.value || '';
+        if (dlTo && filterTo) dlTo.value = filterTo.value || '';
+        if (dlUnit && filterUnit) dlUnit.value = filterUnit.value || '';
+        if (dlOffice && filterOffice) dlOffice.value = filterOffice.value || '';
+        if (dlQ && filterQ) dlQ.value = filterQ.value || '';
+        modal.classList.remove('hidden');
+    }
+    function closeModal() {
+        modal.classList.add('hidden');
+        if (dlSubmit) {
+            dlSubmit.disabled = false;
+            dlSubmit.classList.remove('opacity-70', 'cursor-not-allowed');
+            dlSubmit.textContent = 'Download';
+        }
+        if (dlFeedback) dlFeedback.classList.add('hidden');
+    }
+    openBtn.onclick = openModal;
+    if (closeBtn) closeBtn.onclick = closeModal;
+    if (cancelBtn) cancelBtn.onclick = closeModal;
+    if (backdrop) backdrop.onclick = closeModal;
+    if (dlForm) {
+        dlForm.onsubmit = function() {
+            if (dlSubmit) {
+                dlSubmit.disabled = true;
+                dlSubmit.classList.add('opacity-70', 'cursor-not-allowed');
+                dlSubmit.textContent = 'Starting download...';
+            }
+            if (dlFeedback) dlFeedback.classList.remove('hidden');
+            window.setTimeout(closeModal, 1400);
+        };
+    }
+}
+
+function initRequestReportFilters() {
+    var form = document.getElementById('request-report-filter-form');
+    var wrapper = document.getElementById('request-report-filter-table-wrapper');
+    if (!form || !wrapper) return;
+
+    var fieldIds = ['id_date_from', 'id_date_to', 'id_unit', 'id_requesting_office'];
+    var qInput = document.getElementById('id_q');
+    var searchBtn = document.getElementById('request-report-search-btn');
+
+    function syncFilterTable() {
+        var formData = new FormData(form);
+        formData.delete('download');
+        var params = new URLSearchParams(formData);
+        var url = window.location.pathname + '?' + params.toString();
+        wrapper.classList.add('opacity-50');
+        fetch(url, {
+            headers: {'X-Requested-With': 'XMLHttpRequest'},
+            credentials: 'same-origin'
+        }).then(function(response) { return response.text(); })
+        .then(function(html) {
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+            var newWrapper = doc.getElementById('request-report-filter-table-wrapper');
+            if (newWrapper) {
+                wrapper.innerHTML = newWrapper.innerHTML;
+                wrapper.classList.remove('opacity-50');
+                initRequestReportFilters();
+                initRequestReportDownloadModal();
+            } else {
+                wrapper.classList.remove('opacity-50');
+            }
+        }).catch(function() {
+            wrapper.classList.remove('opacity-50');
+        });
+    }
+
+    fieldIds.forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.onchange = syncFilterTable;
+    });
+    if (qInput) {
+        qInput.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                syncFilterTable();
+            }
+        };
+    }
+    if (searchBtn) {
+        searchBtn.onclick = function() {
+            syncFilterTable();
+        };
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initRequestReportFilters();
+    initRequestReportDownloadModal();
+});
+</script>
+{% endblock %}

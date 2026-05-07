@@ -72,6 +72,10 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
                         <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">description</span>
                         <span class="sidebar-label text-xs truncate">WAR</span>
                     </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_request_report' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_request_report' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Report">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">summarize</span>
+                        <span class="sidebar-label text-xs truncate">Request Report</span>
+                    </a>
                     <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_feedback' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Feedback Reports">
                         <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">forum</span>
                         <span class="sidebar-label text-xs truncate">Feedback Reports</span>

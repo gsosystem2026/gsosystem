@@ -355,6 +355,20 @@ def notify_request_completed(request_obj):
         _notify(u, title, f"Request completed: {_request_context_line(request_obj)}", staff_link)
 
 
+def notify_director_not_applicable(request_obj):
+    """Notify requestor when Director/OIC marks request as not applicable."""
+    requestor_link = reverse('gso_requests:requestor_request_detail', args=[request_obj.pk])
+    reason = (getattr(request_obj, 'not_applicable_reason', '') or '').strip()
+    reason_line = f" Reason: {reason}" if reason else ""
+    _notify_user_id(
+        request_obj.requestor_id,
+        f"Request {request_obj.display_id} — Not applicable",
+        f"Your request was marked as not applicable by Director/OIC.{reason_line}",
+        requestor_link,
+        email_override=_requestor_email_for_request(request_obj),
+    )
+
+
 def notify_oic_assigned(oic_user, director):
     """Phase 8.1: When Director assigns OIC, notify the OIC user."""
     link = reverse('gso_accounts:staff_request_management')

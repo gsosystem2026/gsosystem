@@ -51,18 +51,44 @@ class RequestForm(forms.ModelForm):
     motorpool_trip_datetime = forms.DateTimeField(
         required=False,
         label='Date and Time of Trip',
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'step': '60'}),
+        # Browsers submit HTML5 datetime-local as "YYYY-MM-DDTHH:MM" — not in Django defaults.
+        input_formats=[
+            '%Y-%m-%dT%H:%M:%S.%f',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%dT%H:%M',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S.%f',
+            '%Y-%m-%d %H:%M',
+        ],
     )
     motorpool_number_of_days = forms.IntegerField(
         required=False,
         label='No. of Days',
-        min_value=1,
+        # Omit min_value: Django adds <input min="1"> and some browsers reject empty + min, silently blocking HTML submit.
+        widget=forms.NumberInput(),
     )
     motorpool_number_of_passengers = forms.IntegerField(
         required=False,
         label='No. of Passengers',
-        min_value=0,
+        widget=forms.NumberInput(),
     )
+
+    def clean_motorpool_number_of_days(self):
+        val = self.cleaned_data.get('motorpool_number_of_days')
+        if val is None:
+            return None
+        if val < 1:
+            raise ValidationError('No. of days must be at least 1.')
+        return val
+
+    def clean_motorpool_number_of_passengers(self):
+        val = self.cleaned_data.get('motorpool_number_of_passengers')
+        if val is None:
+            return None
+        if val < 0:
+            raise ValidationError('Passenger count cannot be negative.')
+        return val
 
     class Meta:
         model = Request
@@ -95,24 +121,57 @@ class RequestForm(forms.ModelForm):
             'materials': 'Materials',
             'others': 'Others',
             'custom_full_name': 'Full Name',
-            'custom_email': 'Email',
+            'custom_email': 'Email (optional)',
             'custom_contact_number': 'Contact Number',
             'attachment': 'Attachments',
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, for_motorpool=False, **kwargs):
+        self._for_motorpool = bool(for_motorpool)
         super().__init__(*args, **kwargs)
         self.fields['description'].required = True
-        self.fields['location'].required = True
+        self.fields['location'].required = not self._for_motorpool
         self.fields['labor'].required = False
         self.fields['materials'].required = False
         self.fields['others'].required = False
+        self.fields['custom_full_name'].required = True
+        self.fields['custom_contact_number'].required = True
+        self.fields['custom_email'].required = False
+        if self._for_motorpool:
+            self.fields['motorpool_places_to_be_visited'].required = True
+            self.fields['motorpool_itinerary_of_travel'].required = True
+            self.fields['motorpool_trip_datetime'].required = True
+            self.fields['motorpool_number_of_days'].required = True
+            self.fields['motorpool_number_of_passengers'].required = True
+
+    def clean_custom_full_name(self):
+        name = (self.cleaned_data.get('custom_full_name') or '').strip()
+        if not name:
+            raise ValidationError('Full name is required.')
+        return name
+
+    def clean_custom_contact_number(self):
+        contact = (self.cleaned_data.get('custom_contact_number') or '').strip()
+        if not contact:
+            raise ValidationError('Contact number is required.')
+        return contact
+
+    def clean_custom_email(self):
+        email = (self.cleaned_data.get('custom_email') or '').strip()
+        return email if email else ''
 
     def clean(self):
         cleaned = super().clean()
         purpose = (cleaned.get('description') or '').strip()
         location = (cleaned.get('location') or '').strip()
         # Keep internal title auto-generated while hiding it from requestor UI.
+        if getattr(self, '_for_motorpool', False):
+            cleaned['labor'] = False
+            cleaned['materials'] = False
+            cleaned['others'] = False
+            cleaned['location'] = ''
+            cleaned['title'] = (purpose[:255] if purpose else 'Motorpool request')
+            return cleaned
         cleaned['title'] = f"{purpose[:140]} @ {location}"[:255]
         return cleaned
 

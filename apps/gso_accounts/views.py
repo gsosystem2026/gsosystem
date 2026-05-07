@@ -164,7 +164,13 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 total=Count('id'),
                 total_active=Count(
                     'id',
-                    filter=~Q(status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)),
+                    filter=~Q(
+                        status__in=(
+                            Request.Status.COMPLETED,
+                            Request.Status.CANCELLED,
+                            Request.Status.NOT_APPLICABLE,
+                        )
+                    ),
                 ),
                 total_completed=Count('id', filter=Q(status=Request.Status.COMPLETED)),
                 recent=Count('id', filter=Q(created_at__gte=recent_start)),
@@ -180,7 +186,11 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
             )
             context['total_requests'] = request_qs.count()
             context['total_active_requests'] = request_qs.exclude(
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED)
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                )
             ).count()
             context['total_completed_requests'] = request_qs.filter(
                 status=Request.Status.COMPLETED
@@ -211,7 +221,10 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 .filter(unit__in=units)
                 .values('unit_id')
                 .annotate(
-                    total=Count('id', filter=~Q(status=Request.Status.CANCELLED)),
+                    total=Count(
+                        'id',
+                        filter=~Q(status__in=(Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE)),
+                    ),
                     completed=Count('id', filter=Q(status=Request.Status.COMPLETED)),
                 )
             )
@@ -281,6 +294,7 @@ class StaffDashboardView(StaffRequiredMixin, TemplateView):
                 When(status=Request.Status.DONE_WORKING, then=5),
                 When(status=Request.Status.COMPLETED, then=999),
                 When(status=Request.Status.CANCELLED, then=999),
+                When(status=Request.Status.NOT_APPLICABLE, then=999),
                 default=6,
                 output_field=IntegerField(),
             )
@@ -558,21 +572,33 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
         if getattr(user, 'is_unit_head', False) and user.unit_id:
             qs = Request.objects.filter(
                 unit_id=user.unit_id,
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                ),
             )
         elif getattr(user, 'is_personnel', False):
             qs = Request.objects.filter(
                 assignments__personnel=user,
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                ),
             ).distinct()
         elif getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False):
             qs = Request.objects.filter(
-                status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED),
+                status__in=(
+                    Request.Status.COMPLETED,
+                    Request.Status.CANCELLED,
+                    Request.Status.NOT_APPLICABLE,
+                ),
             )
             unit_id = self.request.GET.get('unit', '').strip()
             if unit_id and unit_id.isdigit():
                 qs = qs.filter(unit_id=int(unit_id))
-        # Optional filter by status (Completed / Cancelled)
+        # Optional filter by terminal status (Completed / Cancelled / Not Applicable)
         status = self.request.GET.get('status', '').strip()
         if status:
             qs = qs.filter(status=status)
@@ -598,15 +624,15 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
         context['page_title'] = 'Request History'
         context['show_unit_filter'] = getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False)
         if context['show_unit_filter']:
-            context['page_description'] = 'Completed and cancelled requests across all units. Filter by unit below.'
+            context['page_description'] = 'Completed, cancelled, and not applicable requests across all units. Filter by unit below.'
             context['units'] = Unit.objects.filter(is_active=True).order_by('name')
             context['unit_filter'] = self.request.GET.get('unit', '')
         elif getattr(user, 'is_personnel', False):
-            context['page_description'] = 'Completed and cancelled requests that were assigned to you.'
+            context['page_description'] = 'Completed, cancelled, and not applicable requests that were assigned to you.'
             context['units'] = []
             context['unit_filter'] = ''
         else:
-            context['page_description'] = 'Completed and cancelled requests for your unit.'
+            context['page_description'] = 'Completed, cancelled, and not applicable requests for your unit.'
             context['units'] = []
             context['unit_filter'] = ''
         context['status_filter'] = self.request.GET.get('status', '')
@@ -614,6 +640,7 @@ class StaffRequestHistoryView(StaffRequiredMixin, ListView):
         context['status_choices'] = [
             (Request.Status.COMPLETED, 'Completed'),
             (Request.Status.CANCELLED, 'Cancelled'),
+            (Request.Status.NOT_APPLICABLE, 'Not Applicable'),
         ]
         return context
 

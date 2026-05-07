@@ -488,7 +488,12 @@
         }
 
         var form = e.target;
-        if (!form || form.dataset.noLoading === '1') return;
+        // dataset.noLoading is not reliable in older WebKit builds; mirror attribute read.
+        var skipAjaxLoading =
+            !form ||
+            form.dataset.noLoading === '1' ||
+            form.getAttribute('data-no-loading') === '1';
+        if (skipAjaxLoading) return;
         var submitter = e.submitter || form.querySelector('button[type="submit"], input[type="submit"]');
         if (!submitter) return;
         setButtonLoading(submitter, submitter.dataset.loadingText || 'Please wait...');
