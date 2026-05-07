@@ -24,11 +24,13 @@
                         {{ form.date_to }}
                         {% if form.date_to.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_to.errors.0 }}</p>{% endif %}
                     </div>
+                    {% if not request.user.is_unit_head %}
                     <div class="flex flex-col gap-1 min-w-[220px]">
                         <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
                         {{ form.unit }}
                         {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
                     </div>
+                    {% endif %}
                     <div class="flex flex-col gap-1 min-w-[220px]">
                         <label for="{{ form.requesting_office.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.requesting_office.label }}</label>
                         {{ form.requesting_office }}
@@ -68,7 +70,7 @@
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
             <div class="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Completed requests</h2>
-                <p class="text-sm text-slate-500 dark:text-slate-400">Showing up to 500 rows with current filters. Download Excel for the full result set.</p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Showing 10 rows per page with current filters. Download Excel for the full result set.</p>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm text-left text-slate-700 dark:text-slate-300">
@@ -76,7 +78,9 @@
                         <tr>
                             <th scope="col" class="px-4 py-3 whitespace-nowrap">Request</th>
                             <th scope="col" class="px-4 py-3 min-w-[140px]">Title</th>
+                            {% if not request.user.is_unit_head %}
                             <th scope="col" class="px-4 py-3 whitespace-nowrap">Unit</th>
+                            {% endif %}
                             <th scope="col" class="px-4 py-3 whitespace-nowrap">Requesting office</th>
                             <th scope="col" class="px-4 py-3 whitespace-nowrap">Requestor</th>
                             <th scope="col" class="px-4 py-3 whitespace-nowrap">Completed</th>
@@ -88,26 +92,61 @@
                         <tr class="border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50">
                             <td class="px-4 py-3 whitespace-nowrap font-medium">{{ r.display_id }}</td>
                             <td class="px-4 py-3">{{ r.title|truncatewords:12 }}</td>
+                            {% if not request.user.is_unit_head %}
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.unit.name|default:"—" }}</td>
+                            {% endif %}
                             <td class="px-4 py-3 whitespace-nowrap">
                                 {{ r.requesting_office_display }}
                             </td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.requestor.get_full_name|default:r.requestor.username }}</td>
                             <td class="px-4 py-3 whitespace-nowrap">{{ r.updated_at|date:"M j, Y" }}</td>
                             <td class="px-4 py-3 whitespace-nowrap text-right">
-                                <a href="{% url 'gso_accounts:staff_request_detail' r.pk %}" class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                                <a href="{% url 'gso_accounts:staff_request_detail' r.pk %}" data-request-modal="1" class="js-request-report-view inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
                                     <span class="material-symbols-outlined text-sm">open_in_new</span> View
                                 </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No completed requests match your filters.</td>
+                            <td colspan="{% if request.user.is_unit_head %}6{% else %}7{% endif %}" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No completed requests match your filters.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+            {% if page_obj %}
+            <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                </p>
+                <div class="flex gap-2">
+                    {% if page_obj.has_previous %}
+                    <a href="?page={{ page_obj.previous_page_number }}{% if request.GET.date_from %}&date_from={{ request.GET.date_from|urlencode }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to|urlencode }}{% endif %}{% if request.GET.unit %}&unit={{ request.GET.unit|urlencode }}{% endif %}{% if request.GET.requesting_office %}&requesting_office={{ request.GET.requesting_office|urlencode }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}" data-rr-page-link="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                        Previous
+                    </a>
+                    {% endif %}
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}{% if request.GET.date_from %}&date_from={{ request.GET.date_from|urlencode }}{% endif %}{% if request.GET.date_to %}&date_to={{ request.GET.date_to|urlencode }}{% endif %}{% if request.GET.unit %}&unit={{ request.GET.unit|urlencode }}{% endif %}{% if request.GET.requesting_office %}&requesting_office={{ request.GET.requesting_office|urlencode }}{% endif %}{% if request.GET.q %}&q={{ request.GET.q|urlencode }}{% endif %}" data-rr-page-link="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<div id="staff-request-modal" class="hidden fixed inset-0 z-[121] flex items-center justify-center p-4" aria-modal="true" role="dialog" aria-labelledby="staff-request-modal-title">
+    <div id="staff-request-modal-backdrop" class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800 flex flex-col">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800">
+            <h3 id="staff-request-modal-title" class="text-lg font-bold text-slate-900 dark:text-slate-100">Request details</h3>
+            <button type="button" id="staff-request-modal-close" class="close-btn" aria-label="Close">
+                <span class="material-symbols-outlined text-xl close-icon">close</span>
+            </button>
+        </div>
+        <div id="staff-request-modal-body" class="p-6 overflow-y-auto">
+            <p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>
         </div>
     </div>
 </div>
@@ -131,6 +170,7 @@
                     <label for="rr-download-date-to" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Completed to</label>
                     <input id="rr-download-date-to" type="date" name="date_to" value="{{ form.date_to.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
                 </div>
+                {% if not request.user.is_unit_head %}
                 <div>
                     <label for="rr-download-unit" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit</label>
                     <select id="rr-download-unit" name="unit" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
@@ -140,6 +180,7 @@
                         <option value="" {% if not form.unit.value %}selected{% endif %}>All units</option>
                     </select>
                 </div>
+                {% endif %}
                 <div>
                     <label for="rr-download-office" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Requesting office</label>
                     <select id="rr-download-office" name="requesting_office" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
@@ -162,6 +203,50 @@
     </div>
 </div>
 <script>
+function initRequestReportRequestModal() {
+    var modal = document.getElementById('staff-request-modal');
+    var modalBackdrop = document.getElementById('staff-request-modal-backdrop');
+    var modalClose = document.getElementById('staff-request-modal-close');
+    var modalBody = document.getElementById('staff-request-modal-body');
+    if (!modal || !modalBody) return;
+
+    function openModal() { modal.classList.remove('hidden'); }
+    function closeModal() { modal.classList.add('hidden'); }
+    function addPartialParam(url) {
+        if (!url) return '';
+        var out = url;
+        if (out.indexOf('partial=1') === -1) out += (out.indexOf('?') === -1 ? '?' : '&') + 'partial=1';
+        if (out.indexOf('modal=1') === -1) out += '&modal=1';
+        return out;
+    }
+    function loadRequestModal(url) {
+        if (!url) return;
+        openModal();
+        modalBody.innerHTML = '<p class="text-sm text-slate-500 dark:text-slate-400">Loading request...</p>';
+        fetch(addPartialParam(url), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        })
+        .then(function (r) { return r.text(); })
+        .then(function (html) { modalBody.innerHTML = html; })
+        .catch(function () {
+            modalBody.innerHTML = '<p class="text-sm text-red-600 dark:text-red-400">Could not load request details. Please try again.</p>';
+        });
+    }
+
+    document.querySelectorAll('a[data-request-modal="1"]').forEach(function (link) {
+        link.onclick = function (e) {
+            e.preventDefault();
+            var href = link.getAttribute('href');
+            if (!href) return;
+            loadRequestModal(href);
+        };
+    });
+
+    if (modalClose) modalClose.onclick = closeModal;
+    if (modalBackdrop) modalBackdrop.onclick = closeModal;
+}
+
 function initRequestReportDownloadModal() {
     var modal = document.getElementById('request-report-download-modal');
     var openBtn = document.getElementById('request-report-download-open-btn');
@@ -226,11 +311,7 @@ function initRequestReportFilters() {
     var qInput = document.getElementById('id_q');
     var searchBtn = document.getElementById('request-report-search-btn');
 
-    function syncFilterTable() {
-        var formData = new FormData(form);
-        formData.delete('download');
-        var params = new URLSearchParams(formData);
-        var url = window.location.pathname + '?' + params.toString();
+    function fetchAndSwap(url) {
         wrapper.classList.add('opacity-50');
         fetch(url, {
             headers: {'X-Requested-With': 'XMLHttpRequest'},
@@ -245,12 +326,22 @@ function initRequestReportFilters() {
                 wrapper.classList.remove('opacity-50');
                 initRequestReportFilters();
                 initRequestReportDownloadModal();
+                initRequestReportRequestModal();
             } else {
                 wrapper.classList.remove('opacity-50');
             }
         }).catch(function() {
             wrapper.classList.remove('opacity-50');
         });
+    }
+
+    function syncFilterTable() {
+        var formData = new FormData(form);
+        formData.delete('download');
+        formData.delete('page');
+        var params = new URLSearchParams(formData);
+        var url = window.location.pathname + '?' + params.toString();
+        fetchAndSwap(url);
     }
 
     fieldIds.forEach(function(id) {
@@ -271,11 +362,20 @@ function initRequestReportFilters() {
             syncFilterTable();
         };
     }
+    wrapper.querySelectorAll('a[data-rr-page-link="1"]').forEach(function(link) {
+        link.onclick = function(e) {
+            e.preventDefault();
+            var href = link.getAttribute('href') || '';
+            if (!href) return;
+            fetchAndSwap(href);
+        };
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     initRequestReportFilters();
     initRequestReportDownloadModal();
+    initRequestReportRequestModal();
 });
 </script>
 {% endblock %}

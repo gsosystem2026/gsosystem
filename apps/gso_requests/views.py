@@ -2,6 +2,9 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
 from django.db import transaction
+from django.db.models import Case, CharField, F, Q, Value, When
+from django.db.models.functions import Cast
+from django.db.models.functions import Concat
 from django.core.cache import cache
 
 from django.http import Http404, HttpResponse, FileResponse, JsonResponse
@@ -351,12 +354,35 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
     context_object_name = 'request_list'
     paginate_by = 10
 
-    def get_queryset(self):
+    def _with_requesting_office_full(self, qs):
+        return qs.annotate(
+            requesting_office_full=Case(
+                When(
+                    Q(requesting_sub_office__isnull=True) | Q(requesting_sub_office=''),
+                    then=F('requestor__office_department'),
+                ),
+                default=Concat(
+                    F('requestor__office_department'),
+                    Value(' - '),
+                    F('requesting_sub_office'),
+                ),
+                output_field=CharField(),
+            )
+        )
+
+    def _base_active_qs(self):
         qs = _staff_request_queryset(self.request)
-        # Request Management: show only active lifecycle (exclude terminal statuses)
         qs = qs.exclude(
             status__in=(Request.Status.COMPLETED, Request.Status.CANCELLED, Request.Status.NOT_APPLICABLE)
         )
+        return self._with_requesting_office_full(qs)
+
+    def get_queryset(self):
+        qs = self._base_active_qs()
+        # Optional filter by requesting office (supports combined office + sub-office display)
+        requesting_office = self.request.GET.get('requesting_office', '').strip()
+        if requesting_office:
+            qs = qs.filter(requesting_office_full__iexact=requesting_office)
         # Optional filter by status within active set
         status = self.request.GET.get('status', '').strip()
         if status:
@@ -368,7 +394,7 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
         # Search by request ID, purpose, location, requestor name, or unit
         q = self.request.GET.get('q', '').strip()
         if q:
-            qs = qs.filter(
+            query_filter = (
                 Q(title__icontains=q)
                 | Q(description__icontains=q)
                 | Q(location__icontains=q)
@@ -376,8 +402,16 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
                 | Q(requestor__first_name__icontains=q)
                 | Q(requestor__last_name__icontains=q)
                 | Q(requestor__username__icontains=q)
-                | Q(pk__icontains=q)
             )
+            qs = qs.annotate(pk_str=Cast('pk', output_field=CharField()))
+            query_filter = query_filter | Q(pk_str__icontains=q)
+            if q.isdigit():
+                try:
+                    query_filter = query_filter | Q(pk=int(q))
+                    query_filter = query_filter | Q(pk_str__icontains=str(int(q)))
+                except (TypeError, ValueError):
+                    pass
+            qs = qs.filter(query_filter)
         return qs.select_related('requestor', 'unit').order_by('-is_emergency', '-created_at')
 
     def get_context_data(self, **kwargs):
@@ -386,8 +420,16 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
         context['page_description'] = 'View and manage active service requests.'
         context['units'] = Unit.objects.filter(is_active=True).order_by('name')
         context['unit_filter'] = self.request.GET.get('unit', '')
+        context['requesting_office_filter'] = self.request.GET.get('requesting_office', '').strip()
         context['status_filter'] = self.request.GET.get('status', '')
         context['search_q'] = self.request.GET.get('q', '')
+        context['requesting_office_choices'] = list(
+            self._base_active_qs()
+            .exclude(requesting_office_full='')
+            .values_list('requesting_office_full', flat=True)
+            .order_by('requesting_office_full')
+            .distinct()
+        )
         # Active statuses only for status filter
         context['status_choices'] = [
             (Request.Status.SUBMITTED, 'Submitted'),

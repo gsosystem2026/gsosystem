@@ -25,15 +25,33 @@
          data-month="{% if preview_month %}{{ preview_month }}{% endif %}">
         <form method="get" action="" class="p-6 space-y-4" data-no-loading="1" id="ipmtFilterForm">
             <input type="hidden" name="preview_edits" id="ipmtPreviewEditsInput" value="">
+            {% if form.non_field_errors %}
+            <div class="rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+                {% for err in form.non_field_errors %}<p>{{ err }}</p>{% endfor %}
+            </div>
+            {% endif %}
             <div class="flex flex-wrap items-end gap-3 text-sm">
+                {% if not request.user.is_unit_head %}
                 <div class="flex flex-col gap-1 min-w-[190px]">
                     <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
-                    {{ form.unit }}
-                    {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
+                    <div class="relative">
+                        {% if form.unit.errors %}
+                        <div class="absolute -top-2 right-2 px-2 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200 text-[10px] font-semibold">
+                            {{ form.unit.errors.0 }}
+                        </div>
+                        {% endif %}
+                        {{ form.unit }}
+                    </div>
                 </div>
+                {% endif %}
                 <div class="flex flex-col gap-1 min-w-[240px] flex-1">
                     <label for="{{ form.personnel.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.personnel.label }}</label>
-                    <select name="personnel" id="{{ form.personnel.id_for_label }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
+                    <select
+                        name="personnel"
+                        id="{{ form.personnel.id_for_label }}"
+                        aria-invalid="{% if form.personnel.errors %}true{% else %}false{% endif %}"
+                        class="w-full rounded-lg border px-3 py-2 text-slate-900 dark:text-slate-100 {% if form.personnel.errors %}border-red-400 bg-red-50 dark:bg-red-950/20 dark:border-red-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500{% else %}border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/30 focus:border-primary{% endif %}"
+                    >
                         <option value="">Select personnel...</option>
                         {% with selected_personnel=form.personnel.value|stringformat:"s" %}
                         {% for p in form.fields.personnel.queryset %}
@@ -43,17 +61,32 @@
                         {% endfor %}
                         {% endwith %}
                     </select>
-                    {% if form.personnel.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.personnel.errors.0 }}</p>{% endif %}
                 </div>
                 <div class="flex flex-col gap-1 min-w-[120px]">
                     <label for="{{ form.year.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.year.label }}</label>
-                    {{ form.year }}
-                    {% if form.year.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.year.errors.0 }}</p>{% endif %}
+                    <input
+                        type="number"
+                        name="year"
+                        id="{{ form.year.id_for_label }}"
+                        min="2020"
+                        max="2030"
+                        value="{{ form.year.value|default:'' }}"
+                        aria-invalid="{% if form.year.errors %}true{% else %}false{% endif %}"
+                        class="w-full rounded-lg border px-3 py-2 {% if form.year.errors %}border-red-400 bg-red-50 dark:bg-red-950/20 dark:border-red-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500{% else %}border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/30 focus:border-primary{% endif %}"
+                    />
                 </div>
                 <div class="flex flex-col gap-1 min-w-[140px]">
                     <label for="{{ form.month.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.month.label }}</label>
-                    {{ form.month }}
-                    {% if form.month.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.month.errors.0 }}</p>{% endif %}
+                    <select
+                        name="month"
+                        id="{{ form.month.id_for_label }}"
+                        aria-invalid="{% if form.month.errors %}true{% else %}false{% endif %}"
+                        class="w-full rounded-lg border px-3 py-2 text-slate-900 dark:text-slate-100 {% if form.month.errors %}border-red-400 bg-red-50 dark:bg-red-950/20 dark:border-red-700 focus:ring-2 focus:ring-red-500/30 focus:border-red-500{% else %}border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/30 focus:border-primary{% endif %}"
+                    >
+                        {% for value, label in form.month.field.choices %}
+                        <option value="{{ value }}" {% if form.month.value|stringformat:'s' == value|stringformat:'s' %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="flex items-end">
                     <button type="submit" name="action" value="preview" class="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-white text-sm font-semibold rounded-lg transition-colors">

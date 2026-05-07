@@ -19,11 +19,15 @@
         <p id="editSiErr_description" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-            <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target unit</label>
-            {{ form.target_unit }}
-            <p id="editSiErr_target_unit" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
-        </div>
+        {% if request.user.is_unit_head %}
+            <div class="hidden">{{ form.target_unit }}</div>
+        {% else %}
+            <div>
+                <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target unit</label>
+                {{ form.target_unit }}
+                <p id="editSiErr_target_unit" class="hidden text-xs text-red-600 dark:text-red-400 mt-1"></p>
+            </div>
+        {% endif %}
         <div>
             <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1">Target position</label>
             {{ form.target_position }}

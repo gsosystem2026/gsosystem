@@ -28,6 +28,33 @@ Sidebar per role. Minimizable: collapse shows icons only; expand shows labels. S
             <span class="sidebar-label text-sm truncate">Inventory</span>
         </a>
         {# Inventory Activity Log: access via icon on Inventory page (left of search), not in sidebar. #}
+        <div class="space-y-0.5">
+            <div class="sidebar-nav-group group" data-sidebar-group="reports">
+                <a href="{% url 'gso_accounts:staff_work_reports' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Work Reports">
+                    <span class="material-symbols-outlined text-[22px] flex-shrink-0">assessment</span>
+                    <span class="sidebar-label text-sm truncate">Work Reports</span>
+                    <span class="material-symbols-outlined text-[18px] ml-auto opacity-70 sidebar-group-toggle" id="reports-submenu-icon" onclick="toggleReportsSubmenu(event)">expand_more</span>
+                </a>
+                <div id="reports-submenu" class="mt-0.5 space-y-0.5 hidden group-hover:block">
+                    <a href="{% url 'gso_accounts:staff_work_reports_ipmt' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_ipmt' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="IPMT Report">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">table_chart</span>
+                        <span class="sidebar-label text-xs truncate">IPMT Report</span>
+                    </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_war_export' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_war_export' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="WAR">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">description</span>
+                        <span class="sidebar-label text-xs truncate">WAR</span>
+                    </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_request_report' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_request_report' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Request Report">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">summarize</span>
+                        <span class="sidebar-label text-xs truncate">Request Report</span>
+                    </a>
+                    <a href="{% url 'gso_accounts:staff_work_reports_feedback' %}" onclick="closeReportsSubmenuOnNavigate()" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_work_reports_feedback' %}bg-primary/10 text-primary shadow-sm shadow-primary/10{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Feedback Reports">
+                        <span class="material-symbols-outlined text-[18px] flex-shrink-0 ml-6">forum</span>
+                        <span class="sidebar-label text-xs truncate">Feedback Reports</span>
+                    </a>
+                </div>
+            </div>
+        </div>
         {% elif request.user.is_personnel %}
         <a href="{% url 'gso_accounts:staff_dashboard' %}" class="sidebar-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg font-medium transition-all {% if request.resolver_match.url_name == 'staff_dashboard' %}bg-primary text-white shadow-sm shadow-primary/20{% else %}text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800{% endif %}" title="Dashboard">
             <span class="material-symbols-outlined text-[22px] flex-shrink-0">dashboard</span>

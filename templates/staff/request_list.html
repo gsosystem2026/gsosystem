@@ -25,6 +25,15 @@
             </div>
             {% endif %}
             <div class="flex flex-col gap-1">
+                <label for="requesting_office" class="text-xs font-medium text-slate-600 dark:text-slate-400">Requesting office</label>
+                <select name="requesting_office" id="requesting_office" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[190px] focus:ring-2 focus:ring-primary/30 focus:border-primary">
+                    <option value="">All offices</option>
+                    {% for office in requesting_office_choices %}
+                    <option value="{{ office }}" {% if requesting_office_filter == office %}selected{% endif %}>{{ office }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex flex-col gap-1">
                 <label for="status" class="text-xs font-medium text-slate-600 dark:text-slate-400">Status</label>
                 <select name="status" id="status" class="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-sm min-w-[160px] focus:ring-2 focus:ring-primary/30 focus:border-primary">
                     <option value="">All active</option>
@@ -102,10 +111,10 @@
             </p>
             <div class="flex gap-2">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
+                <a href="?page={{ page_obj.previous_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if requesting_office_filter %}&requesting_office={{ requesting_office_filter|urlencode }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Previous</a>
                 {% endif %}
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
+                <a href="?page={{ page_obj.next_page_number }}{% if unit_filter %}&unit={{ unit_filter }}{% endif %}{% if requesting_office_filter %}&requesting_office={{ requesting_office_filter|urlencode }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}" data-request-list-page="1" class="px-3 py-1 border border-slate-300 dark:border-slate-700 rounded text-xs font-medium hover:bg-white dark:hover:bg-slate-800 transition-colors">Next</a>
                 {% endif %}
             </div>
         </div>
@@ -132,8 +141,7 @@ function initRequestManagementFilters() {
     const wrapper = document.getElementById('request-management-wrapper');
     if (!form || !wrapper) return;
 
-    const fieldIds = ['unit', 'status', 'q'];
-    let searchDebounce = null;
+    const fieldIds = ['unit', 'requesting_office', 'status', 'q'];
     let loadingOverlay = document.getElementById('request-management-loading-overlay');
 
     function setRequestManagementLoading(isLoading) {
@@ -197,19 +205,11 @@ function initRequestManagementFilters() {
         const el = document.getElementById(id);
         if (!el) return;
         if (id === 'q') {
-            // Live search: debounce on input, still support Enter
-            el.oninput = function () {
-                if (searchDebounce) {
-                    clearTimeout(searchDebounce);
-                }
-                searchDebounce = setTimeout(handleChange, 400);
-            };
+            // Search only when user confirms with Enter.
+            el.oninput = null;
             el.onkeydown = function (event) {
                 if (event.key === 'Enter') {
                     event.preventDefault();
-                    if (searchDebounce) {
-                        clearTimeout(searchDebounce);
-                    }
                     handleChange();
                 }
             };

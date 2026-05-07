@@ -24,11 +24,13 @@
                     {{ form.date_to }}
                     {% if form.date_to.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.date_to.errors.0 }}</p>{% endif %}
                 </div>
+                {% if not request.user.is_unit_head %}
                 <div class="flex flex-col gap-1 min-w-[220px]">
                     <label for="{{ form.unit.id_for_label }}" class="text-xs font-medium text-slate-600 dark:text-slate-400">{{ form.unit.label }}</label>
                     {{ form.unit }}
                     {% if form.unit.errors %}<p class="text-red-600 dark:text-red-400 text-xs mt-1">{{ form.unit.errors.0 }}</p>{% endif %}
                 </div>
+                {% endif %}
                 <div class="flex items-end">
                     <button type="submit" class="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         Apply
@@ -58,7 +60,9 @@
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Request</th>
+                        {% if not request.user.is_unit_head %}
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Unit</th>
+                        {% endif %}
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Requestor</th>
                         <th class="text-left px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Submitted</th>
                         <th class="text-right px-6 py-3 font-semibold text-slate-700 dark:text-slate-300">Action</th>
@@ -70,7 +74,9 @@
                         <td class="px-6 py-3 text-slate-900 dark:text-slate-100">
                             <a href="{% url 'gso_accounts:staff_request_detail' fb.request_id %}" class="text-primary hover:underline">{{ fb.request.display_id }}</a>
                         </td>
+                        {% if not request.user.is_unit_head %}
                         <td class="px-6 py-3 text-slate-700 dark:text-slate-300">{{ fb.request.unit.name|default:"—" }}</td>
+                        {% endif %}
                         <td class="px-6 py-3 text-slate-700 dark:text-slate-300">{{ fb.user.get_full_name|default:fb.user.username }}</td>
                         <td class="px-6 py-3 text-slate-600 dark:text-slate-400">{{ fb.created_at|date:"M j, Y g:i A" }}</td>
                         <td class="px-6 py-3 text-right">
@@ -187,6 +193,7 @@
                     <label for="feedback-download-date-to" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">To date</label>
                     <input id="feedback-download-date-to" type="date" name="date_to" value="{{ form.date_to.value|default:'' }}" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
                 </div>
+                {% if not request.user.is_unit_head %}
                 <div>
                     <label for="feedback-download-unit" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Unit</label>
                     <select id="feedback-download-unit" name="unit" class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-slate-100">
@@ -196,6 +203,7 @@
                         <option value="" {% if not form.unit.value %}selected{% endif %}>All units</option>
                     </select>
                 </div>
+                {% endif %}
             </div>
             <p id="feedback-download-feedback" class="hidden text-xs text-slate-500 dark:text-slate-400">Preparing your file download...</p>
             <div class="flex justify-end gap-3 pt-2">

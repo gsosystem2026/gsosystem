@@ -12,10 +12,11 @@ from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import redirect, get_object_or_404, render
 from django.template.loader import render_to_string
 from django.views import View
+from django.core.paginator import Paginator
 from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -161,10 +162,17 @@ class WARUpdateView(StaffRequiredMixin, UpdateView):
     def dispatch(self, request, *args, **kwargs):
         war = get_object_or_404(WorkAccomplishmentReport.objects.select_related('request'), pk=kwargs['pk'])
         user = request.user
-        # Only GSO Office and Director can edit WARs
-        if getattr(user, 'is_requestor', False) or getattr(user, 'is_unit_head', False) or getattr(user, 'is_personnel', False):
-            messages.error(request, 'Only GSO Office and Director can edit Work Accomplishment Reports.')
-            return redirect('gso_accounts:staff_request_detail', pk=war.request_id)
+        # Editing WAR rules:
+        # - Director/GSO: can edit any WAR
+        # - Unit Head: can edit WARs for their own unit only
+        # - Personnel/Requestor: cannot edit WARs
+        if getattr(user, 'is_requestor', False) or getattr(user, 'is_personnel', False):
+            messages.error(request, 'You are not allowed to edit Work Accomplishment Reports.')
+            return redirect('gso_accounts:staff_work_reports_war_export')
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            if getattr(war.request, 'unit_id', None) != user.unit_id:
+                messages.error(request, 'You can only edit WARs for requests under your unit.')
+                return redirect('gso_accounts:staff_work_reports_war_export')
         self.request_obj = war.request
         return super().dispatch(request, *args, **kwargs)
 
@@ -207,12 +215,14 @@ class WARUpdateView(StaffRequiredMixin, UpdateView):
         return self._next_url()
 
 
-def _can_access_work_reports(user):
-    """True if user is GSO Office or Director (Work Reports nav)."""
-    return getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False)
+def _can_access_work_reports(user, allow_unit_head=False):
+    """True if user is allowed to access Work Reports pages."""
+    if getattr(user, 'is_gso_office', False) or getattr(user, 'is_director', False):
+        return True
+    return bool(allow_unit_head and getattr(user, 'is_unit_head', False))
 
 
-def build_work_reports_analytics_context(get_params):
+def build_work_reports_analytics_context(get_params, unit=None):
     """
     Build template/JSON context for Work Reports dashboard KPIs and charts.
     get_params: QueryDict-like with .get('range'|'start'|'end').
@@ -245,6 +255,8 @@ def build_work_reports_analytics_context(get_params):
         updated_at__date__gte=date_from,
         updated_at__date__lte=date_to,
     )
+    if unit is not None:
+        completed_qs = completed_qs.filter(unit=unit)
     total_completed = completed_qs.count()
     if total_completed == 0:
         completed_qs = Request.objects.filter(status=Request.Status.COMPLETED)
@@ -270,6 +282,8 @@ def build_work_reports_analytics_context(get_params):
         updated_at__date__gte=date_from,
         updated_at__date__lte=date_to,
     )
+    if unit is not None:
+        finished_qs = finished_qs.filter(unit=unit)
     finished_total = finished_qs.count()
     success_rate = round((total_completed / finished_total) * 100, 1) if finished_total else None
 
@@ -279,6 +293,8 @@ def build_work_reports_analytics_context(get_params):
         created_at__date__lte=date_to,
         rating__isnull=False,
     )
+    if unit is not None:
+        feedback_qs = feedback_qs.filter(request__unit=unit)
     avg_rating = feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
     avg_rating_rounded = round(avg_rating, 1) if avg_rating else None
 
@@ -321,6 +337,8 @@ def build_work_reports_analytics_context(get_params):
             'migrated_legacy',
         )
     ).select_related('personnel', 'personnel__unit')
+    if unit is not None:
+        war_qs = war_qs.filter(personnel__unit=unit)
     personnel_rows = (
         war_qs.values(
             'personnel_id',
@@ -369,6 +387,8 @@ def build_work_reports_analytics_context(get_params):
         updated_at__date__gte=prev_from,
         updated_at__date__lte=prev_to,
     )
+    if unit is not None:
+        prev_completed_qs = prev_completed_qs.filter(unit=unit)
     prev_total_completed = prev_completed_qs.count()
     prev_duration = (
         prev_completed_qs.annotate(duration=duration_expr)
@@ -381,6 +401,8 @@ def build_work_reports_analytics_context(get_params):
         updated_at__date__gte=prev_from,
         updated_at__date__lte=prev_to,
     )
+    if unit is not None:
+        prev_finished_qs = prev_finished_qs.filter(unit=unit)
     prev_finished_total = prev_finished_qs.count()
     prev_success_rate = round((prev_total_completed / prev_finished_total) * 100, 1) if prev_finished_total else None
     prev_feedback_qs = RequestFeedback.objects.filter(
@@ -389,6 +411,8 @@ def build_work_reports_analytics_context(get_params):
         created_at__date__lte=prev_to,
         rating__isnull=False,
     )
+    if unit is not None:
+        prev_feedback_qs = prev_feedback_qs.filter(request__unit=unit)
     prev_avg_rating = prev_feedback_qs.aggregate(avg_rating=Avg('rating')).get('avg_rating')
     prev_avg_rating_rounded = round(prev_avg_rating, 1) if prev_avg_rating else None
 
@@ -426,14 +450,15 @@ class WorkReportsLandingView(StaffRequiredMixin, TemplateView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Work Reports is for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Work Reports is for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        analytics = build_work_reports_analytics_context(self.request.GET)
+        forced_unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else None
+        analytics = build_work_reports_analytics_context(self.request.GET, unit=forced_unit)
         context.update(analytics)
         context['page_title'] = 'Work Reports'
         context['page_description'] = 'Analytics based on completed requests, WARs, and feedback.'
@@ -450,12 +475,13 @@ class WorkReportsDashboardDataView(View):
             return JsonResponse({'ok': False, 'error': 'Unauthorized'}, status=401)
         if getattr(request.user, 'is_requestor', False):
             return JsonResponse({'ok': False, 'error': 'Forbidden'}, status=403)
-        if not _can_access_work_reports(request.user):
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
             return JsonResponse({'ok': False, 'error': 'Forbidden'}, status=403)
         return super().dispatch(request, *args, **kwargs)
 
     def get(self, request, *args, **kwargs):
-        ctx = build_work_reports_analytics_context(request.GET)
+        forced_unit = request.user.unit if getattr(request.user, 'is_unit_head', False) else None
+        ctx = build_work_reports_analytics_context(request.GET, unit=forced_unit)
         html = render_to_string(
             'staff/_work_reports_dashboard_analytics.html',
             ctx,
@@ -699,8 +725,8 @@ class IPMTReportView(StaffRequiredMixin, FormView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Work Reports is for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Work Reports is for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
@@ -949,9 +975,30 @@ class IPMTReportView(StaffRequiredMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.GET:
-            kwargs['data'] = self.request.GET
+        data = self.request.GET.copy() if self.request.GET else None
+        today = timezone.localdate()
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            if data is None:
+                data = QueryDict('', mutable=True)
+            data['unit'] = str(self.request.user.unit_id)
+        if data is not None:
+            # Keep filters valid during AJAX refresh (e.g., personnel changed first).
+            if not (data.get('year') or '').strip():
+                data['year'] = str(today.year)
+            if not (data.get('month') or '').strip():
+                data['month'] = str(today.month)
+        if data is not None:
+            kwargs['data'] = data
         return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            form.fields['unit'].queryset = Unit.objects.filter(pk=self.request.user.unit_id)
+            form.fields['personnel'].queryset = form.fields['personnel'].queryset.filter(unit_id=self.request.user.unit_id)
+            form.fields['unit'].label = 'Unit'
+            form.initial['unit'] = self.request.user.unit_id
+        return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -998,7 +1045,7 @@ def ipmt_generate_accomplishment_view(request):
     user = request.user
     if not user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'Authentication required.'}, status=401)
-    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user):
+    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user, allow_unit_head=True):
         return JsonResponse({'ok': False, 'error': 'You are not allowed to generate IPMT text.'}, status=403)
     if not is_ai_configured():
         return JsonResponse({'ok': False, 'error': 'AI is not configured. Set OPENROUTER_API_KEY first.'}, status=400)
@@ -1016,6 +1063,8 @@ def ipmt_generate_accomplishment_view(request):
 
     User = get_user_model()
     personnel = get_object_or_404(User, pk=personnel_id, role=User.Role.PERSONNEL)
+    if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) and personnel.unit_id != user.unit_id:
+        return JsonResponse({'ok': False, 'error': 'Selected personnel is outside your unit.'}, status=403)
     helper = IPMTReportView()
     allowed_indicators = helper._get_allowed_indicators_queryset(personnel).order_by('display_order', 'code')
 
@@ -1078,7 +1127,7 @@ def ipmt_autosave_draft_view(request):
     user = request.user
     if not user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'Authentication required.'}, status=401)
-    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user):
+    if getattr(user, 'is_requestor', False) or not _can_access_work_reports(user, allow_unit_head=True):
         return JsonResponse({'ok': False, 'error': 'You are not allowed to save IPMT drafts.'}, status=403)
 
     try:
@@ -1098,6 +1147,8 @@ def ipmt_autosave_draft_view(request):
 
     User = get_user_model()
     personnel = get_object_or_404(User, pk=personnel_id, role=User.Role.PERSONNEL)
+    if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) and personnel.unit_id != user.unit_id:
+        return JsonResponse({'ok': False, 'error': 'Selected personnel is outside your unit.'}, status=403)
 
     clean_rows = []
     for item in payload:
@@ -1152,21 +1203,39 @@ class SuccessIndicatorManageView(StaffRequiredMixin, FormView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Success Indicators are for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Success Indicators are for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form):
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            # Unit Head can only create indicators scoped to their unit.
+            form.instance.target_unit_id = user.unit_id
         form.save()
         messages.success(self.request, 'Success indicator added.')
         return redirect('gso_accounts:staff_work_reports_success_indicators')
 
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            # Lock target_unit to the Unit Head's unit.
+            form.fields['target_unit'].queryset = Unit.objects.filter(pk=user.unit_id)
+            form.fields['target_unit'].required = False
+            form.initial['target_unit'] = user.unit_id
+        return form
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        user = self.request.user
         context['page_title'] = 'Success Indicators'
         context['page_description'] = 'Manage the IPMT success indicator list used when tagging WAR entries.'
-        context['indicators'] = SuccessIndicator.objects.select_related('target_unit').order_by('display_order', 'code')
+        qs = SuccessIndicator.objects.select_related('target_unit').order_by('display_order', 'code')
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            qs = qs.filter(target_unit_id=user.unit_id)
+        context['indicators'] = qs
         return context
 
 
@@ -1182,12 +1251,32 @@ class SuccessIndicatorUpdateView(StaffRequiredMixin, UpdateView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Success Indicators are for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Success Indicators are for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
+    def get_queryset(self):
+        qs = super().get_queryset().select_related('target_unit')
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            qs = qs.filter(target_unit_id=user.unit_id)
+        return qs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            form.fields['target_unit'].queryset = Unit.objects.filter(pk=user.unit_id)
+            form.fields['target_unit'].required = False
+            form.initial['target_unit'] = user.unit_id
+        return form
+
     def form_valid(self, form):
+        user = self.request.user
+        if getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None):
+            # Unit Head cannot move indicator outside their unit.
+            form.instance.target_unit_id = user.unit_id
         self.object = form.save()
         if self._wants_json():
             return JsonResponse({'ok': True, 'message': 'Success indicator updated.'})
@@ -1239,8 +1328,8 @@ class WARExportView(StaffRequiredMixin, FormView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Work Reports is for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Work Reports is for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
@@ -1268,7 +1357,7 @@ class WARExportView(StaffRequiredMixin, FormView):
                     return super().get(request, *args, **kwargs)
 
             personnel = form.cleaned_data.get('personnel')
-            unit = form.cleaned_data.get('unit')
+            unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else form.cleaned_data.get('unit')
             year = form.cleaned_data.get('year')
             month = form.cleaned_data.get('month')
             date_from = _date(year, month, 1)
@@ -1289,9 +1378,23 @@ class WARExportView(StaffRequiredMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.GET:
-            kwargs['data'] = self.request.GET
+        data = self.request.GET.copy() if self.request.GET else None
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            if data is None:
+                data = QueryDict('', mutable=True)
+            data['unit'] = str(self.request.user.unit_id)
+        if data is not None:
+            kwargs['data'] = data
         return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            form.fields['unit'].queryset = Unit.objects.filter(pk=self.request.user.unit_id)
+            form.fields['personnel'].queryset = form.fields['personnel'].queryset.filter(unit_id=self.request.user.unit_id)
+            form.fields['unit'].label = 'Unit'
+            form.initial['unit'] = self.request.user.unit_id
+        return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1301,9 +1404,9 @@ class WARExportView(StaffRequiredMixin, FormView):
         context['default_filter_year'] = today.year
         context['default_filter_month'] = today.month
         form = context.get('form') or self.get_form()
-        unit = None
+        unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else None
         if form.is_bound and form.is_valid():
-            unit = form.cleaned_data.get('unit')
+            unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else form.cleaned_data.get('unit')
             year = form.cleaned_data.get('year')
             month = form.cleaned_data.get('month')
             date_from = _date(year, month, 1)
@@ -1325,7 +1428,7 @@ class WARExportView(StaffRequiredMixin, FormView):
                 date_to = _date(year + 1, 1, 1) - timedelta(days=1)
             else:
                 date_to = _date(year, month + 1, 1) - timedelta(days=1)
-            qs = get_war_queryset(date_from=date_from, date_to=date_to)
+            qs = get_war_queryset(unit=unit, date_from=date_from, date_to=date_to)
         context['war_list'] = list(qs[:500])  # cap for page load; export has no cap
         config_key, config = get_war_table_config(unit)
         context['war_table_config_key'] = config_key
@@ -1344,8 +1447,8 @@ class FeedbackReportsView(StaffRequiredMixin, FormView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Feedback Reports is for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Feedback Reports is for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
@@ -1355,7 +1458,7 @@ class FeedbackReportsView(StaffRequiredMixin, FormView):
             if form.is_valid():
                 date_from = form.cleaned_data.get('date_from')
                 date_to = form.cleaned_data.get('date_to')
-                unit = form.cleaned_data.get('unit')
+                unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else form.cleaned_data.get('unit')
                 qs = get_feedback_queryset(date_from=date_from, date_to=date_to, unit=unit)
                 if request.GET.get('download') == 'excel':
                     buf, _ = build_feedback_export_excel(qs)
@@ -1372,23 +1475,37 @@ class FeedbackReportsView(StaffRequiredMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.GET:
-            kwargs['data'] = self.request.GET
+        data = self.request.GET.copy() if self.request.GET else None
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            if data is None:
+                data = QueryDict('', mutable=True)
+            data['unit'] = str(self.request.user.unit_id)
+        if data is not None:
+            kwargs['data'] = data
         return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            form.fields['unit'].queryset = Unit.objects.filter(pk=self.request.user.unit_id)
+            form.fields['unit'].label = 'Unit'
+            form.initial['unit'] = self.request.user.unit_id
+        return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Feedback Reports'
         context['page_description'] = 'View and download Client Satisfaction Measurement (CSM) feedback submitted by requestors. Filter by date range or unit.'
         form = context.get('form')
+        forced_unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else None
         if form and form.is_valid():
             context['feedback_list'] = get_feedback_queryset(
                 date_from=form.cleaned_data.get('date_from'),
                 date_to=form.cleaned_data.get('date_to'),
-                unit=form.cleaned_data.get('unit'),
+                unit=forced_unit or form.cleaned_data.get('unit'),
             )[:100]
         else:
-            context['feedback_list'] = get_feedback_queryset()[:100]
+            context['feedback_list'] = get_feedback_queryset(unit=forced_unit)[:100]
         return context
 
 
@@ -1413,18 +1530,18 @@ class RequestReportView(StaffRequiredMixin, FormView):
             return redirect('gso_accounts:login')
         if getattr(request.user, 'is_requestor', False):
             return redirect('gso_accounts:requestor_dashboard')
-        if not _can_access_work_reports(request.user):
-            messages.info(request, 'Request Report is for GSO Office and Director only.')
+        if not _can_access_work_reports(request.user, allow_unit_head=True):
+            messages.info(request, 'Request Report is for authorized staff only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
-    @staticmethod
-    def _filtered_qs(form):
+    def _filtered_qs(self, form):
         office = form.cleaned_data.get('requesting_office')
         office = office.strip() if isinstance(office, str) else ''
         sq = form.cleaned_data.get('q') or ''
+        forced_unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else None
         return get_completed_requests_queryset(
-            unit=form.cleaned_data.get('unit'),
+            unit=forced_unit or form.cleaned_data.get('unit'),
             requesting_office=office if office else None,
             date_from=form.cleaned_data.get('date_from'),
             date_to=form.cleaned_data.get('date_to'),
@@ -1437,7 +1554,7 @@ class RequestReportView(StaffRequiredMixin, FormView):
             if form.is_valid():
                 qs = self._filtered_qs(form)
                 if request.GET.get('download') == 'excel':
-                    unit = form.cleaned_data.get('unit')
+                    unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else form.cleaned_data.get('unit')
                     unit_label = unit.name if unit else 'ALL UNITS'
                     buf, _ = build_request_report_excel(
                         qs,
@@ -1459,20 +1576,39 @@ class RequestReportView(StaffRequiredMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.GET:
-            kwargs['data'] = self.request.GET
+        data = self.request.GET.copy() if self.request.GET else None
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            if data is None:
+                data = QueryDict('', mutable=True)
+            data['unit'] = str(self.request.user.unit_id)
+        if data is not None:
+            kwargs['data'] = data
         return kwargs
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if getattr(self.request.user, 'is_unit_head', False) and getattr(self.request.user, 'unit_id', None):
+            form.fields['unit'].queryset = Unit.objects.filter(pk=self.request.user.unit_id)
+            form.fields['unit'].label = 'Unit'
+            form.initial['unit'] = self.request.user.unit_id
+        return form
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['page_title'] = 'Request Report'
         context['page_description'] = (
-            'Completed requests only. Filter by unit, requesting office, completion date range, and search.'
-            ' Table shows up to 500 rows; Excel includes all matching records.'
+            'Show completed requests only. Use filters to find what you need.'
+            ' The table shows 10 rows. Download Excel for the full list.'
         )
         form = context.get('form')
+        page_number = self.request.GET.get('page') or 1
         if form and form.is_valid():
-            context['report_list'] = list(self._filtered_qs(form)[:500])
+            qs = self._filtered_qs(form)
         else:
-            context['report_list'] = list(get_completed_requests_queryset()[:500])
+            forced_unit = self.request.user.unit if getattr(self.request.user, 'is_unit_head', False) else None
+            qs = get_completed_requests_queryset(unit=forced_unit)
+        paginator = Paginator(qs, 10)
+        page_obj = paginator.get_page(page_number)
+        context['page_obj'] = page_obj
+        context['report_list'] = page_obj.object_list
         return context
