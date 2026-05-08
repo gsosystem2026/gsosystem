@@ -1,6 +1,9 @@
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
+import io
+from pathlib import Path
+from copy import copy
 from django.db import transaction
 from django.db.models import Case, CharField, F, Q, Value, When
 from django.db.models.functions import Cast
@@ -15,6 +18,8 @@ from django.utils import timezone
 from django.views import View
 from django.views.generic import FormView, ListView, DetailView, UpdateView
 import csv
+from openpyxl import load_workbook
+from openpyxl.styles import Alignment
 
 from apps.gso_accounts.views import StaffRequiredMixin
 from apps.gso_units.models import Unit
@@ -42,6 +47,189 @@ def _user_can_access_motorpool_print(user, req):
     is_unit_head = getattr(user, 'is_unit_head', False) and getattr(user, 'unit_id', None) == req.unit_id
     is_director = getattr(user, 'is_director', False) or getattr(user, 'can_approve_requests', False)
     return bool(is_unit_head or is_director)
+
+
+def _resolve_motorpool_request_template_path() -> Path | None:
+    from django.conf import settings
+
+    configured = (getattr(settings, 'GSO_MOTORPOOL_REQUEST_XLSX_TEMPLATE', '') or '').strip()
+    candidates: list[Path] = []
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(Path(settings.BASE_DIR) / 'docs' / 'motorpool_templates' / 'Request for Vehicle.xlsx')
+    candidates.append(Path(r'C:\Users\CLIENT\Desktop\Motorpool Sample Excel\Request for Vehicle.xlsx'))
+
+    for p in candidates:
+        try:
+            if p.exists() and p.is_file():
+                return p
+        except OSError:
+            continue
+    return None
+
+
+def _resolve_motorpool_trip_ticket_template_path() -> Path | None:
+    from django.conf import settings
+
+    configured = (getattr(settings, 'GSO_MOTORPOOL_TRIP_TICKET_XLSX_TEMPLATE', '') or '').strip()
+    candidates: list[Path] = []
+    if configured:
+        candidates.append(Path(configured))
+    candidates.append(Path(settings.BASE_DIR) / 'docs' / 'motorpool_templates' / 'Trip Ticket.xlsx')
+    candidates.append(Path(r'C:\Users\CLIENT\Desktop\Motorpool Sample Excel\Trip Ticket.xlsx'))
+
+    for p in candidates:
+        try:
+            if p.exists() and p.is_file():
+                return p
+        except OSError:
+            continue
+    return None
+
+
+def _fmt_datetime(value):
+    if not value:
+        return ''
+    try:
+        return value.strftime('%m/%d/%Y %I:%M %p')
+    except Exception:
+        return str(value)
+
+
+def _set_cell(ws, row: int, col: int, value):
+    ws.cell(row=row, column=col).value = value if value is not None else ''
+
+
+def _set_cell_horizontal_align(ws, row: int, col: int, horizontal: str):
+    cell = ws.cell(row=row, column=col)
+    base = copy(cell.alignment) if cell.alignment else Alignment()
+    cell.alignment = Alignment(
+        horizontal=horizontal,
+        vertical=base.vertical,
+        text_rotation=base.text_rotation,
+        wrap_text=base.wrap_text,
+        shrink_to_fit=base.shrink_to_fit,
+        indent=base.indent,
+        relativeIndent=base.relativeIndent,
+        justifyLastLine=base.justifyLastLine,
+        readingOrder=base.readingOrder,
+    )
+
+
+def _fill_motorpool_request_copy(ws, base_row: int, req, mp):
+    requestor_name = (req.custom_full_name or req.requestor.get_full_name() or req.requestor.username or '').strip()
+    contact_number = (mp.contact_number or req.custom_contact_number or '').strip()
+
+    _set_cell(ws, base_row + 0, 3, (mp.driver_name or '').strip())  # C
+    _set_cell(ws, base_row + 1, 3, (mp.vehicle_plate or '').strip())  # C
+    _set_cell(ws, base_row + 2, 3, (mp.vehicle_trans or '').strip())  # C
+    _set_cell(ws, base_row + 0, 10, req.created_at.strftime('%m/%d/%Y'))  # J filing date
+
+    _set_cell(ws, base_row + 5, 4, (mp.requesting_office or req.requestor.office_department or '').strip())  # D
+    _set_cell(ws, base_row + 5, 10, contact_number)  # J
+    _set_cell(ws, base_row + 6, 4, (req.description_for_display or '').strip())  # D
+    _set_cell(ws, base_row + 6, 10, '' if mp.number_of_days is None else int(mp.number_of_days))  # J
+    _set_cell_horizontal_align(ws, base_row + 6, 10, 'left')
+    _set_cell(ws, base_row + 7, 10, '')  # Remarks left blank by default
+    _set_cell(ws, base_row + 8, 4, (mp.places_to_be_visited or '').strip())  # D
+    _set_cell(ws, base_row + 9, 4, _fmt_datetime(mp.trip_datetime))  # D
+    _set_cell(ws, base_row + 10, 4, (mp.itinerary_of_travel or '').strip())  # D
+    # Passenger count belongs on the left data side; avoid right merged area near "Approved by".
+    _set_cell(ws, base_row + 13, 4, '' if mp.number_of_passengers is None else int(mp.number_of_passengers))  # D
+    _set_cell_horizontal_align(ws, base_row + 13, 4, 'left')
+    # Keep the template label "Name and Signature of Requesting Officer/ Employee"
+    # and place the requestor name on the line above it.
+    _set_cell(ws, base_row + 15, 2, requestor_name)  # B
+    _set_cell_horizontal_align(ws, base_row + 15, 2, 'center')
+
+
+def _fmt_decimal(value):
+    if value is None:
+        return ''
+    try:
+        # Keep user-friendly number display; Excel can still treat numeric strings.
+        iv = int(value)
+        if iv == value:
+            return iv
+    except Exception:
+        pass
+    return float(value)
+
+
+def _iter_trip_rows(mp):
+    legs = list(mp.actual_legs_json or [])
+    rows = []
+    for leg in legs:
+        if not isinstance(leg, dict):
+            continue
+        rows.append({
+            'depart': _fmt_datetime(leg.get('depart_datetime')),
+            'odo_start': leg.get('odo_start') or '',
+            'origin': leg.get('depart_place') or '',
+            'arrive': _fmt_datetime(leg.get('arrive_datetime')),
+            'odo_end': leg.get('odo_end') or '',
+            'office': mp.requesting_office or '',
+            'destination': leg.get('arrive_place') or '',
+            'distance': leg.get('distance') or '',
+            'signature': '',
+        })
+    if rows:
+        return rows
+    # Fallback from planned itinerary lines when no actual legs are stored yet.
+    planned = [ln.strip() for ln in (mp.itinerary_of_travel or '').splitlines() if ln.strip()]
+    for ln in planned:
+        rows.append({
+            'depart': '',
+            'odo_start': '',
+            'origin': '',
+            'arrive': '',
+            'odo_end': '',
+            'office': mp.requesting_office or '',
+            'destination': ln,
+            'distance': '',
+            'signature': '',
+        })
+    return rows
+
+
+def _fill_trip_ticket_sheet(ws, req, mp):
+    _set_cell(ws, 9, 3, _fmt_datetime(mp.trip_datetime))  # Travel date
+    contact_number = (mp.contact_number or req.custom_contact_number or '').strip()
+    # Keep label in I9 from template; place value on top row (I8:J8 merged).
+    _set_cell(ws, 8, 9, contact_number)
+    _set_cell_horizontal_align(ws, 8, 9, 'center')
+    _set_cell(ws, 10, 3, (mp.vehicle_trans or '').strip())  # TRANS. #
+    _set_cell(ws, 11, 3, (mp.driver_name or '').strip())
+    _set_cell(ws, 11, 8, (mp.vehicle_plate or '').strip())
+    _set_cell(ws, 12, 4, (mp.contact_person or req.custom_full_name or req.requestor.get_full_name() or '').strip())
+    _set_cell_horizontal_align(ws, 12, 4, 'left')
+    _set_cell(ws, 14, 3, (req.description_for_display or '').strip())
+    _set_cell_horizontal_align(ws, 14, 3, 'left')
+
+    trip_rows = _iter_trip_rows(mp)
+    start_row = 22
+    max_rows = 20
+    for i in range(max_rows):
+        row = start_row + i
+        item = trip_rows[i] if i < len(trip_rows) else None
+        _set_cell(ws, row, 2, item['depart'] if item else '')
+        _set_cell(ws, row, 3, item['odo_start'] if item else '')
+        _set_cell(ws, row, 4, item['origin'] if item else '')
+        _set_cell(ws, row, 5, item['arrive'] if item else '')
+        _set_cell(ws, row, 6, item['odo_end'] if item else '')
+        _set_cell(ws, row, 7, item['office'] if item else '')
+        _set_cell(ws, row, 8, item['destination'] if item else '')
+        _set_cell(ws, row, 9, item['distance'] if item else '')
+        _set_cell(ws, row, 10, item['signature'] if item else '')
+
+    # Fuel/consumables summary
+    _set_cell(ws, 47, 5, _fmt_decimal(mp.fuel_beginning_liters))
+    _set_cell(ws, 48, 5, _fmt_decimal(mp.fuel_received_issued_liters))
+    _set_cell(ws, 49, 5, _fmt_decimal(mp.fuel_added_purchased_liters))
+    _set_cell(ws, 50, 5, _fmt_decimal(mp.fuel_total_available_liters))
+    _set_cell(ws, 51, 5, _fmt_decimal(mp.fuel_used_liters))
+    _set_cell(ws, 52, 5, _fmt_decimal(mp.fuel_ending_liters))
+    _set_cell(ws, 54, 3, (mp.other_consumables_notes or '').strip())
 
 
 def _requires_inspection(request_obj):
@@ -432,10 +620,10 @@ class StaffRequestListView(StaffRequiredMixin, ListView):
         )
         # Active statuses only for status filter
         context['status_choices'] = [
-            (Request.Status.SUBMITTED, 'Submitted'),
+            (Request.Status.SUBMITTED, 'Pending'),
             (Request.Status.ASSIGNED, 'Assigned'),
             (Request.Status.DIRECTOR_APPROVED, 'Approved'),
-            (Request.Status.INSPECTION, 'Inspection'),
+            (Request.Status.INSPECTION, 'Pre Inspection'),
             (Request.Status.IN_PROGRESS, 'In Progress'),
             (Request.Status.ON_HOLD, 'On Hold'),
             (Request.Status.DONE_WORKING, 'Done working'),
@@ -827,6 +1015,68 @@ class MotorpoolPrintRequestView(LoginRequiredMixin, View):
             'purpose': req.description_for_display,
         }
         return TemplateResponse(request, 'motorpool/print_motorpool_request.html', context)
+
+
+class MotorpoolRequestExcelDownloadView(LoginRequiredMixin, View):
+    """Download-filled Motorpool vehicle request workbook (two identical copies)."""
+
+    def get(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
+        if not _user_can_access_motorpool_print(request.user, req):
+            raise Http404()
+
+        template_path = _resolve_motorpool_request_template_path()
+        if template_path is None:
+            raise Http404('Motorpool Excel template was not found.')
+
+        mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+        wb = load_workbook(template_path)
+        ws = wb[wb.sheetnames[0]]
+
+        # Template contains two same slips separated by 32 rows.
+        _fill_motorpool_request_copy(ws, base_row=6, req=req, mp=mp)
+        _fill_motorpool_request_copy(ws, base_row=38, req=req, mp=mp)
+
+        stream = io.BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+
+        filename = f'{req.display_id}-vehicle-request.xlsx'
+        response = HttpResponse(
+            stream.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+
+class MotorpoolTripTicketExcelDownloadView(LoginRequiredMixin, View):
+    """Download-filled Motorpool trip ticket workbook."""
+
+    def get(self, request, pk):
+        req = get_object_or_404(Request.objects.select_related('unit', 'requestor'), pk=pk)
+        if not _user_can_access_motorpool_print(request.user, req):
+            raise Http404()
+
+        template_path = _resolve_motorpool_trip_ticket_template_path()
+        if template_path is None:
+            raise Http404('Motorpool trip ticket Excel template was not found.')
+
+        mp, _ = MotorpoolTripData.objects.get_or_create(request=req)
+        wb = load_workbook(template_path)
+        ws = wb[wb.sheetnames[0]]
+        _fill_trip_ticket_sheet(ws, req=req, mp=mp)
+
+        stream = io.BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        filename = f'{req.display_id}-trip-ticket.xlsx'
+        response = HttpResponse(
+            stream.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
 
 
 class MotorpoolPrintTripTicketView(LoginRequiredMixin, View):

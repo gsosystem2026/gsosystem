@@ -8,11 +8,11 @@ class Request(models.Model):
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Draft'
-        SUBMITTED = 'SUBMITTED', 'Submitted'
+        SUBMITTED = 'SUBMITTED', 'Pending'
         ASSIGNED = 'ASSIGNED', 'Assigned'
         DIRECTOR_APPROVED = 'DIRECTOR_APPROVED', 'Approved'
         NOT_APPLICABLE = 'NOT_APPLICABLE', 'Not Applicable'
-        INSPECTION = 'INSPECTION', 'Inspection'
+        INSPECTION = 'INSPECTION', 'Pre Inspection'
         IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
         ON_HOLD = 'ON_HOLD', 'On Hold'
         DONE_WORKING = 'DONE_WORKING', 'Done working'

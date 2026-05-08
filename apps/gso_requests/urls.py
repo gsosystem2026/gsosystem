@@ -14,6 +14,8 @@ urlpatterns = [
 
     # Motorpool printing + saving (Unit Head / assigned personnel)
     path('<int:pk>/motorpool/update/', views.MotorpoolTripUpdateView.as_view(), name='motorpool_trip_update'),
+    path('<int:pk>/motorpool/download-request-excel/', views.MotorpoolRequestExcelDownloadView.as_view(), name='motorpool_request_excel'),
+    path('<int:pk>/motorpool/download-trip-ticket-excel/', views.MotorpoolTripTicketExcelDownloadView.as_view(), name='motorpool_trip_ticket_excel'),
     path('<int:pk>/motorpool/print-request/', views.MotorpoolPrintRequestView.as_view(), name='motorpool_print_request'),
     path('<int:pk>/motorpool/print-trip-ticket/', views.MotorpoolPrintTripTicketView.as_view(), name='motorpool_print_trip_ticket'),
 ]

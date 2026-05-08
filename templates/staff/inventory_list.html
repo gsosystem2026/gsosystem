@@ -39,9 +39,8 @@
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Item</th>
                         {% if show_unit_filter %}
-                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Department</th>
+                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Unit</th>
                         {% endif %}
-                        <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Category</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-right">Quantity</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">UoM</th>
                         <th class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">Date arrived</th>
@@ -58,7 +57,6 @@
                         {% if show_unit_filter %}
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.unit.name }}</td>
                         {% endif %}
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.category|default:"—" }}</td>
                         <td class="px-6 py-4 text-sm text-slate-900 dark:text-slate-100 text-right">{{ item.quantity }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.unit_of_measure }}</td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ item.arrival_date|date:"M j, Y"|default:"—" }}</td>
@@ -75,7 +73,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="{% if show_unit_filter %}8{% else %}7{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No inventory items yet.{% if not user.is_personnel %} <a href="{% url 'gso_accounts:staff_inventory_add' %}" data-inventory-action="add" class="text-primary hover:underline font-medium">Add one</a>.{% endif %}</td>
+                        <td colspan="{% if show_unit_filter %}7{% else %}6{% endif %}" class="px-6 py-8 text-center text-slate-500 dark:text-slate-400">No inventory items yet.{% if not user.is_personnel %} <a href="{% url 'gso_accounts:staff_inventory_add' %}" data-inventory-action="add" class="text-primary hover:underline font-medium">Add one</a>.{% endif %}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

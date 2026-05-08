@@ -61,7 +61,7 @@ class InventoryListView(StaffRequiredMixin, InventoryAccessMixin, ListView):
     model = InventoryItem
     template_name = 'staff/inventory_list.html'
     context_object_name = 'items'
-    paginate_by = 20
+    paginate_by = 10
 
     def get_queryset(self):
         qs = super().get_queryset().order_by('unit__name', 'name')
