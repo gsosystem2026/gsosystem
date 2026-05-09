@@ -1,6 +1,6 @@
 {% load static %}
 const APP_VERSION = "{{ app_version|default:'1.0' }}";
-const SW_SCHEMA_VERSION = "2";
+const SW_SCHEMA_VERSION = "3";
 const SHELL_CACHE = `gso-shell-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
 const RUNTIME_CACHE = `gso-runtime-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
 const OFFLINE_URL = "/offline/";
@@ -51,6 +51,13 @@ function isPersonnelPage(requestUrl) {
     || /\/accounts\/staff\/request-management\/\d+\/$/.test(requestUrl.pathname);
 }
 
+/** File/binary downloads — do not intercept so PWA/navigate+fallback does not swallow them. */
+function isBypassNavigationUrl(requestUrl) {
+  const p = requestUrl.pathname;
+  return p.includes("/motorpool/download-request-excel/")
+    || p.includes("/motorpool/download-trip-ticket-excel/");
+}
+
 function offlineNavigationFallback(request) {
   return caches.match(request).then((cached) => {
     if (cached) return cached;
@@ -67,6 +74,8 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (isBypassNavigationUrl(url)) return;
 
   if (isStaticAsset(url)) {
     event.respondWith(
