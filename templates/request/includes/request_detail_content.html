@@ -1,5 +1,7 @@
 {% load inventory_units %}
 <div class="{% if in_modal %}w-full space-y-6{% else %}max-w-3xl mx-auto space-y-6{% endif %}">
+    {# Full page only: flash messages consume session and need space; modals overflow if many queued. #}
+    {% if not in_modal %}
     {% if messages %}
     <div class="space-y-3">
         {% for message in messages %}
@@ -12,6 +14,7 @@
         </div>
         {% endfor %}
     </div>
+    {% endif %}
     {% endif %}
     {% if request.GET.updated %}
     <div class="rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 px-4 py-3 text-sm text-green-700 dark:text-green-300">

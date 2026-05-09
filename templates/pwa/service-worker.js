@@ -1,16 +1,21 @@
 {% load static %}
 const APP_VERSION = "{{ app_version|default:'1.0' }}";
-const SW_SCHEMA_VERSION = "3";
+const SW_SCHEMA_VERSION = "4";
 const SHELL_CACHE = `gso-shell-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
 const RUNTIME_CACHE = `gso-runtime-${APP_VERSION}-${SW_SCHEMA_VERSION}`;
 const OFFLINE_URL = "/offline/";
 const STAFF_FALLBACK_URL = "/accounts/staff/task-management/";
 
+/**
+ * Prefetch shells only for URLs safe for every logged-in role.
+ * Do NOT prefetch /accounts/staff/task-management/ or task-history/: those views
+ * use django.contrib.messages for non-Personnel users; a background SW fetch runs
+ * as the current user and would flood the session (e.g. requestors seeing toasts).
+ * Personnel still get runtime caching when they visit those pages online.
+ */
 const SHELL_URLS = [
   OFFLINE_URL,
   "/accounts/staff/dashboard/",
-  "/accounts/staff/task-management/",
-  "/accounts/staff/task-history/",
   "/accounts/staff/inventory/",
   "{% static 'css/tailwind.css' %}",
   "{% static 'js/personnel_offline_sync.js' %}",

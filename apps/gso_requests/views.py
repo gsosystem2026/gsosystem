@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.contrib.messages import get_messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 import mimetypes
 import io
@@ -671,6 +672,13 @@ class RequestDetailView(LoginRequiredMixin, DetailView):
         user = self.request.user
         context['is_requestor_layout'] = getattr(user, 'is_requestor', False)
         context['in_modal'] = self.request.GET.get('modal') == '1'
+        # Modal fragments hide {% messages %}; consume queue so flashes do not pile until a full-page visit.
+        is_partial_fragment = bool(
+            self.request.GET.get('partial')
+            or self.request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        )
+        if is_partial_fragment and context['in_modal']:
+            list(get_messages(self.request))
         req = self.object
         context['is_motorpool'] = bool(req and req.unit_id and req.unit.is_motorpool)
         # Phase 4.1: assignments and assign form for Unit Head
@@ -1517,7 +1525,8 @@ class PersonnelTaskListView(StaffRequiredMixin, ListView):
 
     def dispatch(self, request, *args, **kwargs):
         if not getattr(request.user, 'is_personnel', False):
-            messages.info(request, 'Task Management is for Personnel only.')
+            # Silent redirect avoids django.contrib.messages on mistaken/background hits
+            # (e.g. SW prefetch); personnel see this page normally when they navigate here.
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
@@ -1554,7 +1563,6 @@ class PersonnelTaskHistoryView(StaffRequiredMixin, ListView):
 
     def dispatch(self, request, *args, **kwargs):
         if not getattr(request.user, 'is_personnel', False):
-            messages.info(request, 'Task History is for Personnel only.')
             return redirect('gso_accounts:staff_dashboard')
         return super().dispatch(request, *args, **kwargs)
 
